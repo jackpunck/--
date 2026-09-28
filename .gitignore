@@ -1,0 +1,97 @@
+# Local reference projects and the original demo archive
+/3d-demo/
+/cherry-studio/
+/3D动作演示.zip
+
+# Dependencies and generated caches (keep the shipped 3D bundle and assets)
+node_modules/
+.npm/
+.pnpm-store/
+.cache/
+.vite/
+.turbo/
+/dist/
+/build/
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local application data, database sidecars, and encryption keys
+.data/
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+server.key
+server.key.*
+
+# Private uploads, account exports, and local backups
+uploads/
+backups/
+backup/
+exports/
+private/
+.local/
+fitness-export-*.json
+循序健身-*.json
+*.sqlite.*
+*.sqlite3.*
+*.db.*
+*.bak
+
+# Deployment credentials and private keys
+secrets/
+.secrets/
+.ssh/
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.npmrc
+.netrc
+_netrc
+
+# Environment secrets; the documented configuration template may be committed
+.env
+.env.*
+.envrc
+# Examples must contain placeholders only; keep backup copies ignored.
+!.env.example
+.env.example.*
+
+# Browser test profiles, screenshots, reports, and temporary output
+.qa/
+playwright-report/
+test-results/
+blob-report/
+coverage/
+.tmp/
+/tmp/
+/temp/
+*.log
+*.log.*
+logs/
+*.har
+playwright/.auth/
+storageState*.json
+storage-state*.json
+auth-state*.json
+
+# Editor, OS, and Office temporary files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+~$*

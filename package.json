@@ -1,0 +1,13 @@
+{
+  "name": "fitness-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.mjs && node --check server/storage.mjs && node --check server/providers.mjs && node --check server/chat-stream.mjs && node --check server/plan-tools.mjs && node --check server/assistant-tools.mjs && node --check server/calendar-data.mjs && node --check public/app.js && node --check public/store.js && node --check public/domain.js && node --check public/schedule.js && node --check public/meal-contract.js && node --check public/knowledge.js && node --check public/knowledge-tools.js && node --check public/visuals.js && node --check public/model-viewer.js && node --check public/provider-presets.js && node --check public/provider-ui.js && node --check public/chat-stream.js && node --check public/chat-markdown.js && node --check public/chat-attachments.js && node --check public/chat-view.js && node --check public/sw.js"
+  }
+}

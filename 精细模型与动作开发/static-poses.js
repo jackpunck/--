@@ -1,0 +1,26 @@
+// A single manually posed keyframe per exercise. These profiles are explicitly
+// labelled static; they are not interpolated into unreviewed animations.
+export const staticPoseProfiles = Object.freeze({
+  bench:{hip:[0,.973,0],torso:-Math.PI/2,thigh:-1.35,shin:0,upper:[.8,-.2,.5],fore:[-.15,.1,1],weights:true,support:'flat',camera:'low'},
+  'incline-bench':{hip:[0,.973,0],torso:-Math.PI/3,thigh:-1.35,shin:0,upper:[.75,-.15,.6],fore:[-.1,.25,1],weights:true,support:'incline'},
+  'chest-press':{hip:[0,.80,0],thigh:-Math.PI/2,upper:[.55,-.35,.65],fore:[-.25,0,1],support:'seat',cable:true},
+  'lat-pulldown':{hip:[0,.80,0],thigh:-Math.PI/2,upper:[.85,.3,.1],fore:[-.15,.9,.15],support:'seat',bar:true,cable:true},
+  row:{hip:[0,.80,0],thigh:-Math.PI/2,shin:-.6,upper:[.12,-.9,-.4],fore:[-.15,.10,1],support:'seat',cable:true,targetY:1.1,cameraScale:1.10},
+  'dumbbell-row':{torso:1.1,thigh:-.1,shin:.18,upper:[.12,-.85,-.5],fore:[0,-.9,.1],leftUpper:[.05,-.1,.99],leftFore:[0,-.1,1],weights:'right',support:'side',workingArmView:true},
+  pullup:{hip:[0,1.90,0],thigh:.1,shin:.4,upper:[.8,.4,.05],fore:[-.1,.95,.05],bar:true,targetY:2,cameraScale:1.15},
+  'shoulder-press':{upper:[.6,.75,.1],fore:[-.1,.98,.05],weights:true,targetY:1.9,cameraScale:1.10},
+  'lateral-raise':{upper:[1,-.08,.15],fore:[1,-.02,.12],weights:true},
+  'reverse-fly':{torso:1.0,thigh:-.1,shin:.2,upper:[1,-.08,.1],fore:[1,-.06,.05],weights:true},
+  triceps:{upper:[.05,-1,0],fore:[0,-.98,.12],cable:true},
+  'overhead-triceps':{upper:[.2,.98,0],fore:[-.15,-.35,-.9],weights:'single'},
+  'hammer-curl':{upper:[.12,-1,0],fore:[0,-.1,.99],weights:true,hammer:true},
+  'goblet-squat':{base:'squat',q:.70,weights:'goblet'},
+  rdl:{torso:.95,thigh:-.12,shin:.2,upper:[.05,-.7,.71],fore:[0,-.7,.71],weights:true},
+  lunge:{hip:[0,1.39,0],torso:.07,thigh:-.72,shin:.2,rightThigh:.70,rightShin:-1.15,upper:[.1,-1,0],fore:[0,-1,0]},
+  'leg-curl':{hip:[0,.8,0],thigh:-Math.PI/2,shin:.7,upper:[.15,-1,0],fore:[0,-.8,.5],support:'seat'},
+  'leg-extension':{hip:[0,.8,0],thigh:-Math.PI/2,shin:-1.45,upper:[.15,-1,0],fore:[0,-.8,.5],support:'seat'},
+  'glute-bridge':{hip:[0,.69,0],torso:-2.08,thigh:-1.7,shin:0,upper:[.35,-1,.2],fore:[.2,-1,0],camera:'low'},
+  plank:{base:'plank',camera:'low'},
+  crunch:{hip:[0,.24,0],torso:-1.4,thigh:-2.1,shin:-.7,upper:[.4,-.9,.1],fore:[-.6,.5,.15],camera:'low'},
+  'calf-raise':{hip:[0,1.80,-.06],footAngle:-.35,upper:[.12,-1,0],fore:[0,-1,0]},
+});

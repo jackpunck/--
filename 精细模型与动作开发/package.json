@@ -1,0 +1,14 @@
+{
+  "name": "fitness-anatomy-motion-kit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src.js --bundle --minify --format=iife --outfile=demo.bundle.js",
+    "start": "node server.cjs",
+    "test": "node scripts/verify-atlas.mjs && node scripts/verify-rig.mjs && node scripts/verify-static.mjs && node --test scripts/verify-embed.mjs scripts/verify-anatomy.mjs",
+    "preview:export": "node scripts/verify-rig.mjs --export"
+  },
+  "dependencies": { "three": "0.186.0" },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}

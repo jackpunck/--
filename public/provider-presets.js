@@ -1,0 +1,112 @@
+// Provider connection facts only. Model IDs and capabilities come from each API.
+// Official references and protocol details: docs/AI供应商.md.
+export const providerPresets = [
+  {
+    id: 'deepseek', name: 'DeepSeek', protocol: 'openai',
+    baseUrl: 'https://api.deepseek.com',
+    description: 'DeepSeek 官方 API，自动获取当前可用模型。',
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    docsUrl: 'https://api-docs.deepseek.com/api/list-models/',
+    requiresKey: true, logo: 'D', color: '#4d6bfe',
+  },
+  {
+    id: 'siliconflow', name: '硅基流动', protocol: 'openai',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    modelsUrl: 'https://api.siliconflow.cn/v1/models?sub_type=chat',
+    description: '硅基流动中国站，多种开源对话模型。',
+    keyUrl: 'https://cloud.siliconflow.cn/account/ak',
+    docsUrl: 'https://docs.siliconflow.cn/docs/api/models-get',
+    requiresKey: true, logo: '硅', color: '#7951d5',
+  },
+  {
+    id: 'moonshot', name: 'Kimi / 月之暗面', protocol: 'openai',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    description: 'Kimi 中国开放平台，使用开放平台的 API Key。',
+    keyUrl: 'https://platform.kimi.com/console/api-keys',
+    docsUrl: 'https://platform.kimi.com/docs/api/list-models',
+    requiresKey: true, logo: 'K', color: '#202124',
+  },
+  {
+    id: 'dashscope-intl', name: '阿里云百炼 · 国际', protocol: 'openai',
+    baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    modelsUrl: 'https://dashscope-intl.aliyuncs.com/api/v1/models',
+    description: '新加坡地域的百炼 API Key；请勿使用中国地域或 Coding Plan 密钥。',
+    keyUrl: 'https://modelstudio.console.alibabacloud.com/',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/list-models',
+    requiresKey: true, logo: '千', color: '#ff6a00',
+  },
+  {
+    id: 'openai', name: 'OpenAI', protocol: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    description: 'OpenAI 官方 API，选择支持对话的模型。',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    docsUrl: 'https://developers.openai.com/api/reference/resources/models',
+    requiresKey: true, logo: 'O', color: '#10a37f',
+  },
+  {
+    id: 'anthropic', name: 'Anthropic / Claude', protocol: 'anthropic',
+    baseUrl: 'https://api.anthropic.com/v1',
+    description: 'Claude 官方 API，自动使用 Anthropic 消息格式。',
+    keyUrl: 'https://platform.claude.com/settings/keys',
+    docsUrl: 'https://platform.claude.com/docs/en/api/models/list',
+    requiresKey: true, logo: 'A', color: '#bf7655',
+  },
+  {
+    id: 'gemini', name: 'Google Gemini', protocol: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    description: 'Google AI Studio API Key，获取支持内容生成的模型。',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    docsUrl: 'https://ai.google.dev/api/models',
+    requiresKey: true, logo: 'G', color: '#4285f4',
+  },
+  {
+    id: 'openrouter', name: 'OpenRouter', protocol: 'openai',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    description: '一个 API Key 连接多家模型，模型能力以接口返回为准。',
+    keyUrl: 'https://openrouter.ai/settings/keys',
+    docsUrl: 'https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties',
+    requiresKey: true, logo: '↗', color: '#5867b8',
+  },
+  {
+    id: 'groq', name: 'Groq', protocol: 'openai',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    description: 'GroqCloud 推理服务，获取账号可用模型。',
+    keyUrl: 'https://console.groq.com/keys',
+    docsUrl: 'https://console.groq.com/docs/models',
+    requiresKey: true, logo: 'g', color: '#f55036',
+  },
+  {
+    id: 'xai', name: 'xAI / Grok', protocol: 'openai',
+    baseUrl: 'https://api.x.ai/v1',
+    modelsUrl: 'https://api.x.ai/v1/language-models',
+    description: 'Grok 官方 API，获取对话和图像理解模型。',
+    keyUrl: 'https://console.x.ai/',
+    docsUrl: 'https://docs.x.ai/developers/rest-api-reference/inference/models',
+    requiresKey: true, logo: '𝕏', color: '#292929',
+  },
+  {
+    id: 'mistral', name: 'Mistral AI', protocol: 'openai',
+    baseUrl: 'https://api.mistral.ai/v1',
+    description: 'Mistral 官方 API，模型接口提供对话和视觉能力信息。',
+    keyUrl: 'https://console.mistral.ai/',
+    docsUrl: 'https://docs.mistral.ai/api/endpoint/models',
+    requiresKey: true, logo: 'M', color: '#e56b18',
+  },
+  {
+    id: 'cerebras', name: 'Cerebras', protocol: 'openai',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    description: 'Cerebras Inference，获取账号可用模型。',
+    keyUrl: 'https://cloud.cerebras.ai/',
+    docsUrl: 'https://inference-docs.cerebras.ai/api-reference/models/list-models',
+    requiresKey: true, logo: 'C', color: '#e77d51',
+  },
+  {
+    id: 'custom', name: '自定义供应商', protocol: 'openai', baseUrl: '',
+    description: '连接其他兼容服务或本地模型，在高级设置填写接口地址。',
+    keyUrl: '', docsUrl: '', requiresKey: false, logo: '+', color: '#667085',
+  },
+];
+
+export function getProviderPreset(id) {
+  return providerPresets.find(provider => provider.id === id);
+}
