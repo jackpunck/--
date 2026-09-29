@@ -73,3 +73,16 @@
 .model-dialog{width:min(1180px,calc(100vw - 30px));max-height:94dvh;background:#f8faf5}.model-dialog .modal-head{padding:17px 22px 14px;background:#f8faf5}.model-dialog .modal-head h2{font-size:17px}.model-dialog .modal-head [data-model-close]{font-size:24px;font-weight:300;line-height:1}.model-dialog-content{padding:14px 18px 18px}.model-viewer-stage{position:relative;height:min(720px,72dvh);min-height:330px;border:1px solid #e0e7d9;border-radius:11px;overflow:hidden;background:#edf3e8}.model-viewer-stage>.model-frame{height:100%;width:100%;border:0;border-radius:0;display:block}.model-dialog[data-state=loading] .model-frame,.model-dialog[data-state=error] .model-frame{pointer-events:none}.model-dialog[data-state=error] .model-frame{opacity:0}.model-viewer-status{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px;text-align:center;background:#f0f5e9;color:#5c7750}.model-viewer-status[hidden]{display:none}.model-viewer-status strong{font-size:14px;line-height:1.7;font-weight:500}.model-viewer-status p{font-size:11px;color:#8a9b7b;line-height:1.8;margin:9px 0 17px}.model-loading-mark{width:27px;height:27px;border:2px solid #d3dfc6;border-top-color:#668750;border-radius:50%;margin-bottom:17px;animation:model-loading-spin 1s linear infinite}.model-viewer-status[data-state=error] .model-loading-mark{display:none}.model-viewer-status [data-model-retry][hidden]{display:none}#model-viewer-details{padding:0 3px}#model-viewer-details:empty{display:none}.model-dialog .model-caption{margin-top:13px}.model-dialog .model-guidance{margin-top:11px}@keyframes model-loading-spin{to{transform:rotate(360deg)}}
 @media(max-width:700px){.model-dialog{width:calc(100vw - 16px);max-height:95dvh;border-radius:13px}.model-dialog .modal-head{padding:13px 15px 11px}.model-dialog .modal-head h2{font-size:15px}.model-dialog-content{padding:10px 8px 13px}.model-viewer-stage{height:70dvh;min-height:310px;border-radius:8px}.model-dialog .model-caption{font-size:11px;margin:11px 5px 0}.model-dialog .model-guidance{margin:9px 5px 0}}
 @media(prefers-reduced-motion:reduce){.model-loading-mark{animation:none;border-style:dotted}}
+
+/* 动作卡片真人封面：只要目录里有任意一张封面，整个网格就统一按 3:2 排布，
+   没有图片的动作把矢量图示放大居中，这样同一行卡片高度一致，可以一张张慢慢补图。
+   清单见 public/exercise-covers.js，图片规格与来源记录见 public/assets/exercises/README.md。 */
+.exercise-grid[data-covers] .exercise-visual{height:auto;aspect-ratio:3/2}
+.exercise-grid[data-covers] .exercise-visual .icon{height:84px;width:84px}
+.exercise-grid[data-covers] .exercise-visual .letter{font-size:52px}
+.exercise-cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;transition:transform .35s ease}
+.exercise-card:hover .exercise-cover{transform:scale(1.03)}
+.exercise-visual[data-cover]:after{content:'';position:absolute;inset:auto 0 0;height:52%;z-index:0;background:linear-gradient(180deg,#0d1f1700,#0d1f173d);pointer-events:none}
+.exercise-visual[data-cover] .letter{z-index:1;color:#ffffffe0;text-shadow:0 1px 7px #0d1f1799}
+.exercise-visual[data-cover] .badge{z-index:1;background:#ffffffeb;box-shadow:0 1px 5px #0d1f171f}
+@media(prefers-reduced-motion:reduce){.exercise-cover{transition:none}.exercise-card:hover .exercise-cover{transform:none}}
