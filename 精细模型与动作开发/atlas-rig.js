@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import regions from './assets/anatomy-regions.json' with {type:'json'};
+import {createGymEquipment} from './gym-equipment.js';
 import {sampleExtendedPose} from './motion-poses.js';
 import {alignedGrip,gripNormal,fingerFlexion,horizontalBarGrip,gripOffset,createGripRotations} from './grip-poses.js';
 
@@ -162,7 +163,7 @@ export function createAtlasRig(body,sources){
     }
     body.updateMatrixWorld(true);skeleton.update();
   }
-  const staticProps=new THREE.Group();staticProps.userData.prop=true;staticProps.name='Exercise equipment schematic';body.add(staticProps);
+  const staticProps=new THREE.Group();staticProps.userData.prop=true;staticProps.name='Common gym equipment';body.add(staticProps);
   const propMaterial=new THREE.MeshStandardMaterial({color:'#526257',roughness:.75});
   const pad=new THREE.Mesh(new THREE.BoxGeometry(.72,.15,1.95),propMaterial);pad.name='support-pad';pad.castShadow=true;pad.receiveShadow=true;staticProps.add(pad);
   const uprights=[];
@@ -175,6 +176,9 @@ export function createAtlasRig(body,sources){
   const assistance=new THREE.Mesh(new THREE.BoxGeometry(.75,.12,.44),propMaterial);staticProps.add(assistance);
   const frameParts=Array.from({length:3},()=>{const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),propMaterial);staticProps.add(m);return m;});
   const handles=['r','l'].map(()=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.027,.027,.24,12),propMaterial);staticProps.add(m);return m;});
+  const gymEquipment=createGymEquipment(staticProps);
+  pad.material=gymEquipment.materials.pad;backrest.material=gymEquipment.materials.pad;roller.material=gymEquipment.materials.pad;assistance.material=gymEquipment.materials.pad;
+  bar.material=gymEquipment.materials.chrome;handles.forEach(h=>h.material=gymEquipment.materials.dark);uprights.forEach(h=>h.material=gymEquipment.materials.frame);
   const equipmentAnchors={palms:{},cableTargets:[],barCenter:null};
   function staticPose(exercise,progress=.5){
     const ref=joints.l,lengths={thigh:ref.hip.distanceTo(ref.knee),shin:ref.knee.distanceTo(ref.ankle),upper:ref.shoulder.distanceTo(ref.elbow),fore:ref.elbow.distanceTo(ref.wrist)};
@@ -320,7 +324,7 @@ export function createAtlasRig(body,sources){
     if(profile.support==='seat'){pad.scale.z=.5;pad.position.set(0,profile.hip[1]-.22,profile.hip[2]+.20);}
     if(profile.support==='side'){pad.position.set(.70,1.3,.35);pad.scale.set(.58,1,.7);}
     uprights.forEach(leg=>{const corner=leg.userData.supportCorner,top=V(corner.x,-.075,corner.z*pad.scale.z).applyQuaternion(pad.quaternion).add(pad.position);leg.position.set(top.x,top.y/2,top.z);leg.scale.y=top.y/.8;});
-    backrest.visible=profile.support==='seat'&&exercise!=='row';backrest.position.set(0,1.27,-.24);
+    backrest.visible=profile.support==='seat'&&!['row','lat-pulldown'].includes(exercise);backrest.position.set(0,1.27,-.24);
     const palms=['r','l'].map(side=>{const sign=side==='l'?1:-1;const closed=(profile.weights||profile.handles||profile.bar)&&!(exercise==='dumbbell-row'&&side==='l');return rigidPoint(joints[side].wrist.clone().add(closed?gripOffset(sign):V(-sign*.015,-.165,.12)),'hand.'+side);});
     equipmentAnchors.palms={r:palms[0].clone(),l:palms[1].clone()};equipmentAnchors.cableTargets=[];
     bar.visible=Boolean(profile.bar||profile.balanceRail);bar.position.copy(palms[0]).add(palms[1]).multiplyScalar(.5);
@@ -344,9 +348,13 @@ export function createAtlasRig(body,sources){
     const frameWidth=profile.balanceRail?1.3:exercise==='row'?.6:2.1;
     for(let i=0;i<2;i++){frameParts[i].position.set((i?.5:-.5)*frameWidth,frameHeight/2,frameZ);frameParts[i].scale.set(.06,frameHeight,.06);}
     frameParts[2].position.set(0,frameHeight,frameZ);frameParts[2].scale.set(frameWidth,.06,.06);
+    // Dedicated gym machines replace the old generic frame and duplicate cables.
+    if(gymEquipment.variants[exercise]){frameParts.forEach(p=>p.visible=false);cables.forEach(p=>p.visible=false);}
+    gymEquipment.update(exercise,THREE.MathUtils.clamp(progress,0,1),{palms,joints:poseJoints,bar,roller,assistance,handles});
+    if(gymEquipment.variants[exercise])equipmentAnchors.cableTargets=gymEquipment.variants[exercise].dynamic.outlet?[gymEquipment.variants[exercise].dynamic.outlet.clone()]:[];
     body.updateMatrixWorld(true);skeleton.update();return true;
   }
   function attach(point,boneName){const a=new THREE.Object3D();a.position.copy(point).sub(rest[boneName]);map[boneName].add(a);return a;}
   reset();
-  return {bones,map,rest,skeleton,bindGeometry,pose,staticPose,reset,attach,poseJoints,joints,weights,staticProps,equipmentAnchors,fingerChains:fingers};
+  return {bones,map,rest,skeleton,bindGeometry,pose,staticPose,reset,attach,poseJoints,joints,weights,staticProps,equipmentAnchors,gymEquipment,fingerChains:fingers};
 }

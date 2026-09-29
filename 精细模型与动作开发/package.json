@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src.js --bundle --minify --format=iife --outfile=demo.bundle.js",
     "start": "node server.cjs",
-    "test": "node scripts/verify-atlas.mjs && node scripts/verify-rig.mjs && node scripts/verify-static.mjs && node --test scripts/verify-embed.mjs scripts/verify-anatomy.mjs scripts/verify-activity.mjs scripts/verify-grips.mjs",
+    "test": "node scripts/verify-atlas.mjs && node scripts/verify-rig.mjs && node scripts/verify-static.mjs && node --test scripts/verify-embed.mjs scripts/verify-anatomy.mjs scripts/verify-activity.mjs scripts/verify-grips.mjs scripts/verify-equipment.mjs",
     "preview:export": "node scripts/verify-rig.mjs --export",
     "test:force": "node --test scripts/verify-force.mjs"
   },
