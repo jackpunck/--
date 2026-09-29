@@ -24,6 +24,15 @@
 
 手部规则、已校正动作和验证方式见 [手部动作校正](手部动作校正.md)。
 
+## 观察操作
+
+- 左键拖动旋转，右键拖动平移。
+- 滚轮沿光标位置放大或缩小，可直接对准手部等细节。
+- 双指捏合缩放和平移；加减按钮缩放当前观察区域。
+- 点击“立体／正面／侧面／背面”恢复对应视角，窗口尺寸变化会保留当前观察位置。
+
+使用 Three.js [OrbitControls 的 zoomToCursor](https://threejs.org/docs/pages/OrbitControls.html#zoomToCursor)，不需要每次滚轮操作重新拾取整个人体网格。`scripts/qa-model-navigation.mjs`（根目录）验证动作页、图谱及紧凑视图中的指针定位缩放、平移、旋转、视角恢复和尺寸变化。
+
 ## 直接查看
 
 双击 `index.html`，即可使用已打包的演示。请保留 `embed-bootstrap.js`、`style.css`、`demo.bundle.js` 和署名许可文件。

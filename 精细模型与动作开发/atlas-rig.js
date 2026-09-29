@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import regions from './assets/anatomy-regions.json' with {type:'json'};
 import {sampleExtendedPose} from './motion-poses.js';
-import {alignedGrip,gripNormal,fingerFlexion,horizontalBarGrip,gripOffset} from './grip-poses.js';
+import {alignedGrip,gripNormal,fingerFlexion,horizontalBarGrip,gripOffset,createGripRotations} from './grip-poses.js';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const X=V(1,0,0),Z=V(0,0,1);
@@ -38,6 +38,7 @@ export function createAtlasRig(body,sources){
       fingers[side].push(chain);
     }
   }
+  const gripRotations=Object.fromEntries(['l','r'].map(side=>[side,{closed:createGripRotations(fingers[side],side==='l'?1:-1),cup:createGripRotations(fingers[side],side==='l'?1:-1,'cup')} ]));
   body.updateMatrixWorld(true);const skeleton=new THREE.Skeleton(bones);skeleton.calculateInverses();
   function fingerWeights(p,side,rigidName){
     const chains=fingers[side];
@@ -151,7 +152,7 @@ export function createAtlasRig(body,sources){
         for(let i=0;i<chain.length;i++){
           const seg=chain[i],position=rigidPoint(seg.top,parent);
           const flex=push?(i===0?-.40:-.10):.16;
-          const rotation=map[parent].quaternion.clone().multiply(exercise==='curl'?fingerFlexion(f,i,sign):new THREE.Quaternion().setFromAxisAngle(X,-flex));
+          const rotation=exercise==='curl'?handRotation.clone().multiply(gripRotations[side].closed.get(seg.bone)):map[parent].quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(X,-flex));
           transform(seg.bone,position,rotation);parent=seg.bone;
         }
       }
@@ -303,7 +304,7 @@ export function createAtlasRig(body,sources){
         map['hand'+suffix].quaternion.copy(alignedGrip(elbow,wrist,gripNormal(exercise,side,forearm)));
       }
       for(const [finger,chain] of fingers[side].entries()){let parent='hand'+suffix;for(const [index,seg] of chain.entries()){
-        const position=rigidPoint(seg.top,parent),rotation=map[parent].quaternion.clone().multiply(fingerFlexion(finger,index,sign,supported?'support':gripping?'closed':'relaxed'));
+        const position=rigidPoint(seg.top,parent),rotation=gripping?map['hand'+suffix].quaternion.clone().multiply(gripRotations[side][['single','goblet'].includes(profile.weights)?'cup':'closed'].get(seg.bone)):map[parent].quaternion.clone().multiply(fingerFlexion(finger,index,sign,supported?'support':'relaxed'));
         transform(seg.bone,position,rotation);parent=seg.bone;
       }}
       const weight=weights[sign===-1?0:1];weight.visible=Boolean(profile.weights)&&(profile.weights!=='right'||sign===-1);

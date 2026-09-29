@@ -2,6 +2,7 @@
 // follows the forearm while its palm normal defines neutral/overhand grip.
 import * as THREE from 'three';
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const closedFlexion=[[.3666,.4151,.4146],[.4664,.6195,.4486],[.3229,.4117,.5382],[.1863,.4706,.143]];
 // Calibrated to this anatomical hand and a 0.025–0.027 radius handle.
 export const gripOffset=(sign)=>V(-sign*.015,-.165,.17);
 export function alignedGrip(elbow,wrist,palmNormal){
@@ -21,8 +22,8 @@ export function gripNormal(exercise,side,forearm){
 export function fingerFlexion(finger,joint,sign,kind='closed'){
   if(kind==='support')return new THREE.Quaternion().setFromAxisAngle(V(1,0,0),joint===0?.40:.10);
   if(kind==='relaxed')return new THREE.Quaternion().setFromAxisAngle(V(1,0,0),-.10);
-  if(finger===0)return new THREE.Quaternion().setFromAxisAngle(V(0,0,1),-sign*(joint===0?.68:.15)).multiply(new THREE.Quaternion().setFromAxisAngle(V(1,0,0),joint===0?-.30:-.95));
-  return new THREE.Quaternion().setFromAxisAngle(V(1,0,0),-[[.668,1.518,.05],[.602,.262,1.172],[.471,1.785,.05],[.408,1.763,.05]][finger-1][joint]);
+  if(finger===0)return new THREE.Quaternion().setFromAxisAngle(V(0,0,1),-sign*(joint===0?.571:.075)).multiply(new THREE.Quaternion().setFromAxisAngle(V(1,0,0),joint===0?-.40:-1.056));
+  return new THREE.Quaternion().setFromAxisAngle(V(1,0,0),-closedFlexion[finger-1][joint]);
 }
 
 // A straight bar fixes the grip axis. Solve in the sagittal plane, accounting
@@ -41,4 +42,24 @@ export function horizontalBarGrip(shoulder,palm,upper,fore,sign){
   const wrist=elbow.clone().addScaledVector(direction,fore);
   const normal=V(1,0,0).cross(direction);
   return {elbow,wrist,rotation:alignedGrip(elbow,wrist,normal)};
+}
+
+// Compile against the imported phalanx axes once. Closed fingers adduct into
+// parallel planes instead of retaining the anatomical asset's spread pose.
+export function createGripRotations(chains,sign,kind='closed'){
+  const result=new Map();
+  for(const [finger,chain] of chains.entries()){
+    let cumulative=0,rotation=new THREE.Quaternion();
+    for(const [joint,segment] of chain.entries()){
+      if(finger===0){rotation=rotation.clone().multiply(fingerFlexion(finger,joint,sign));}
+      else{
+        const delta=(chain[joint+1]?.top||segment.bottom).clone().sub(segment.top);
+        const flex=kind==='cup'?[.35,.65,.40][joint]:closedFlexion[finger-1][joint];
+        cumulative+=flex;const angle=Math.atan2(delta.z,delta.y)-cumulative;
+        rotation=new THREE.Quaternion().setFromUnitVectors(delta.normalize(),V(0,Math.cos(angle),Math.sin(angle)));
+      }
+      result.set(segment.bone,rotation);
+    }
+  }
+  return result;
 }

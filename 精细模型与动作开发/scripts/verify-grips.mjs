@@ -43,3 +43,21 @@ test('the supporting hand stays open and returns cleanly from closed grip',()=>{
  assert(closed.angleTo(a.rig.map['finger2-0.l'].quaternion)>.1);
  a.rig.reset();for(const b of a.rig.bones)assert(b.quaternion.angleTo(new T.Quaternion())<1e-7);
 });
+
+test('closed phalanx surfaces clear the handle and fingers close in parallel planes',()=>{
+ const a=createAnatomyAtlas({rigged:true});a.rig.pose(.5,'chest-press');let checked=0;
+ for(const side of ['l','r']){
+  const h=a.rig.map['hand.'+side],inverse=h.quaternion.clone().invert(),offset=gripOffset(side==='l'?1:-1);
+  for(const [finger,chain] of a.rig.fingerChains[side].entries())for(const seg of chain){
+   const mesh=a.pickableMeshes.find(m=>m.userData.structures.some(s=>s.structure===seg.source));
+   const info=mesh.userData.structures.find(s=>s.structure===seg.source),g=mesh.geometry,indices=new Set();
+   for(let i=info.firstFace*3;i<(info.firstFace+info.faceCount)*3;i++)indices.add(g.index.getX(i));
+   for(const index of indices){const v=mesh.getVertexPosition(index,new T.Vector3()).sub(h.position).applyQuaternion(inverse);if(Math.abs(v.x-offset.x)>.14)continue;assert(Math.hypot(v.y-offset.y,v.z-offset.z)>.028,`${seg.bone}: bone penetrates handle`);checked++;}
+   if(finger>0){const local=a.rig.map[seg.bone].position.clone().sub(h.position).applyQuaternion(inverse);assert(Math.abs(local.x-(chain[0].top.x-a.rig.rest['hand.'+side].x))<1e-7,'Closed digits adduct instead of splaying');}
+  }
+ }
+ assert(checked>1000);
+ const closed=a.rig.map['hand.l'].quaternion.clone().invert().multiply(a.rig.map['finger2-1.l'].quaternion);
+ a.rig.pose(.5,'goblet-squat');const cupped=a.rig.map['hand.l'].quaternion.clone().invert().multiply(a.rig.map['finger2-1.l'].quaternion);
+ assert(closed.angleTo(cupped)>.05,'Supporting a dumbbell end uses a distinct cupped pose');
+});
