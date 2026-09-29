@@ -4,7 +4,10 @@ import { createAnatomyAtlas } from './atlas-model.js';
 import { createModelBridge, isSupportedExercise, readModelOptions, animatedExercises } from './embed-interface.js';
 import { exerciseDetails } from './exercise-catalog.js';
 import { muscleGroups, muscleIds, isSupportedMuscle, isSupportedStructure, structureLabel, structureView } from './muscle-data.js';
-import { staticPoseProfiles } from './static-poses.js';
+import { extendedMotionInfo } from './motion-poses.js';
+import { activityAt, hasActivityProfile } from './muscle-activity.js';
+import { activityProfiles } from './activity-profiles.js';
+import { sampleMotion, cycleSeconds } from './motion-timeline.js';
 
 const $ = (id) => document.getElementById(id);
 const exercises = {
@@ -37,12 +40,21 @@ const exercises = {
 
 for(const [id,data] of Object.entries(exerciseDetails))if(!exercises[id])exercises[id]={...data,
   muscles:data.muscleIds.map((key,index)=>[key,muscleGroups[key].name,muscleGroups[key].description,index?'secondary':'primary']),
-  avoid:'当前为人工设置的静态姿态，用于辨认动作方向；器械仅为轮廓示意。请结合文字要领，在可控制且无痛的范围训练。',
-  phases:[['静态姿态','拖动可查看不同角度，当前没有连续动作轨迹。','自然呼吸']]};
+  avoid:'动作与器械为教学示意。颜色表示本动作内各肌群的相对变化，不代表实测肌力。请在可控制且无痛的范围训练。',
+  phases:[extendedMotionInfo[id].start,extendedMotionInfo[id].out,extendedMotionInfo[id].back].map((title,index)=>[title,data.cues[index]||data.summary,'保持自然呼吸'])};
+// Keep the displayed muscle list aligned with the same teaching profile.
+for(const [id,profile] of Object.entries(activityProfiles)){
+  const previous=new Map(exercises[id].muscles.map(row=>[row[0],row]));
+  exercises[id].muscles=Object.entries(profile.muscles).map(([group,definition])=>[
+    group,muscleGroups[group].name,previous.get(group)?.[2]||muscleGroups[group].description,
+    definition.role==='primary'?'primary':'secondary',
+  ]);
+}
 const options=readModelOptions(window.location.search);
 document.documentElement.classList.toggle('is-embedded',options.embed);
 document.documentElement.classList.toggle('is-compact',options.compact);
-const state={exercise:options.exercise||'squat',progress:0,playing:false,speed:1,highlight:true,selected:null,structure:null,view:'angle',appearance:'neutral',focus:'full',mode:options.mode,unsupported:options.invalidExercise};
+const state={exercise:options.exercise||'squat',progress:0,playing:false,speed:1,highlight:true,dynamicColors:true,selected:null,structure:null,view:'angle',appearance:'neutral',focus:'full',mode:options.mode,unsupported:options.invalidExercise};
+let lastActivityPanel='',lastActivityValueKey='',activityValueNodes=[];
 let controls,camera,renderer,atlas,webglReady=false,lastPhase=-1,visible=true,parentVisible=true,lastPoseKey=null;
 let resumeRendering=()=>{},pauseRendering=()=>{},dirty=true,pendingRenderReport=true,renderRequestId=null;
 function requestRender(){dirty=true;resumeRendering();}
@@ -51,40 +63,92 @@ const bridge=createModelBridge(window,(id,requestId)=>{renderRequestId=requestId
 const isAnimated=()=>state.mode==='motion'&&!state.unsupported&&animatedExercises.includes(state.exercise);
 const activeMuscles=()=>state.mode==='atlas'?(state.selected?[[state.selected,muscleGroups[state.selected].name,muscleGroups[state.selected].description]]:[]):exercises[state.exercise].muscles;
 function datasets(){const d=document.documentElement.dataset;d.exercise=state.unsupported||state.mode==='atlas'?'':state.exercise;d.mode=state.mode;d.selectedMuscle=state.selected||'';d.selectedStructure=state.structure||'';$('viewport').dataset.pose=state.mode==='motion'&&!state.unsupported?state.exercise:'atlas';}
-function movementAt(progress){const ease=x=>.5-.5*Math.cos(Math.PI*Math.max(0,Math.min(1,x)));return progress<.12?0:progress<.55?ease((progress-.12)/.43):progress<.95?1-ease((progress-.55)/.4):0;}
-function showPhase(){if(!isAnimated())return;const index=state.progress<.12?0:state.progress<.55?1:2;if(lastPhase===index)return;lastPhase=index;const phase=exercises[state.exercise].phases[index];$('phase-number').textContent=`0${index+1} / 03`;$('phase-title').textContent=phase[0];$('phase-cue').textContent=phase[1];$('breath').textContent=phase[2];$('phase-caption').textContent=phase[0];}
+function showPhase(motion=sampleMotion(state.exercise,state.progress)){if(!isAnimated())return;const index=motion.phaseIndex;if(lastPhase===index)return;lastPhase=index;const phase=exercises[state.exercise].phases[index];$('phase-number').textContent=activityProfiles[state.exercise]?.isometric?'持续支撑':`0${index+1} / 03`;$('phase-title').textContent=phase[0];$('phase-cue').textContent=phase[1];$('breath').textContent=phase[2];$('phase-caption').textContent=phase[0];}
 function updatePlay(){$('play').textContent=state.playing?'Ⅱ':'▶';$('play').setAttribute('aria-label',state.playing?'暂停动画':'播放动画');$('play').disabled=!isAnimated();$('progress').disabled=!isAnimated();}
-function updateColors(){atlas?.setAppearance(state.appearance,state.structure?[]:activeMuscles(),state.structure?null:state.selected,state.highlight,state.mode==='atlas'&&!state.structure);requestRender();}
+function updateActivity(motion){
+  const result=isAnimated()?activityAt(state.exercise,motion):null;
+  const enabled=!!result&&state.dynamicColors&&state.highlight&&!state.structure;
+  atlas?.setActivity(enabled?result:null);
+  const label=enabled?({isometric:'等长支撑',concentric:'向心阶段',eccentric:'离心阶段',turn:'方向转换',hold:state.exercise==='pushup'?'支撑保持':'起始姿态保持'})[motion.contraction]:'';
+  if($('contraction-state').textContent!==label)$('contraction-state').textContent=label;
+  document.documentElement.dataset.activityValid=String(!!result);
+  if(result){
+    if(!state.structure){const kind=(activityProfiles[state.exercise]?.isometric?'持续支撑演示':'连续动画')+(state.dynamicColors?' · 发力示意':' · 固定高亮');if($('pose-kind').textContent!==kind)$('pose-kind').textContent=kind;}
+    const values=result.rows.map(row=>{const percent=Math.round(row.relative*100);return {percent,label:row.steady?(row.relative>0?(row.role==='stabilizer'?'持续稳定':'持续用力'):'未示意参与'):percent>=90?'接近本程峰值':percent>=70?'本程较强':percent<=15?'本程较轻':'本程中等'};});
+    const key=JSON.stringify([values,result.phaseNote]);
+    if(key!==lastActivityValueKey){
+      lastActivityValueKey=key;
+      activityValueNodes.forEach(({node,fill,meter,steady},i)=>{
+        const value=values[i];node.textContent=steady?value.label:`${value.label} · ${value.percent}%`;
+        fill.style.transform=`scaleX(${value.percent/100})`;
+        meter.setAttribute('aria-valuenow',String(value.percent));meter.setAttribute('aria-valuetext',value.label);
+      });
+      $('activity-status').textContent=result.phaseNote;
+    }
+  }
+}
+function updateActivityControl(){
+  const available=isAnimated()&&hasActivityProfile(state.exercise);
+  const relativeColors=available&&state.dynamicColors&&state.highlight&&!state.structure;
+  document.documentElement.dataset.activityColors=String(relativeColors);
+  $('primary-label').textContent=relativeColors?'本程发力：较轻 → 较强':state.mode==='atlas'?'已选解剖部位':'主要发力部位';
+  document.querySelector('.viewer-legend>span:nth-child(2)').hidden=relativeColors||state.mode==='atlas';
+  $('activity-controls').hidden=!available;
+  $('activity-panel').hidden=!available;
+  if(!available)lastActivityPanel='';
+  $('dynamic-colors').textContent=state.dynamicColors?'发力变化：开':'发力变化：关';
+  $('dynamic-colors').setAttribute('aria-pressed',String(state.dynamicColors));
+  $('dynamic-colors').disabled=!state.highlight||!!state.structure;
+  $('activity-note').textContent=!state.highlight?'显示高亮后可查看发力变化':state.structure?'当前为解剖结构高亮；点击肌群按钮恢复发力变化':state.dynamicColors?'同一肌肉按本次动作的最轻到最强着色；浅色不代表完全放松。':'固定显示解剖高亮，右侧仍展示本程相对变化';
+  if(available&&lastActivityPanel!==state.exercise){
+    lastActivityPanel=state.exercise;lastActivityValueKey='';
+    const result=activityAt(state.exercise,{position:0,contraction:'hold'});
+    $('activity-summary').textContent=result.note+(result.rows.some(row=>row.group==='core'&&row.role==='primary')?' 腹部核心采用透视高亮，便于观察被表层组织遮住的肌肉。':'');
+    activityValueNodes=result.rows.map(item=>{
+      const row=document.createElement('div'),heading=document.createElement('div'),label=document.createElement('button'),node=document.createElement('strong');
+      row.className='activity-row';row.dataset.activityMuscle=item.group;
+      label.textContent=muscleGroups[item.group].name;label.onclick=()=>selectMuscle(item.group,true);
+      const role=document.createElement('small');role.textContent=({primary:'主力',secondary:'辅助',stabilizer:'稳定'})[item.role]||'参与';
+      heading.append(label,role,node);
+      const meter=document.createElement('div'),fill=document.createElement('i');meter.className='activity-meter';meter.hidden=item.steady;meter.setAttribute('role','progressbar');meter.setAttribute('aria-label',`${muscleGroups[item.group].name}本动作内相对变化`);meter.setAttribute('aria-valuemin','0');meter.setAttribute('aria-valuemax','100');meter.append(fill);
+      const hint=document.createElement('p');hint.textContent=item.steady?item.peak:`较强：${item.peak}；较轻：${item.low}`;
+      row.append(heading,meter,hint);return {node,fill,meter,steady:item.steady,row};
+    });
+    $('activity-values').replaceChildren(...activityValueNodes.map(x=>x.row));
+  }
+}
+function updateColors(){atlas?.setAppearance(state.appearance,state.structure?[]:activeMuscles(),state.structure?null:state.selected,state.highlight,state.mode==='atlas'&&!state.structure);updateActivityControl();requestRender();}
 function enableHighlight(){state.highlight=true;$('highlight').textContent='隐藏高亮';$('highlight').setAttribute('aria-pressed','true');}
 function updateChips(){const list=state.mode==='atlas'?muscleIds.map(id=>[id,muscleGroups[id].name]):exercises[state.exercise].muscles;$('muscle-chips').replaceChildren(...list.map(([id,label,,role])=>{const b=document.createElement('button');b.className=`muscle-chip ${role||''}`;b.textContent=label;b.dataset.muscle=id;b.onclick=()=>selectMuscle(id,true,state.mode==='atlas');return b;}));markChips();}
 function markChips(){document.querySelectorAll('.muscle-chip').forEach(b=>{const on=!state.structure&&b.dataset.muscle===state.selected;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});}
-function selectMuscle(id,reveal=false,orient=false,notify=true){if(!isSupportedMuscle(id))return;pendingRenderReport=true;if(reveal)enableHighlight();state.selected=id;state.structure=null;atlas?.selectStructure(null);$('pose-kind').textContent=state.mode==='atlas'?'肌群 · 透视高亮':isAnimated()?'连续动画':'静态姿态 · 单帧示意';const group=muscleGroups[id];$('muscle-description').textContent=group.description;$('picked-name').textContent=group.name;$('picked-source').textContent='点击高亮可查看对应结构；左右以模型自身为准';if(state.mode==='atlas'){$('exercise-name').textContent=group.name;$('viewer-title').textContent=group.name;$('exercise-summary').textContent=group.description;document.title=`${group.name} · 肌肉图谱 · 健身助手`;}markChips();updateColors();datasets();if(orient&&camera){if(options.compact){state.focus=['quads','hamstrings','glutes','calves'].includes(id)?'lower':'upper';$('focus').value=state.focus;}setView(group.view);}if(notify)bridge.muscleSelected(id,group.name,null,state.mode,renderRequestId);}
-function selectStructure(name,orient=false){if(!isSupportedStructure(name))return;pendingRenderReport=true;const info=atlas?.selectStructure(name);if(!info){state.structure=name;return;}enableHighlight();state.structure=name;state.selected=info.muscle;const description=`${info.name}。透视高亮显示该真实结构，可能透过表层肌肉。结构英文名：${name}。`;$('pose-kind').textContent=(state.mode==='atlas'?'单结构':isAnimated()?'连续动画':'静态姿态')+' · 透视高亮';$('picked-name').textContent=info.name;$('picked-source').textContent=name;$('muscle-description').textContent=description;if(state.mode==='atlas'){$('exercise-name').textContent=info.name;$('viewer-title').textContent=info.name;$('exercise-summary').textContent='已透视高亮该真实解剖结构，深层肌肉可透过表层显示。';document.title=`${info.name} · 肌肉图谱 · 健身助手`;}markChips();updateColors();datasets();if(orient&&camera){if(options.compact){state.focus=/femoris|vastus|gluteus|tibialis|gastrocnemius|soleus|sartorius|gracilis|adductor (magnus|longus|brevis)/i.test(name)?'lower':'upper';$('focus').value=state.focus;}setView(structureView(name));}bridge.muscleSelected(info.muscle,info.name,name,state.mode,renderRequestId);}
-function applyPose(){
+function selectMuscle(id,reveal=false,orient=false,notify=true){if(!isSupportedMuscle(id))return;pendingRenderReport=true;if(reveal)enableHighlight();state.selected=id;state.structure=null;atlas?.selectStructure(null);$('pose-kind').textContent=state.mode==='atlas'?'肌群 · 透视高亮':isAnimated()?(activityProfiles[state.exercise]?.isometric?'持续支撑演示':'连续动画'):'静态姿态 · 单帧示意';const group=muscleGroups[id];$('muscle-description').textContent=group.description;$('picked-name').textContent=group.name;$('picked-source').textContent='点击高亮可查看对应结构；左右以模型自身为准';if(state.mode==='atlas'){$('exercise-name').textContent=group.name;$('viewer-title').textContent=group.name;$('exercise-summary').textContent=group.description;document.title=`${group.name} · 肌肉图谱 · 健身助手`;}markChips();updateColors();datasets();if(orient&&camera){if(options.compact){state.focus=['quads','hamstrings','glutes','calves'].includes(id)?'lower':'upper';$('focus').value=state.focus;}setView(group.view);}if(notify)bridge.muscleSelected(id,group.name,null,state.mode,renderRequestId);}
+function selectStructure(name,orient=false){if(!isSupportedStructure(name))return;pendingRenderReport=true;const info=atlas?.selectStructure(name);if(!info){state.structure=name;return;}enableHighlight();state.structure=name;state.selected=info.muscle;const description=`${info.name}。透视高亮显示该真实结构，可能透过表层肌肉。结构英文名：${name}。`;$('pose-kind').textContent=(state.mode==='atlas'?'单结构':isAnimated()?(activityProfiles[state.exercise]?.isometric?'持续支撑演示':'连续动画'):'静态姿态')+' · 透视高亮';$('picked-name').textContent=info.name;$('picked-source').textContent=name;$('muscle-description').textContent=description;if(state.mode==='atlas'){$('exercise-name').textContent=info.name;$('viewer-title').textContent=info.name;$('exercise-summary').textContent='已透视高亮该真实解剖结构，深层肌肉可透过表层显示。';document.title=`${info.name} · 肌肉图谱 · 健身助手`;}markChips();updateColors();datasets();if(orient&&camera){if(options.compact){state.focus=/femoris|vastus|gluteus|tibialis|gastrocnemius|soleus|sartorius|gracilis|adductor (magnus|longus|brevis)/i.test(name)?'lower':'upper';$('focus').value=state.focus;}setView(structureView(name));}bridge.muscleSelected(info.muscle,info.name,name,state.mode,renderRequestId);}
+function applyPose(motion=sampleMotion(state.exercise,state.progress)){
   if(!atlas)return;
-  const key=state.mode==='atlas'||state.unsupported?'atlas':isAnimated()?`${state.exercise}:${movementAt(state.progress)}`:state.exercise;
+  const key=state.mode==='atlas'||state.unsupported?'atlas':isAnimated()?`${state.exercise}:${motion.position}`:state.exercise;
   if(key===lastPoseKey)return;
-  if(key==='atlas')atlas.rig.reset();else if(isAnimated())atlas.rig.pose(movementAt(state.progress),state.exercise);else atlas.rig.staticPose(state.exercise);
+  if(key==='atlas')atlas.rig.reset();else if(isAnimated())atlas.rig.pose(motion.position,state.exercise);else atlas.rig.staticPose(state.exercise);
   lastPoseKey=key;requestRender();
 }
-function showDetails(){const data=exercises[state.exercise],atlasMode=state.mode==='atlas';$('equipment').textContent=atlasMode?'真实解剖网格':data.equipment;$('guide-label').textContent=atlasMode?'肌肉图谱':'动作指南';$('muscle-heading').textContent=atlasMode?'观察肌群':'哪里在发力';$('cues-heading').textContent=atlasMode?'如何观察':'动作要领';$('exercise-name').textContent=state.unsupported?'暂不支持此动作':atlasMode?'肌肉解剖图谱':data.title;$('exercise-summary').textContent=state.unsupported?'此动作 ID 未收录。请选择列表中支持的动作；当前展示解剖模型。':atlasMode?'点击模型任意肌肉查看名称，或选择下方肌群高亮。':data.summary;$('avoid-text').textContent=atlasMode?'模型来自 Z-Anatomy / BodyParts3D。高亮表示解剖位置，不表示实测发力强度。':data.avoid;$('source-link').href=atlasMode?'https://github.com/Z-Anatomy/Models-of-human-anatomy':data.source;$('source-link').textContent=atlasMode?'解剖资产来源 ↗':'动作要领参考 ↗';$('cues').replaceChildren(...(atlasMode?['拖动模型旋转，点击肌肉查看具体名称。','使用正面、侧面与背面按钮观察不同区域。','左右以模型自身为准；透视高亮可穿过表层组织。']:data.cues).map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));$('pose-kind').textContent=state.unsupported?'未收录动作':atlasMode?'肌肉解剖 · 点击识别':isAnimated()?'连续动画':'静态姿态 · 单帧示意';$('viewer-title').textContent=state.unsupported?'暂不支持此动作':atlasMode?'肌肉解剖':data.title;$('primary-label').textContent=atlasMode?'已选解剖部位':'主要发力部位';$('atlas-note').hidden=!atlasMode;$('playback').hidden=!isAnimated();$('phase-card').hidden=!isAnimated();$('exercise-select').value=state.unsupported?'':state.exercise;updateChips();showPhase();updatePlay();}
+function showDetails(){const data=exercises[state.exercise],atlasMode=state.mode==='atlas';$('equipment').textContent=atlasMode?'真实解剖网格':data.equipment;$('guide-label').textContent=atlasMode?'肌肉图谱':'动作指南';$('muscle-heading').textContent=atlasMode?'观察肌群':'哪里在发力';$('cues-heading').textContent=atlasMode?'如何观察':'动作要领';$('exercise-name').textContent=state.unsupported?'暂不支持此动作':atlasMode?'肌肉解剖图谱':data.title;$('exercise-summary').textContent=state.unsupported?'此动作 ID 未收录。请选择列表中支持的动作；当前展示解剖模型。':atlasMode?'点击模型任意肌肉查看名称，或选择下方肌群高亮。':data.summary;$('avoid-text').textContent=atlasMode?'模型来自 Z-Anatomy / BodyParts3D。高亮表示解剖位置，不表示实测发力强度。':data.avoid;$('source-link').href=atlasMode?'https://github.com/Z-Anatomy/Models-of-human-anatomy':data.source;$('source-link').textContent=atlasMode?'解剖资产来源 ↗':'动作要领参考 ↗';$('cues').replaceChildren(...(atlasMode?['拖动模型旋转，点击肌肉查看具体名称。','使用正面、侧面与背面按钮观察不同区域。','左右以模型自身为准；透视高亮可穿过表层组织。']:data.cues).map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));$('pose-kind').textContent=state.unsupported?'未收录动作':atlasMode?'肌肉解剖 · 点击识别':isAnimated()?(activityProfiles[state.exercise]?.isometric?'持续支撑演示':'连续动画'):'静态姿态 · 单帧示意';$('viewer-title').textContent=state.unsupported?'暂不支持此动作':atlasMode?'肌肉解剖':data.title;$('primary-label').textContent=atlasMode?'已选解剖部位':'主要发力部位';$('atlas-note').hidden=!atlasMode;$('cycle-caption').textContent=activityProfiles[state.exercise]?.isometric?'持续支撑观察':'一个完整动作';$('playback').hidden=!isAnimated();$('phase-card').hidden=!isAnimated();$('exercise-select').value=state.unsupported?'':state.exercise;updateChips();showPhase();updatePlay();}
 function chooseExercise(id){if(!isSupportedExercise(id))return;state.mode='motion';state.unsupported=false;markModes();state.exercise=id;state.progress=0;state.structure=null;state.selected=null;state.focus='full';$('focus').value='full';lastPhase=-1;state.playing=isAnimated()&&!options.compact&&!matchMedia('(prefers-reduced-motion: reduce)').matches;atlas?.selectStructure(null);showDetails();selectMuscle(exercises[id].muscles[0][0],false,false,false);document.querySelectorAll('[data-exercise]').forEach(b=>{const on=b.dataset.exercise===id;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});$('progress').value='0';applyPose();if(camera)setView('angle');datasets();document.title=`${exercises[id].title} · 3D演示 · 健身助手`;bridge.selected(id,exercises[id].title,renderRequestId);}
 function markModes(){document.querySelectorAll('[data-mode]').forEach(b=>{const on=b.dataset.mode===state.mode;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});}
 function setMode(mode){
   const next=mode==='atlas'?'atlas':'motion';if(next===state.mode)return;
   if(next==='motion'){chooseExercise(state.exercise);return;}
   state.mode=next;state.focus='full';$('focus').value='full';state.playing=false;state.structure=null;state.selected=null;atlas?.selectStructure(null);
-  markModes();showDetails();applyPose();datasets();if(camera)setView('angle');
+  markModes();showDetails();applyPose();updateColors();datasets();if(camera)setView('angle');
 }
-$('exercise-select').replaceChildren(...Object.entries(exercises).map(([id,data])=>{const option=document.createElement('option');option.value=id;option.textContent=`${data.title}${animatedExercises.includes(id)?' · 动画':' · 静态'}`;return option;}));
+$('exercise-select').replaceChildren(...Object.entries(exercises).map(([id,data])=>{const option=document.createElement('option');option.value=id;option.textContent=`${data.title}${activityProfiles[id]?.isometric?' · 持续支撑':animatedExercises.includes(id)?' · 动画':' · 静态'}`;return option;}));
 $('exercise-select').onchange=e=>chooseExercise(e.target.value);
 document.querySelectorAll('[data-exercise]').forEach(b=>b.onclick=()=>chooseExercise(b.dataset.exercise));
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 $('play').onclick=()=>{if(isAnimated()){state.playing=!state.playing;updatePlay();requestRender();}};
-$('progress').oninput=e=>{state.progress=Number(e.target.value)/1000;state.playing=false;updatePlay();showPhase();applyPose();};
+$('progress').oninput=e=>{state.progress=Number(e.target.value)/1000;state.playing=false;updatePlay();showPhase();applyPose();requestRender();};
 $('speed').onclick=()=>{state.speed=state.speed===1?.5:state.speed===.5?.25:1;$('speed').textContent=`${state.speed}×`;};
+$('dynamic-colors').onclick=()=>{state.dynamicColors=!state.dynamicColors;updateColors();};
 $('highlight').onclick=()=>{state.highlight=!state.highlight;$('highlight').textContent=state.highlight?'隐藏高亮':'显示高亮';$('highlight').setAttribute('aria-pressed',String(state.highlight));if(state.structure)atlas?.selectStructure(state.highlight?state.structure:null);updateColors();};
-function setView(view){if(!camera||!controls||!atlas)return;state.view=view;const low=state.mode==='motion'&&(state.exercise==='pushup'||staticPoseProfiles[state.exercise]?.camera==='low');const profile=state.mode==='motion'?staticPoseProfiles[state.exercise]:null;const target=new THREE.Vector3(0,profile?.targetY??(low?.7:profile?.hip?.[1]===.8?1.2:1.55),0);let scale=profile?.cameraScale??1;if(state.focus!=='full'){if(state.mode==='atlas'){target.set(0,state.focus==='upper'?2.45:.88,0);scale=state.focus==='upper'?.5:.57;}else{atlas.focus[state.focus].getWorldPosition(target);scale=.63;}}const positions={angle:[profile?.workingArmView?-3.6:3.6,1.65,5.1],front:[0,.3,6.1],side:[6.1,.5,0],back:[0,.3,-6.1]};if(low&&state.focus==='full')scale*=Math.max(1,1.2/camera.aspect);camera.position.copy(target).add(new THREE.Vector3(...positions[view]).multiplyScalar(scale));controls.target.copy(target);controls.update();document.querySelectorAll('[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});}
+function setView(view){if(!camera||!controls||!atlas)return;state.view=view;const low=state.mode==='motion'&&(state.exercise==='pushup'||extendedMotionInfo[state.exercise]?.camera==='low');const profile=state.mode==='motion'?extendedMotionInfo[state.exercise]:null;const target=new THREE.Vector3(0,profile?.targetY??(low?.7:profile?.hip?.[1]===.8?1.2:1.55),0);let scale=profile?.cameraScale??1;if(state.mode==='motion'&&state.focus==='full'){scale*=1.16;target.y-=.18;}if(state.focus!=='full'){if(state.mode==='atlas'){target.set(0,state.focus==='upper'?2.45:.88,0);scale=state.focus==='upper'?.5:.57;}else{atlas.focus[state.focus].getWorldPosition(target);scale=.63;}}const positions={angle:[profile?.workingArmView?-3.6:3.6,1.65,5.1],front:[0,.3,6.1],side:[6.1,.5,0],back:[0,.3,-6.1]};if(low&&state.focus==='full')scale*=Math.max(1,1.2/camera.aspect);camera.position.copy(target).add(new THREE.Vector3(...positions[view]).multiplyScalar(scale));controls.target.copy(target);controls.update();document.querySelectorAll('[data-view]').forEach(b=>{const on=b.dataset.view===view;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
 function zoom(factor){if(!camera||!controls)return;camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target);controls.update();}
 $('zoom-in').onclick=()=>zoom(.85);$('zoom-out').onclick=()=>zoom(1.15);
@@ -126,7 +190,9 @@ try{
   function frame(now){
     raf=0;if(!canRender())return;
     const dt=Math.min((now-previous)/1000,.05);previous=now;dirty=false;
-    if(isAnimated()&&state.playing){state.progress=(state.progress+dt*state.speed/6)%1;$('progress').value=String(Math.round(state.progress*1000));applyPose();showPhase();}
+    if(isAnimated()&&state.playing){state.progress=(state.progress+dt*state.speed/cycleSeconds)%1;$('progress').value=String(Math.round(state.progress*1000));}
+    const motion=sampleMotion(state.exercise,state.progress);
+    applyPose(motion);showPhase(motion);updateActivity(motion);
     controls.update();updateLabels();try{renderer.render(scene,camera);}catch(error){webglReady=false;pauseRendering();console.error('3D rendering failed',error);$('loading').hidden=false;$('loading').textContent='3D 显示暂不可用，请重试；文字说明仍可查看。';reportReady();return;}
     if(!readySent){readySent=true;$('loading').hidden=true;reportReady();}
     if(pendingRenderReport){pendingRenderReport=false;reportRendered();}

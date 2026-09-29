@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f6f2">
   <title>动作实验室 · 健身助手</title>
-  <script src="embed-bootstrap.js?v=12"></script>
-  <link rel="stylesheet" href="style.css?v=12">
+  <script src="embed-bootstrap.js?v=19"></script>
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <header class="header"><a class="brand" href="./index.html"><span class="brand-icon">f.</span>健身助手<span class="brand-divider"></span><span class="muted">动作实验室</span></a><span class="demo-badge"><i></i>交互演示</span></header>
   <main>
-    <div class="intro"><div><div class="eyebrow">MOVE WITH UNDERSTANDING</div><h1>看懂动作，找到发力感。</h1><p>旋转模型查看肌肉位置，点击肌肉了解名称。</p></div><span class="intro-note">3 个动画 · 22 个静态姿态<br><strong>从看懂到会做</strong></span></div>
+    <div class="intro"><div><div class="eyebrow">MOVE WITH UNDERSTANDING</div><h1>看懂动作，找到发力感。</h1><p>旋转模型查看肌肉位置，点击肌肉了解名称。</p></div><span class="intro-note">24 个往复动作 · 1 个持续支撑<br><strong>从看懂到会做</strong></span></div>
     <nav class="exercise-tabs" aria-label="选择训练动作">
       <button class="exercise-tab active" data-exercise="squat" aria-pressed="true"><span class="tab-number">01</span><span><strong>徒手深蹲</strong><small>腿部 · 臀部</small></span><span class="tab-arrow">↗</span></button>
       <button class="exercise-tab" data-exercise="pushup" aria-pressed="false"><span class="tab-number">02</span><span><strong>俯卧撑</strong><small>胸部 · 手臂</small></span><span class="tab-arrow">↗</span></button>
@@ -32,12 +32,20 @@
           <div class="zoom-buttons"><button id="zoom-in" aria-label="放大模型">＋</button><button id="zoom-out" aria-label="缩小模型">−</button></div>
         </div>
         <div class="viewer-legend"><span><i class="primary-dot"></i><span id="primary-label">已选部位</span></span><span><i class="secondary-dot"></i>辅助与稳定部位</span><button id="highlight" aria-pressed="true">隐藏高亮</button></div>
+        <div id="activity-controls" class="activity-controls" hidden><button id="dynamic-colors" aria-pressed="true" aria-describedby="activity-note">发力变化：开</button><div><strong id="contraction-state" aria-live="polite"></strong><span id="activity-note">颜色表示本动作内的相对变化；教学示意。</span></div></div>
         <p id="atlas-note" class="atlas-note" hidden>点击可见肌肉显示真实解剖名称；旋转至背面可观察背部肌群。肌群和单结构均采用透视高亮，深层结构可透过表层显示。左右以模型自身为准。</p>
-        <div class="playback" id="playback" hidden><button id="play" class="play-button" aria-label="播放动画">▶</button><div class="progress-area"><div class="progress-caption"><span id="phase-caption">准备</span><span>一个完整动作</span></div><input id="progress" aria-label="动作进度" type="range" min="0" max="1000" value="0"></div><button id="speed" class="speed-button" aria-label="切换播放速度">1×</button></div>
+        <div class="playback" id="playback" hidden><button id="play" class="play-button" aria-label="播放动画">▶</button><div class="progress-area"><div class="progress-caption"><span id="phase-caption">准备</span><span id="cycle-caption">一个完整动作</span></div><input id="progress" aria-label="动作进度" type="range" min="0" max="1000" value="0"></div><button id="speed" class="speed-button" aria-label="切换播放速度">1×</button></div>
       </section>
       <aside class="instruction-card">
         <div class="section-kicker"><span id="guide-label">模型详情</span><span id="equipment"></span></div><h2 id="exercise-name">正在准备模型…</h2><p id="exercise-summary" class="exercise-summary"></p>
         <div class="muscle-section"><h3 id="muscle-heading">观察肌群</h3><div id="muscle-chips" class="muscle-chips"></div><p id="muscle-description" class="muscle-description" aria-live="polite"></p></div>
+        <section id="activity-panel" class="activity-panel" hidden aria-label="动作发力变化示意">
+          <h3>发力变化 <span>教学示意</span></h3><p id="activity-summary"></p>
+          <p id="activity-status" role="status"></p><div id="activity-values" class="activity-values"></div>
+          <div class="activity-scale" aria-label="本动作内相对变化：较轻到较强"><i></i><span>本程较轻</span><span>本程最强</span></div>
+          <p>各肌肉分别按自己的全程范围比较，颜色不用于比较不同肌肉的力量大小。</p>
+          <details id="activity-assumptions"><summary>如何理解颜色与百分比</summary><p>0% 是这块肌肉在本动作示意中的最低点，100% 是示意峰值；不表示真实肌力、肌电激活率或人体极限。浅色不代表完全不发力。稳定肌群持续显示，不因暂停或动作转向而熄灭。</p><p>曲线根据动作要领人工简化，用于观察大致趋势；实际发力会随动作细节、负重和个体改变。<a href="动态颜色说明.md" target="_blank" rel="noopener">示意方法与动作接入说明 ↗</a></p></details>
+        </section>
         <div class="phase-card" id="phase-card" hidden><div class="phase-card-top"><span id="phase-number">01 / 03</span><span id="breath">自然呼吸</span></div><strong id="phase-title">准备</strong><p id="phase-cue"></p></div>
         <div class="cues-section"><h3 id="cues-heading">如何观察</h3><ol id="cues"></ol></div>
         <div class="avoid"><span>容易忽略</span><p id="avoid-text"></p></div>
@@ -46,6 +54,6 @@
     <footer aria-label="模型署名与动作参考"><span class="compact-attribution">BodyParts3D · </span><p>解剖模型：<a href="https://github.com/Z-Anatomy/Models-of-human-anatomy" target="_blank" rel="noopener noreferrer">Z-Anatomy</a> / BodyParts3D · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>（原始数据 CC BY-SA 2.1 Japan）。动作采用教学骨架与近似蒙皮；高亮不代表实测发力强度。<a href="THIRD_PARTY_LICENSES.txt" target="_blank" rel="noopener noreferrer">完整署名与许可</a></p><a id="source-link" target="_blank" rel="noopener noreferrer">动作要领参考 ↗</a></footer>
   </main>
   <noscript><p>请启用 JavaScript 以查看互动演示。</p></noscript>
-  <script src="demo.bundle.js?v=12" onerror="document.getElementById('loading').textContent='未找到演示资源，请保留精细模型与动作开发目录中的页面、样式和打包文件后重新打开。'"></script>
+  <script src="demo.bundle.js?v=19" onerror="document.getElementById('loading').textContent='未找到演示资源，请保留精细模型与动作开发目录中的页面、样式和打包文件后重新打开。'"></script>
 </body>
 </html>

@@ -22,6 +22,13 @@ for(const exercise of ['squat','curl','pushup'])for(let frame=0;frame<=100;frame
     for(const [start,end] of [['shoulder','elbow'],['elbow','wrist'],['hip','knee'],['knee','ankle']]){
       const err=Math.abs(r[start].distanceTo(r[end])-j[start].distanceTo(j[end]));maxLimbError=Math.max(err,maxLimbError);assert(err<.002,`${exercise} ${start} ${end} length error ${err}`);
     }
+    if(exercise==='pushup'){
+      const upper=j.elbow.clone().sub(j.shoulder),forearm=j.wrist.clone().sub(j.elbow);
+      const flexion=THREE.MathUtils.radToDeg(upper.angleTo(forearm));
+      assert(flexion<125,`Push-up elbow exceeds the reference model's working range: ${flexion}`);
+      if(frame===0){assert(flexion<20,'Push-up starts with nearly extended elbows');assert(Math.abs(j.shoulder.z-j.wrist.z)<.1,'Starting hands align beneath shoulders in the sagittal plane');}
+      if(frame===100)assert(flexion>100&&flexion<120,'Push-up retains a lowered pose without the former excessive elbow flexion');
+    }
   }
   for(const m of meshes)for(let i=0;i<m.geometry.attributes.position.count;i+=997){m.getVertexPosition(i,v);assert(v.toArray().every(Number.isFinite));assert(v.length()<5,'runaway deformation');}
 }

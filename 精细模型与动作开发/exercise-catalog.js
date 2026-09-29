@@ -83,17 +83,17 @@ export const exerciseDetails = Object.freeze({
   "chest-press": {
     "title": "器械推胸",
     "equipment": "固定器械",
-    "summary": "沿器械轨迹将把手向前推。",
+    "summary": "示范中立握法：掌心相对，沿器械轨迹向前推。",
     "cues": [
-      "调座椅使把手约在胸部高度",
-      "背部贴垫，手腕稳定",
-      "回程慢放，不让配重片撞击"
+      "调座椅使握把对准胸部中段，双脚踩稳",
+      "背部贴垫，拇指环握，手腕与前臂对齐",
+      "推至接近伸肘但不锁死，控制还原"
     ],
     "muscleIds": [
       "chest",
       "triceps"
     ],
-    "source": "https://www.nasm.org/workout-exercise-guidance"
+    "source": "https://www.acefitness.org/resources/everyone/exercise-library/188/seated-chest-press/"
   },
   "lat-pulldown": {
     "title": "高位下拉",
@@ -375,5 +375,5 @@ export const exerciseDetails = Object.freeze({
     "source": "https://www.nasm.org/workout-exercise-guidance"
   }
 });
-export const animatedExercises=Object.freeze(['squat','pushup','curl']);
+export const animatedExercises=Object.freeze(Object.keys(exerciseDetails));
 export const supportedExercises=Object.freeze(Object.keys(exerciseDetails));

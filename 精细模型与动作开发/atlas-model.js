@@ -49,14 +49,51 @@ export function createAnatomyAtlas({rigged=false}={}){
     else {const a=new THREE.Object3D();a.position.set(...xyz);anchors[key]=a;body.add(a);}
   }
   const focus=rig?{upper:rig.attach(new THREE.Vector3(0,2.40,0),'chest'),lower:rig.attach(new THREE.Vector3(0,1.0,0),'thigh.l')}:null;
+  // Keep materials and geometry stable. Only their color values change per frame.
+  let activityMaterials=[],activityApplied=false,activityOverlay=null;
+  const coreMesh=muscleMeshes.find(mesh=>mesh.userData.muscle==='core');
+  function updateActivityOverlay(levels){
+    const visible=activityMaterials.length>0&&levels?.rows?.some(row=>row.group==='core'&&row.role==='primary');
+    if(visible&&!activityOverlay){
+      const material=coreMesh.material.clone();material.transparent=true;material.opacity=.8;material.depthTest=false;material.depthWrite=false;
+      activityOverlay=rig?new THREE.SkinnedMesh(coreMesh.geometry,material):new THREE.Mesh(coreMesh.geometry,material);
+      activityOverlay.userData={...coreMesh.userData,selectionOverlay:true,activityOverlay:true};
+      activityOverlay.renderOrder=1;activityOverlay.frustumCulled=false;
+      if(rig)activityOverlay.bind(rig.skeleton,new THREE.Matrix4());
+      body.add(activityOverlay);
+    }
+    if(activityOverlay){
+      activityOverlay.visible=!!visible;
+      activityOverlay.material.color.copy(coreMesh.material.color);
+      activityOverlay.material.emissive.copy(coreMesh.material.emissive);
+    }
+  }
+  const activityLow=new THREE.Color('#fae6c7'),activityMid=new THREE.Color('#ea9651'),activityHigh=new THREE.Color('#a92f21');
+  const activityGlow=new THREE.Color('#4b1004');
+  function setActivity(levels){
+    if(!levels&&!activityApplied)return;
+    for(const {material,muscle,color,emissive,neutral} of activityMaterials){
+      const level=levels?.muscles[muscle];
+      if(!levels){material.color.copy(color);material.emissive.copy(emissive);continue;}
+      if(!Number.isFinite(level)){material.color.copy(neutral);material.emissive.set('#000000');continue;}
+      const intensity=THREE.MathUtils.clamp(level,0,1);
+      if(intensity<=.5)material.color.lerpColors(activityLow,activityMid,intensity/.5);
+      else material.color.lerpColors(activityMid,activityHigh,(intensity-.5)/.5);
+      material.emissive.copy(activityGlow).multiplyScalar(intensity*.25);
+    }
+    updateActivityOverlay(levels);activityApplied=!!levels;
+  }
   function setAppearance(mode,active=[],selected=null,highlight=true,seeThrough=false){
+    activityMaterials=[];activityApplied=false;if(activityOverlay)activityOverlay.visible=false;
     const roles=new Map(active.map(([id,,,role])=>[id,role||'primary']));
     for(const mesh of body.children){
       if(!mesh.isMesh||mesh.userData.selectionOverlay)continue;
       const role=roles.get(mesh.userData.muscle),isBone=mesh.userData.kind==='bone';
       let color=mode==='neutral'?(isBone?'#a19d90':'#807b71'):(isBone?'#d9c9b1':'#a8695a');
+      const neutral=new THREE.Color(color);
       if(highlight&&role)color=role==='secondary'?'#d9ad5c':selected===mesh.userData.muscle?'#dc6347':'#c97553';
       mesh.material.color.set(color);mesh.material.emissive.set(highlight&&selected===mesh.userData.muscle?'#2b1005':'#000000');
+      if(highlight&&mesh.userData.muscle)activityMaterials.push({material:mesh.material,muscle:mesh.userData.muscle,color:mesh.material.color.clone(),emissive:mesh.material.emissive.clone(),neutral});
     }
     if(seeThrough&&selected&&highlight)selectGroup(selected);
     else if(selectedMesh?.userData.group)selectStructure(null);
@@ -119,8 +156,12 @@ export function createAnatomyAtlas({rigged=false}={}){
       const selected=pickStructure(raycaster.intersectObject(target,false)[0]);
       if(selected)return selected;
     }
+    if(activityOverlay?.visible&&!anatomicalRest){
+      const selected=pickStructure(raycaster.intersectObject(activityOverlay,false)[0]);
+      if(selected)return selected;
+    }
     if(anatomicalRest)restPickers.forEach((mesh,index)=>mesh.matrixWorld.copy(pickableMeshes[index].matrixWorld));
     return pickStructure(raycaster.intersectObjects(anatomicalRest?restPickers:pickableMeshes,false)[0]);
   }
-  return {body,anchors,muscleMeshes,pickableMeshes,setAppearance,selectStructure,pickStructure,raycastStructure,structureInfo:name=>publicInfo(structureMap.get(name)),structureCount:asset.meshes.length,rig,focus};
+  return {body,anchors,muscleMeshes,pickableMeshes,setAppearance,setActivity,selectStructure,pickStructure,raycastStructure,structureInfo:name=>publicInfo(structureMap.get(name)),structureCount:asset.meshes.length,rig,focus};
 }

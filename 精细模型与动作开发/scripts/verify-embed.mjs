@@ -5,7 +5,8 @@ import { muscleIds, structures } from '../muscle-data.js';
 
 test('deep links select all 25 actual poses, distinguish unsupported IDs and opt into embedding explicitly', () => {
   assert.equal(supportedExercises.length,25);
-  assert.deepEqual(animatedExercises,['squat','pushup','curl']);
+  assert.equal(animatedExercises.length,25);
+  assert.deepEqual([...animatedExercises].sort(),[...supportedExercises].sort());
   for (const exercise of supportedExercises) {
     const url = new URL(`https://fitness.example/model/index.html?exercise=${exercise}&embed=1`);
     assert.deepEqual(readModelOptions(url.search), { exercise, embed: true,compact:false,invalidExercise:false,mode:'motion',muscle:null,structure:null });

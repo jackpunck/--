@@ -2,7 +2,9 @@
 
 这是当前精细人体及后续动作开发的独立工作目录。从原演示复制整理，模型数据、骨架、动作、页面、构建依赖清单和验证工具都在本目录内。可以把整个文件夹复制到其他位置，不依赖旁边的 `3d-demo` 或其 `.qa`。
 
-当前包含深蹲、俯卧撑、哑铃弯举 **3 个连续动画**，以及主应用其余 **22 个动作的静态姿态**。静态姿态明确标注为单帧示意，提供对应关节姿态、肌群高亮和器械轮廓，不模拟完整动作轨迹。
+当前目录的 **25 个动作均已接入统一教学演示**：24 个往复动作，以及平板支撑的持续等长支撑。新增的 22 个动作使用同一副 46 骨骼人体，按动作配置连续轨迹、握持点、支撑点与器械轮廓。
+
+全部动作使用统一的“发力变化”教学模型：每块肌群按本动作完整行程的最小／最大示意值归一化，颜色由浅到深变化。页面显示本程相对百分比、较强／较轻位置及持续稳定提示。暂停、拖动与播放共享姿态进度；新增动画可通过 `activity-profiles.js` 配置肌群和变化曲线。当前网页不再加载 OpenSim 力表，不显示牛顿值，也不运行肌力求解。完整规则、后续动作接入及历史工具说明见 [动态颜色说明](动态颜色说明.md)。
 
 主应用使用 `/model/index.html?exercise=squat&embed=1` 嵌入；动作参数覆盖 `exercise-catalog.js` 的 25 个 ID。未知 ID 显示未收录提示和解剖姿态，不会冒充深蹲演示。完整接口与许可保留要求见 [`../docs/动作接入.md`](../docs/动作接入.md)。
 
@@ -18,7 +20,9 @@
 
 `embed=1` 使用专注详情布局：隐藏全局动作导航、动作目录与模式切换，展示当前内容和观察控件；独立打开仍保留完整导航。嵌入样式在主 bundle 加载前生效，初始标题为中性的加载提示。
 
-父窗口可复用同一个 iframe，用上述消息切换内容。关闭时发送 `{type:'fitness:visibility',visible:false}`，会取消绘制调度；重开时发送 `visible:true` 恢复，保留已上传的模型与 WebGL 上下文。选择命令及 `visibility:true` 可携带非负安全整数 `requestId`；模型在更新标签和实际绘制之后回报 `fitness:rendered`，包含相同的 `requestId` 及 `mode/exercise/muscle/structure`。父页面应等待该请求与目标相符的绘制回执后再揭开加载遮罩，不能只等 DOM 选择回执或父窗口的两帧。首次 URL 加载的 `requestId` 为 `null`；连续动画不会逐帧重复发送绘制回执。图谱和静态姿态采用按需绘制，停止交互后不持续刷新；连续动画仍保持播放。结构高亮复用几何与 GPU 缓冲，避免反复上传共享网格。
+父窗口可复用同一个 iframe，用上述消息切换内容。关闭时发送 `{type:'fitness:visibility',visible:false}`，会取消绘制调度；重开时发送 `visible:true` 恢复，保留已上传的模型与 WebGL 上下文。选择命令及 `visibility:true` 可携带非负安全整数 `requestId`；模型在更新标签和实际绘制之后回报 `fitness:rendered`，包含相同的 `requestId` 及 `mode/exercise/muscle/structure`。父页面应等待该请求与目标相符的绘制回执后再揭开加载遮罩，不能只等 DOM 选择回执或父窗口的两帧。首次 URL 加载的 `requestId` 为 `null`；连续动画不会逐帧重复发送绘制回执。图谱和暂停的动作采用按需绘制，停止交互后不持续刷新；连续动画仍保持播放。结构高亮复用几何与 GPU 缓冲，避免反复上传共享网格。
+
+手部规则、已校正动作和验证方式见 [手部动作校正](手部动作校正.md)。
 
 ## 直接查看
 
@@ -45,15 +49,16 @@ npm start
 | `assets/anatomy-regions.json` | 骨骼、肌肉的肢体分区，用于分配蒙皮权重 |
 | `assets/anatomy-manifest.json` | 结构名称及网格清单 |
 | `atlas-model.js` | 15 批网格绘制、原结构面拾取、单结构覆盖高亮、标签锚点 |
+| `grip-poses.js` | 手腕对齐、横杆握持约束、按手指配置的环握姿态 |
 | `atlas-rig.js` | 46 根控制骨骼、蒙皮权重、手指姿态、器械和动作轨迹 |
 | `muscle-data.js` | 13 组真实肌群映射、结构名称与中文标签 |
-| `exercise-catalog.js`、`static-poses.js` | 25 动作目录快照与 22 个静态姿态配置 |
+| `exercise-catalog.js`、`motion-poses.js` | 25 动作目录与新增 22 个动作的轨迹配置 |
 | `src.js` | 动作资料、播放阶段、动作要领和页面交互 |
 | `index.html`、`embed-bootstrap.js`、`style.css` | 动作入口、页面结构和桌面／手机布局 |
 | `demo.bundle.js` | 已构建的网页运行文件，内嵌模型与 Three.js |
 | `scripts/verify-atlas.mjs` | 网格、法线朝向、尺寸和高亮检查 |
 | `scripts/verify-rig.mjs` | 蒙皮、动作姿态、支撑点检查及离线预览导出 |
-| `scripts/verify-static.mjs`、`scripts/verify-embed.mjs` | 静态姿态、地面边界、URL 契约和父窗口消息校验 |
+| `scripts/verify-static.mjs`、`scripts/verify-embed.mjs` | 新增连续轨迹、地面边界、URL 契约和父窗口消息校验 |
 | `scripts/render-model-preview.py` | 离线渲染导出数据 |
 | `scripts/build-*.py`、`scripts/inspect-anatomy-source.py` | 可选的原始模型提取与分区工具 |
 | `scripts/restore-obliques.py` | 从原 `.blend` 补回旧过滤器误排除的四块腹内外斜肌 |
