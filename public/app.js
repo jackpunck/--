@@ -11,6 +11,7 @@ import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
 import {exercises, foods, calculateNutrition, generatePlan, estimate1RM, sumFoods, suggestRecipe, planVariants, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=9';
+import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -508,7 +509,9 @@ function choosePortion(id) {
 }
 function renderExerciseLibrary() {
  const filtered=exercises.filter(x=>(x.name+x.muscle+x.equipment).includes(state.filter)&&(!state.muscle||x.muscle.includes(state.muscle))&&(!state.equipment||x.equipment.includes(state.equipment)));
- $('#knowledge-panel').innerHTML=`<div class="search-row"><input id="exercise-search" type="search" placeholder="搜索动作、肌肉或器械…" aria-label="搜索动作" value="${esc(state.filter)}"><select id="muscle-filter" aria-label="按肌肉筛选">${options([['','全部肌群'],['胸','胸部'],['背','背部'],['三角','肩部'],['二头','肱二头肌'],['三头','肱三头肌'],['股','腿部'],['臀','臀部'],['腹','核心']],state.muscle)}</select><select id="equipment-filter" aria-label="按器械筛选">${options([['','全部器械'],['徒手','徒手'],['哑铃','哑铃'],['器','固定器械']],state.equipment)}</select></div><div class="row spread wrap" style="margin-bottom:18px"><small>${filtered.length} 个动作</small><span class="badge neutral">3D 姿态 · 目标肌群 · 动作要领</span></div><div class="exercise-grid">${filtered.map((x,i)=>`<button class="exercise-card" data-action="exercise" data-id="${x.id}"><div class="exercise-visual">${icon('body')}<span class="letter">${String(i+1).padStart(2,'0')}</span><span class="badge">${x.demo?'◉ 3D 动作演示':'◉ 3D 姿态示意'}</span></div><div class="exercise-info"><h3>${esc(x.name)} <span style="float:right;color:#9eab93">↗</span></h3><p>${esc(x.muscle)}</p><p style="margin-top:9px">${esc(x.equipment)} · ${esc(x.level)}</p></div></button>`).join('')}</div>${!filtered.length?empty('没有找到相关动作，试试其他关键词。','grid'):''}`;
+ // 只要目录里任何一个动作收录了真人封面，整个网格就统一按 3:2 排布，否则同一行里封面卡和矢量卡高低不齐。
+ const hasCovers=exercises.some(x=>coverUrl(x.id));
+ $('#knowledge-panel').innerHTML=`<div class="search-row"><input id="exercise-search" type="search" placeholder="搜索动作、肌肉或器械…" aria-label="搜索动作" value="${esc(state.filter)}"><select id="muscle-filter" aria-label="按肌肉筛选">${options([['','全部肌群'],['胸','胸部'],['背','背部'],['三角','肩部'],['二头','肱二头肌'],['三头','肱三头肌'],['股','腿部'],['臀','臀部'],['腹','核心']],state.muscle)}</select><select id="equipment-filter" aria-label="按器械筛选">${options([['','全部器械'],['徒手','徒手'],['哑铃','哑铃'],['器','固定器械']],state.equipment)}</select></div><div class="row spread wrap" style="margin-bottom:18px"><small>${filtered.length} 个动作</small><span class="badge neutral">3D 姿态 · 目标肌群 · 动作要领</span></div><div class="exercise-grid"${hasCovers?' data-covers="1"':''}>${filtered.map((x,i)=>{const cover=coverUrl(x.id);return `<button class="exercise-card" data-action="exercise" data-id="${x.id}"><div class="exercise-visual"${cover?' data-cover="1"':''}>${icon('body')}${cover?`<img class="exercise-cover" src="${cover}" alt="" loading="${i<3?'eager':'lazy'}" decoding="async">`:''}<span class="letter">${String(i+1).padStart(2,'0')}</span><span class="badge">${x.demo?'◉ 3D 动作演示':'◉ 3D 姿态示意'}</span></div><div class="exercise-info"><h3>${esc(x.name)} <span style="float:right;color:#9eab93">↗</span></h3><p>${esc(x.muscle)}</p><p style="margin-top:9px">${esc(x.equipment)} · ${esc(x.level)}</p></div></button>`}).join('')}</div>${!filtered.length?empty('没有找到相关动作，试试其他关键词。','grid'):''}`;
 }
 function renderMuscleLibrary() {
  $('#knowledge-panel').innerHTML=`<div class="atlas-intro"><div><span class="eyebrow">MUSCLE ATLAS</span><h2>找到你正在训练的肌肉。</h2><p>旋转模型查看位置。选择肌群，可以打开对应的高亮图谱。</p><div class="row wrap"><span class="badge">${muscleCatalog.length} 个肌群与肌肉</span><span class="badge neutral">可旋转 / 缩放</span></div></div><iframe class="knowledge-atlas-frame" src="${esc(modelUrl('muscle','chest',{compact:true}))}" title="胸部肌群3D图谱预览" loading="lazy" allow="fullscreen"></iframe></div><div class="muscle-grid">${muscleCatalog.map(muscle=>`<button class="muscle-card" type="button" data-action="muscle-model" data-id="${esc(muscle.id)}"><span class="muscle-icon">${icon('body')}</span><div><strong>${esc(muscle.name)}</strong><p>${esc(muscle.description)}</p><small>查看 3D 高亮 ↗</small></div></button>`).join('')}</div>`;
@@ -647,6 +650,14 @@ async function exportData() {
 }
 function confirmDialog(title,message,action,id='') {modal(title,`<p class="description">${esc(message)}</p><div class="form-footer">${button('取消','close-modal')}${button('确认删除',action,`data-id="${esc(id)}"`,'danger')}</div>`);}
 async function navigate(page) {state.page=page;if(page==='settings'&&state.setting==='ai')await loadProviders();render();window.scrollTo(0,0);}
+
+// 真人封面加载失败（文件缺失、离线、清单过期）时移除图片并撤掉遮罩，露出底下的矢量图示。
+// closest 必须在 remove 之前取：图片一旦脱离文档，closest 只会返回 null。
+document.addEventListener('error',event=>{
+ const image=event.target;
+ if(!(image instanceof HTMLImageElement)||!image.classList.contains('exercise-cover'))return;
+ const visual=image.closest('.exercise-visual');image.remove();visual?.removeAttribute('data-cover');
+},true);
 
 document.addEventListener('click',async event=>{
  const target=event.target.closest('[data-action]');if(!target)return;
