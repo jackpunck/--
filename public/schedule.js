@@ -32,6 +32,19 @@ export function validateCalendarTask(value) {
   return {taskType:'training',title,date,notes,completed:value.completed ?? false};
 }
 
+/** Place one complete cycle on the calendar, leaving recovery dates empty. */
+export function planCalendarTasks(plan, startDate) {
+  validateDate(startDate);
+  if (!plan?.planVersion || !Array.isArray(plan.days) || !plan.days.some(day=>!day.rest)) throw new Error('请先确认训练计划。');
+  return plan.days.flatMap((day,index)=>{
+    const date=addDays(startDate,index);
+    if(day.rest)return [];
+    if(!day.id||!day.exercises?.length)throw new Error('每个训练日需要至少一个动作。');
+    const data={...validateCalendarTask({title:day.name,date}),dayId:day.id,daySnapshot:structuredClone(day),planVersion:plan.planVersion,rest:false};
+    return [{id:`task:plan:${plan.planVersion}:${startDate}:${index}`,kind:'calendar-task',data}];
+  });
+}
+
 function isTrainingRecord(record) {
   if (!record || record.deleted || !record.data) return false;
   const data = record.data;
