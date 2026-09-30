@@ -127,6 +127,25 @@ export function partPlanVariants(parts) {
   return ['standard','home',...(parts.length===4&&parts.includes('shoulders')?['shoulders']:[]),...(parts.length===4&&parts.includes('arms')?['arms']:[])];
 }
 
+export const MAX_TRAINING_EXERCISES = 32;
+
+/** Keep exercises flat for calendar snapshots, with a part tag for the draft editor. */
+export function generateGroupedPlan({split,groups,variant='standard'} = {}, input) {
+  if (input) validateProfile(input);
+  if (!Number.isInteger(split)||split<1||split>5) throw new Error('请选择一至五分化。');
+  if (!Array.isArray(groups)||groups.length!==split) throw new Error('训练日数量应与分化数一致。');
+  if (!['standard','home'].includes(variant)) throw new Error('请选择标准或居家模板。');
+  const days=[];
+  groups.forEach((parts,index)=>{
+    if (!Array.isArray(parts)||!parts.length||new Set(parts).size!==parts.length||parts.some(id=>!trainingParts.some(part=>part.id===id))) throw new Error(`请为训练日 ${index+1} 选择部位，同一天的部位不能重复。`);
+    const sessions=generatePartPlan({parts,variant}).days.filter(day=>!day.rest);
+    const name=parts.length===1?sessions[0].name:parts.map(id=>trainingParts.find(part=>part.id===id).name).join('与')+'训练';
+    days.push({id:`day-${days.length+1}`,name,parts:[...parts],rest:false,exercises:sessions.flatMap(day=>day.exercises.map(exercise=>({...exercise,part:day.part})))});
+    if ((index+1)%2===0||index===groups.length-1) days.push({id:`day-${days.length+1}`,name:'休息与轻活动',rest:true,exercises:[]});
+  });
+  return {name:`${split}分化 · ${variant==='home'?'居家':'标准'}`,split,variant,parts:[...new Set(groups.flat())],days};
+}
+
 export function generatePartPlan({parts,variant='standard'} = {}, input) {
   if (input) validateProfile(input);
   if (!Array.isArray(parts)||!parts.length||parts.length>trainingParts.length||new Set(parts).size!==parts.length||parts.some(id=>!trainingParts.some(part=>part.id===id))) throw new Error('请至少选择一个训练部位，每个部位只选一次。');

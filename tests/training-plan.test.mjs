@@ -1,7 +1,74 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {exercises, trainingParts, generatePartPlan, partPlanVariants, defaultTrainingExercise, exerciseUsesSeconds} from '../public/domain.js';
+import {exercises, trainingParts, generatePartPlan, generateGroupedPlan, partPlanVariants, defaultTrainingExercise, exerciseUsesSeconds} from '../public/domain.js';
 import {validatePlan} from '../server/plan-tools.mjs';
+import {libraryPlan, createLibraryTemplate} from '../public/plan-library.js';
+import {planCalendarTasks, recurringCalendarTasks} from '../public/schedule.js';
+
+test('split count creates grouped sessions with four actions per muscle and existing rest rhythm', () => {
+  const groups=[['back','shoulders'],['chest','arms'],['legs']];
+  const original=structuredClone(groups);
+  const draft=generateGroupedPlan({split:3,groups});
+  assert.equal(draft.split,3);
+  assert.deepEqual(draft.days.map(day=>day.rest),[false,false,true,false,true]);
+  assert.deepEqual(draft.days.filter(day=>!day.rest).map(day=>day.parts),groups);
+  assert.equal(draft.days[0].name,'背与肩训练');
+  assert.deepEqual(draft.days[0].exercises.map(e=>e.part),['back','back','back','back','shoulders','shoulders','shoulders','shoulders']);
+  assert.ok(draft.days[0].exercises.every(e=>e.sets===4&&e.reps==='8'));
+  assert.deepEqual(groups,original);
+  draft.days[0].parts.pop();draft.days[0].exercises[0].sets=9;
+  assert.equal(generateGroupedPlan({split:3,groups}).days[0].exercises[0].sets,4);
+});
+
+test('same muscle can repeat across training days, with home equipment respected', () => {
+  const draft=generateGroupedPlan({split:2,groups:[['back','shoulders'],['legs','shoulders']],variant:'home'});
+  assert.deepEqual(draft.days[1].parts,['legs','shoulders']);
+  for(const day of draft.days)for(const e of day.exercises)assert.ok(!exercises.find(x=>x.id===e.exerciseId).equipment.includes('器'));
+});
+
+test('grouped sessions reject empty days, duplicate parts within a day and invalid split or template', () => {
+  for(const input of [
+    {},{split:0,groups:[]},{split:6,groups:Array(6).fill(['chest'])},{split:1.5,groups:[['chest']]},
+    {split:2,groups:[['chest']]},{split:1,groups:[[]]},{split:1,groups:[['chest','chest']]},
+    {split:1,groups:[['unknown']]},{split:1,groups:['chest']},{split:1,groups:[['chest']],variant:'shoulders'},
+  ])assert.throws(()=>generateGroupedPlan(input));
+});
+
+test('all five muscles fit in one saved and scheduled session with independent snapshots', () => {
+  const draft=generateGroupedPlan({split:1,groups:[trainingParts.map(p=>p.id)]});
+  assert.equal(draft.days[0].exercises.length,20);
+  assert.equal(validatePlan(draft).days[0].exercises.length,20);
+  const [record]=createLibraryTemplate([],draft,'template:test','2026-10-01T00:00:00Z');
+  const plan=libraryPlan(record);
+  const tasks=planCalendarTasks(plan,'2026-10-01');
+  assert.equal(tasks[0].data.daySnapshot.exercises.length,20);
+  assert.deepEqual(tasks[0].data.daySnapshot.parts,trainingParts.map(p=>p.id));
+  plan.days[0].exercises[0].sets=9;
+  assert.equal(tasks[0].data.daySnapshot.exercises[0].sets,4);
+  assert.equal(record.data.days[0].exercises[0].sets,4);
+});
+
+test('busy dates postpone the entire combined session while preserving the next training day', () => {
+  const [record]=createLibraryTemplate([],generateGroupedPlan({split:2,groups:[['back','shoulders'],['chest','arms']]}),'template:busy','2026-10-01T00:00:00Z');
+  const cycle={id:'grouped-cycle',startDate:'2026-10-01',plan:libraryPlan(record)};
+  const tasks=recurringCalendarTasks(cycle,'2026-10-01','2026-10-07',['2026-10-01']);
+  assert.equal(tasks[0].data.date,'2026-10-02');
+  assert.deepEqual(tasks[0].data.daySnapshot.parts,['back','shoulders']);
+  assert.equal(tasks[0].data.daySnapshot.exercises.length,8);
+  assert.equal(tasks[1].data.date,'2026-10-03');
+  assert.deepEqual(tasks[1].data.daySnapshot.parts,['chest','arms']);
+});
+
+test('library and server agree on the custom exercise limit after combining muscles', () => {
+  const draft=generateGroupedPlan({split:1,groups:[['back','shoulders']]});
+  draft.days[0].exercises=Array.from({length:32},()=>defaultTrainingExercise('bench'));
+  const record={id:'template:limit',kind:'training-template',data:draft};
+  assert.equal(libraryPlan(record).days[0].exercises.length,32);
+  assert.equal(validatePlan(draft).days[0].exercises.length,32);
+  draft.days[0].exercises.push(defaultTrainingExercise('bench'));
+  assert.throws(()=>libraryPlan(record),/1–32/);
+  assert.throws(()=>validatePlan(draft),/1–32/);
+});
 
 // Every non-empty selection must remain usable by the existing persistence schema.
 test('all part selections and templates produce four distinct catalog actions per training day', () => {
@@ -57,7 +124,7 @@ test('draft edits preserve date, recovery days and internal rest settings', asyn
   const {runInNewContext}=await import('node:vm');
   const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
   const start=source.indexOf('function readDraftForm() {');
-  const end=source.indexOf('function viewDraft()',start);
+  const end=source.indexOf('function viewDraft(',start);
   const original=generatePartPlan({parts:['chest','back']});
   original.scheduleDate='2026-10-01';
   const values={name:'My edited cycle'};
@@ -83,7 +150,7 @@ test('switching between repetition and timed actions updates the unit and saves 
   const {runInNewContext}=await import('node:vm');
   const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
   const start=source.indexOf('function updateDraftExerciseUnit(target) {');
-  const end=source.indexOf('function viewDraft()',start);
+  const end=source.indexOf('function viewDraft(',start);
   const original=generatePartPlan({parts:['chest']});
   const values={name:original.name};
   original.days.forEach((day,i)=>day.exercises.forEach((exercise,j)=>{

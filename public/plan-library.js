@@ -1,4 +1,4 @@
-import {exercises} from './domain.js?v=10';
+import {exercises, MAX_TRAINING_EXERCISES} from './domain.js?v=11';
 
 function chineseNumber(value) {
   const digits='零一二三四五六七八九';
@@ -44,7 +44,7 @@ export function libraryPlan(record) {
     if(!day.id||ids.has(day.id)||!day.name?.trim())throw new Error('训练日信息不完整，请编辑方案。');
     ids.add(day.id);
     if(day.rest)continue;
-    if(!Array.isArray(day.exercises)||!day.exercises.length||day.exercises.length>16)throw new Error(`${day.name}需要 1–16 个动作，请先编辑方案。`);
+    if(!Array.isArray(day.exercises)||!day.exercises.length||day.exercises.length>MAX_TRAINING_EXERCISES)throw new Error(`${day.name}需要 1–${MAX_TRAINING_EXERCISES} 个动作，请先编辑方案。`);
     for(const exercise of day.exercises){
       exercise.reps=String(exercise.reps??'').trim();
       if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps||exercise.reps.length>30)throw new Error('请检查方案中的动作、组数和次数。');

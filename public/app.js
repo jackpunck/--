@@ -1,6 +1,6 @@
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
-import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=1';
+import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
 import {weeklyAchievement, earnedWeeklyAchievements} from './achievements.js?v=1';
 import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=9';
 import {renderMarkdown} from './chat-markdown.js?v=9';
@@ -14,7 +14,7 @@ import {muscleCatalog, findVisuals, modelUrl} from './visuals.js?v=9';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
-import {exercises, foods, calculateNutrition, generatePartPlan, trainingParts, partPlanVariants, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=10';
+import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=11';
 import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -623,7 +623,7 @@ function openTrainingContentEditor(id) {
 }
 function renderTrainingContentEditor() {
  const {record,day}=state.trainingContentEditor;
- modal(esc(record.data.title),`<form id="training-content-form"><div class="training-content-editor"><div class="draft-exercises">${day.exercises.map((exercise,index)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(index+1).padStart(2,'0')}</span><select name="exercise-${index}" data-exercise-index="${index}" aria-label="动作 ${index+1}">${options(exercises.map(item=>[item.id,item.name]),exercise.exerciseId)}</select>${button(icon('close'),'training-content-remove',`data-index="${index}" aria-label="删除动作 ${index+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="content-sets-${index}">组数</label><input id="content-sets-${index}" name="sets-${index}" type="number" min="1" max="12" step="1" value="${esc(exercise.sets)}" required><label for="content-reps-${index}">${exerciseUsesSeconds(exercise.exerciseId)?'秒':'次数'}</label><input id="content-reps-${index}" name="reps-${index}" value="${esc(exerciseUsesSeconds(exercise.exerciseId)?String(exercise.reps).replace(/秒$/,'').trim():exercise.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','training-content-add',day.exercises.length>=16?'disabled':'','draft-add')}</div><div id="training-content-error" role="alert"></div><div class="form-footer">${button('取消','calendar-detail',`data-id="${esc(record.id)}"`)}<button type="submit" class="button primary">保存</button></div></form>`);
+ modal(esc(record.data.title),`<form id="training-content-form"><div class="training-content-editor"><div class="draft-exercises">${day.exercises.map((exercise,index)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(index+1).padStart(2,'0')}</span><select name="exercise-${index}" data-exercise-index="${index}" aria-label="动作 ${index+1}">${options(exercises.map(item=>[item.id,item.name]),exercise.exerciseId)}</select>${button(icon('close'),'training-content-remove',`data-index="${index}" aria-label="删除动作 ${index+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="content-sets-${index}">组数</label><input id="content-sets-${index}" name="sets-${index}" type="number" min="1" max="12" step="1" value="${esc(exercise.sets)}" required><label for="content-reps-${index}">${exerciseUsesSeconds(exercise.exerciseId)?'秒':'次数'}</label><input id="content-reps-${index}" name="reps-${index}" value="${esc(exerciseUsesSeconds(exercise.exerciseId)?String(exercise.reps).replace(/秒$/,'').trim():exercise.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','training-content-add',day.exercises.length>=MAX_TRAINING_EXERCISES?'disabled':'','draft-add')}</div><div id="training-content-error" role="alert"></div><div class="form-footer">${button('取消','calendar-detail',`data-id="${esc(record.id)}"`)}<button type="submit" class="button primary">保存</button></div></form>`);
  trainingContentHeader(record);
 }
 function readTrainingContentForm() {
@@ -640,7 +640,7 @@ function changeTrainingContentExercise(target,remove=false) {
  const day=readTrainingContentForm(),index=Number(target.dataset.index);
  if(remove)day.exercises.splice(index,1);
  else {
-   if(day.exercises.length>=16)throw new Error('每次训练最多添加 16 个动作。');
+   if(day.exercises.length>=MAX_TRAINING_EXERCISES)throw new Error(`每次训练最多添加 ${MAX_TRAINING_EXERCISES} 个动作。`);
    const muscle={chest:'胸',back:'背',shoulders:'三角肌',legs:'股',arms:'肱'}[day.part]||'';
    const candidates=exercises.filter(exercise=>exercise.muscle.includes(muscle));
    const next=candidates.find(exercise=>!day.exercises.some(item=>item.exerciseId===exercise.id))||candidates[0]||exercises[0];
@@ -651,7 +651,7 @@ function changeTrainingContentExercise(target,remove=false) {
 }
 function trainingContentData(record,day) {
  if(record.data.completed)throw new Error('已完成的训练请编辑实际记录。');
- if(!day.exercises.length||day.exercises.length>16)throw new Error('请保留 1–16 个动作。');
+ if(!day.exercises.length||day.exercises.length>MAX_TRAINING_EXERCISES)throw new Error(`请保留 1–${MAX_TRAINING_EXERCISES} 个动作。`);
  for(const exercise of day.exercises) {
    if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps.trim()||exercise.reps.length>30)throw new Error('请检查动作、组数和次数。');
  }
@@ -718,25 +718,18 @@ async function importLibraryTemplate(values) {
  state.date=date;state.libraryDate=date;closeModal();renderTraining();toast('方案已循环安排到日历');
 }
 function planBuilder(date=state.date) {
- state.planStartDate=date;
- state.planParts=[...(plan()?.parts||['back','chest','legs'])].filter(id=>trainingParts.some(part=>part.id===id));
- modal('创建训练循环',`<form id="plan-form"><fieldset class="training-part-fieldset"><legend>训练部位 <small>可多选</small></legend><div class="training-part-grid">${trainingParts.map(part=>`<button type="button" class="training-part" data-action="toggle-training-part" data-part="${part.id}" aria-pressed="false"><span class="part-order" aria-hidden="true"></span><span class="part-symbol">${part.name}</span><strong>${part.detail}</strong></button>`).join('')}</div></fieldset><div class="split-summary" aria-live="polite"><div><strong id="split-label"></strong></div><div id="split-preview" class="split-preview"></div></div><div class="plan-template-row"><div><label for="variant">模板样式</label><small id="variant-description"></small></div><select id="variant" name="variant">${variantOptions(state.planParts)}</select></div><div class="form-footer"><button class="button primary" type="submit">生成循环草案 ${icon('arrow')}</button></div></form>`);
- updatePartSelection();
+ state.planStartDate=date;state.planSplit=3;state.planGroups=Array.from({length:5},()=>[]);state.partPicker=null;
+ modal('创建训练循环',`<form id="plan-form"><fieldset class="plan-split-fieldset"><legend>训练分化</legend><div class="plan-split-options">${['一','二','三','四','五'].map((name,index)=>`<label><input type="radio" name="split" value="${index+1}" ${index===2?'checked':''}><span>${name}分化</span></label>`).join('')}</div></fieldset><div class="plan-groups-heading"><strong>训练安排</strong><small id="plan-day-count" aria-live="polite"></small></div><div id="plan-groups" class="plan-groups"></div><div class="plan-template-row"><div><label for="variant">模板样式</label><small id="variant-description"></small></div><select id="variant" name="variant">${options([['standard','标准模板'],['home','居家训练']],'standard')}</select></div><div class="form-footer">${button('取消','close-modal')}<button class="button primary" type="submit">生成草案 ${icon('arrow')}</button></div></form>`);
+ $('#modal').classList.add('plan-builder-modal');updatePlanGroups();
 }
-function variantOptions(parts,selected='standard') {return options(partPlanVariants(parts).map(id=>[id,{standard:'标准模板',home:'居家训练',shoulders:'肩部单练',arms:'手臂单练'}[id]]),selected);}
-function updatePartSelection() {
- const parts=state.planParts;
- document.querySelectorAll('.training-part').forEach(card=>{const index=parts.indexOf(card.dataset.part);card.setAttribute('aria-pressed',String(index>=0));$('.part-order',card).textContent=index>=0?String(index+1):'＋';});
- $('#split-label').textContent=parts.length?`${['','一','二','三','四','五'][parts.length]}分化`:'请选择训练部位';
- $('#split-preview').innerHTML=parts.map(id=>`<span>${trainingParts.find(part=>part.id===id).name}</span>`).join('<i aria-hidden="true">→</i>');
- const variant=$('#variant').value;
- $('#variant').innerHTML=variantOptions(parts,partPlanVariants(parts).includes(variant)?variant:'standard');
- updateVariantDescription();
- $('#plan-form button[type="submit"]').disabled=!parts.length;
+function updatePlanGroups(focusSelector) {
+ $('#plan-day-count').textContent=`${state.planSplit} 个训练日`;
+ $('#plan-groups').innerHTML=state.planGroups.slice(0,state.planSplit).map((parts,index)=>`<section class="plan-group" aria-labelledby="plan-group-title-${index}"><h3 id="plan-group-title-${index}"><span class="step-badge">${index+1}</span>训练日 ${index+1}</h3><div class="plan-part-chips">${parts.map(id=>`<button type="button" class="plan-part-chip" data-action="toggle-training-part" data-day="${index}" data-part="${id}" aria-label="移除训练日 ${index+1} 的${trainingParts.find(part=>part.id===id).name}">${trainingParts.find(part=>part.id===id).name}${icon('close')}</button>`).join('')}${button(icon('plus')+' 部位','plan-parts-picker',`data-day="${index}" aria-label="选择训练日 ${index+1} 的部位" aria-expanded="${state.partPicker===index}" aria-controls="plan-part-picker-${index}"`,'plan-part-add')}</div>${state.partPicker===index?`<div id="plan-part-picker-${index}" class="plan-part-picker" role="group" aria-label="训练日 ${index+1} 的部位">${trainingParts.map(part=>`<button type="button" data-action="toggle-training-part" data-day="${index}" data-part="${part.id}" aria-pressed="${parts.includes(part.id)}">${part.name}${parts.includes(part.id)?icon('check'):''}</button>`).join('')}${button('完成','plan-parts-picker',`data-day="${index}"`,'plan-parts-done')}</div>`:''}</section>`).join('');
+ $('#plan-form button[type="submit"]').disabled=state.planGroups.slice(0,state.planSplit).some(parts=>!parts.length);
+ if(focusSelector)$(focusSelector)?.focus({preventScroll:true});
 }
 function updateVariantDescription() {
- const variant=$('#variant').value;
- $('#variant-description').textContent=variant==='home'?'需要哑铃和可调训练凳':variant==='shoulders'?'肩部安排在最后':variant==='arms'?'手臂安排在最后':'';
+ $('#variant-description').textContent=$('#variant').value==='home'?'需要哑铃和可调训练凳':'';
 }
 function updateDraftExerciseUnit(target) {
  if(!target.name?.startsWith('e-'))return;
@@ -751,28 +744,39 @@ function readDraftForm() {
  draft.days.forEach((day,i)=>day.exercises.forEach((exercise,j)=>{exercise.exerciseId=values[`e-${i}-${j}`];exercise.sets=values[`s-${i}-${j}`]===''?'':Number(values[`s-${i}-${j}`]);const reps=values[`r-${i}-${j}`].trim();exercise.reps=exerciseUsesSeconds(exercise.exerciseId)&&reps?reps.replace(/秒$/,'').trim()+'秒':reps;}));
  return draft;
 }
-function viewDraft() {
+function viewDraft(openDays) {
  const d=state.store.get(state.libraryEditing?.id);if(!d)return;state.draftEditor=d;
- modal('编辑训练草案',`<form id="draft-form" class="training-draft-form"><div class="field"><label for="plan-name">计划名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><div class="draft-days">${d.days.map((day,i)=>day.rest?`<div class="draft-rest"><span>${icon('leaf')} ${esc(day.name)}</span><small>第 ${i+1} 天</small></div>`:`<section class="draft-day" data-draft-day="${i}"><div class="draft-day-heading"><h3><span class="step-badge">${i+1}</span>${esc(day.name)}</h3><span>${day.exercises.length} 个动作</span></div><div class="draft-exercises">${day.exercises.map((e,j)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(j+1).padStart(2,'0')}</span><label class="sr-only" for="draft-e-${i}-${j}">第${i+1}天动作${j+1}</label><select id="draft-e-${i}-${j}" name="e-${i}-${j}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select>${button(icon('close'),'draft-remove-exercise',`data-day="${i}" data-index="${j}" aria-label="删除第${i+1}天动作${j+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="draft-s-${i}-${j}">组数</label><input id="draft-s-${i}-${j}" name="s-${i}-${j}" type="number" min="1" max="12" step="1" value="${esc(e.sets)}" required><label for="draft-r-${i}-${j}">${exerciseUsesSeconds(e.exerciseId)?'秒':'次数'}</label><input id="draft-r-${i}-${j}" name="r-${i}-${j}" value="${esc(exerciseUsesSeconds(e.exerciseId)?String(e.reps).replace(/秒$/,'').trim():e.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','draft-add-exercise',`data-day="${i}" ${day.exercises.length>=16?'disabled':''}`,'draft-add')}${!day.exercises.length?'<p class="description">至少添加 1 个动作</p>':''}</section>`).join('')}</div>${!d.parts?.length&&d.notes?.length?`<p class="description draft-notes">${esc(Array.isArray(d.notes)?d.notes.join('；'):d.notes)}</p>`:''}<div class="form-footer draft-footer">${button('返回方案库','plan-library-return')}<button class="button primary" type="submit">保存方案 ${icon('check')}</button></div></form>`,true);
+ let trainingIndex=0;
+ modal('调整训练草案',`<form id="draft-form" class="training-draft-form grouped-draft"><div class="draft-name-row"><div class="field"><label for="plan-name">方案名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><span class="badge neutral">${d.days.filter(day=>!day.rest).length} 分化</span></div><div class="draft-days">${d.days.map((day,i)=>day.rest?`<div class="draft-rest"><span>${icon('leaf')} ${esc(day.name)}</span><small>第 ${i+1} 天</small></div>`:renderDraftDay(day,i,++trainingIndex,openDays?openDays.includes(i):trainingIndex===1)).join('')}</div><div class="form-footer draft-footer">${button('返回方案库','plan-library-return')}<button class="button primary" type="submit">保存到方案库 ${icon('check')}</button></div></form>`,true);
+ $('#modal').classList.add('training-draft-modal');
+}
+function renderDraftDay(day,i,number,open) {
+ const parts=(day.parts||[day.part]).filter(id=>trainingParts.some(part=>part.id===id));
+ const groupFor=exercise=>parts.includes(exercise.part)?exercise.part:parts.length===1?parts[0]:'';
+ const groups=[...parts];if(!parts.length||day.exercises.some(exercise=>!groupFor(exercise)))groups.push('');
+ return `<details class="draft-day" data-draft-day="${i}" ${open?'open':''}><summary class="draft-day-heading"><h3><span class="step-badge">${number}</span>${esc(day.name)}</h3><span>${day.exercises.length} 个动作</span><span class="draft-chevron" aria-hidden="true">⌄</span></summary><div class="draft-day-body">${groups.map(part=>`<section class="draft-part" data-draft-part="${part}"><div class="draft-part-heading"><h4>${esc(trainingParts.find(item=>item.id===part)?.name||'动作')}</h4>${button(icon('plus')+' 添加动作','draft-add-exercise',`data-day="${i}" data-part="${part}" ${day.exercises.length>=MAX_TRAINING_EXERCISES?'disabled':''}`,'draft-part-add')}</div><div class="draft-exercises">${day.exercises.map((exercise,j)=>groupFor(exercise)===part?renderDraftExercise(exercise,i,j):'').join('')}</div></section>`).join('')}${!day.exercises.length?'<p class="description">至少添加 1 个动作</p>':''}</div></details>`;
+}
+function renderDraftExercise(e,i,j) {
+ return `<div class="draft-exercise"><div class="draft-exercise-choice"><label class="sr-only" for="draft-e-${i}-${j}">第${i+1}天动作${j+1}</label><select id="draft-e-${i}-${j}" name="e-${i}-${j}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select></div><div class="draft-value"><label for="draft-s-${i}-${j}">组数</label><input id="draft-s-${i}-${j}" name="s-${i}-${j}" type="number" min="1" max="12" step="1" value="${esc(e.sets)}" required></div><div class="draft-value"><label for="draft-r-${i}-${j}">${exerciseUsesSeconds(e.exerciseId)?'秒':'次数'}</label><input id="draft-r-${i}-${j}" name="r-${i}-${j}" value="${esc(exerciseUsesSeconds(e.exerciseId)?String(e.reps).replace(/秒$/,'').trim():e.reps)}" maxlength="30" required></div>${button(icon('trash'),'draft-remove-exercise',`data-day="${i}" data-index="${j}" aria-label="删除第${i+1}天动作${j+1}"`,'draft-remove')}</div>`;
 }
 async function changeDraftExercise(target,remove=false) {
  if(state.draftSaving)return;
  const draft=readDraftForm(),index=Number(target.dataset.day),day=draft?.days[index];if(!day||day.rest)return;
  if(remove)day.exercises.splice(Number(target.dataset.index),1);
  else {
-   if(day.exercises.length>=16)throw new Error('每个训练日最多添加 16 个动作。');
-   const muscle={chest:'胸',back:'背',shoulders:'三角肌',legs:'股',arms:'肱'}[day.part]||'';
+   if(day.exercises.length>=MAX_TRAINING_EXERCISES)throw new Error(`每个训练日最多添加 ${MAX_TRAINING_EXERCISES} 个动作。`);
+   const part=target.dataset.part||day.part||'',muscle={chest:'胸',back:'背',shoulders:'三角肌',legs:'股',arms:'肱'}[part]||'';
    const candidates=exercises.filter(exercise=>exercise.muscle.includes(muscle));
    const next=candidates.find(exercise=>!day.exercises.some(item=>item.exerciseId===exercise.id))||candidates[0]||exercises[0];
-   day.exercises.push(defaultTrainingExercise(next.id));
+   day.exercises.push({...defaultTrainingExercise(next.id),...(part?{part}:{})});
  }
- const form=$('#draft-form'),scroll=$('#modal').scrollTop;
+ const form=$('#draft-form'),scroll=$('.draft-days').scrollTop,openDays=[...form.querySelectorAll('.draft-day[open]')].map(node=>Number(node.dataset.draftDay));
  state.draftSaving=true;
  try {
    await saveLibraryDraft(draft);
    if(!form.isConnected||!$('#modal').open)return;
-   viewDraft();$('#modal').scrollTop=scroll;
-   const section=$(`[data-draft-day="${index}"]`);(remove?$('[data-action="draft-add-exercise"]',section):section.querySelector('.draft-exercise:last-child select'))?.focus({preventScroll:remove});
+   viewDraft(openDays);$('.draft-days').scrollTop=scroll;
+   const section=$(`[data-draft-day="${index}"]`);(remove?section.querySelector(`[data-action="draft-add-exercise"][data-part="${target.dataset.part||''}"]`)||$('[data-action="draft-add-exercise"]',section):$(`#draft-e-${index}-${day.exercises.length-1}`))?.focus({preventScroll:true});
  } finally {state.draftSaving=false;}
 }
 function logTraining(id) {
@@ -1027,7 +1031,8 @@ document.addEventListener('click',async event=>{
  case 'library-delete':deleteLibraryTemplate(id);break;
  case 'library-delete-confirm':{assertLibraryCurrent(state.libraryDeleting);await state.store.remove(state.libraryDeleting.id);await openPlanLibrary(null,true);break;}
  case 'view-draft':await openPlanLibrary();break;
- case 'toggle-training-part':{const part=target.dataset.part;state.planParts=state.planParts.includes(part)?state.planParts.filter(id=>id!==part):[...state.planParts,part];updatePartSelection();break;}
+ case 'plan-parts-picker':{const index=Number(target.dataset.day);state.partPicker=state.partPicker===index?null:index;updatePlanGroups(`[data-action="plan-parts-picker"][data-day="${index}"]`);break;}
+ case 'toggle-training-part':{const index=Number(target.dataset.day),part=target.dataset.part,parts=state.planGroups[index];state.planGroups[index]=parts.includes(part)?parts.filter(id=>id!==part):[...parts,part];updatePlanGroups(state.partPicker===index?`.plan-part-picker [data-day="${index}"][data-part="${part}"]`:`[data-action="plan-parts-picker"][data-day="${index}"]`);break;}
  case 'draft-add-exercise':await changeDraftExercise(target);break;
  case 'draft-remove-exercise':await changeDraftExercise(target,true);break;
 
@@ -1097,6 +1102,10 @@ document.addEventListener('click',async event=>{
  }catch(error){toast(error.message,true);}
 });
 
+document.addEventListener('invalid',event=>{
+ const day=event.target.closest('#draft-form .draft-day');if(day)day.open=true;
+},true);
+
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!(form instanceof HTMLFormElement))return;event.preventDefault();const values=formData(form);const submit=form.querySelector('button[type="submit"],button:not([type])');if(submit)submit.disabled=true;
  try {
@@ -1106,7 +1115,7 @@ document.addEventListener('submit',async event=>{
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await saveMeal(true);break;
  case 'metabolism-form':case 'macro-energy-form':case 'portion-form':updateKnowledgeTool(form);break;
- case 'plan-form':{await ensurePlanLibrary();const draft=generatePartPlan({parts:state.planParts,variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;await openPlanLibrary(id,true);break;}
+ case 'plan-form':{await ensurePlanLibrary();const draft=generateGroupedPlan({split:state.planSplit,groups:state.planGroups.slice(0,state.planSplit),variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;state.librarySelected=id;state.libraryEditing=structuredClone(state.store.records.get(id));viewDraft();break;}
  case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();libraryPlan({id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
  case 'plan-library-form':await importLibraryTemplate(values);break;
  case 'library-rename-form':{const record=assertLibraryCurrent(state.libraryRenaming),name=values.name.trim();if(!name||name.length>80)throw new Error('方案名称需为 1–80 个字。');await state.store.put(record.kind,record.id,{...record.data,name,libraryRevision:uid()});await openPlanLibrary(record.id,true);break;}
@@ -1127,6 +1136,7 @@ document.addEventListener('submit',async event=>{
 
 document.addEventListener('change',async event=>{
  const target=event.target;
+ if(target.closest('#plan-form')&&target.name==='split'){state.planSplit=Number(target.value);state.partPicker=null;updatePlanGroups();return;}
  if(target.closest('#training-content-form')){
    try {
      if(target.dataset.exerciseIndex!==undefined){

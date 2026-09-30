@@ -3,14 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
-import {exercises,exerciseUsesSeconds,defaultTrainingExercise} from '../public/domain.js';
+import {exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES} from '../public/domain.js';
 
 const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const content=source.slice(source.indexOf('function trainingExerciseSummary('),source.indexOf('function exerciseLine('));
 const conflictCheck=source.slice(source.indexOf('function assertTaskCurrent('),source.indexOf('function renderCalendarCard('));
 const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('function renderTraining('));
 function setup(extra={}) {
-  const context={weeklyAchievement,allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,...extra};
+  const context={weeklyAchievement,allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES,...extra};
   runInNewContext(conflictCheck+content,context);
   return context;
 }
@@ -55,7 +55,7 @@ test('stale or completed sessions and invalid edits cannot overwrite training co
     const day=structuredClone(snapshot.data.daySnapshot);Object.assign(day.exercises[0],changes);
     assert.throws(()=>context.trainingContentData(record,day),/检查/);
   }
-  assert.throws(()=>context.trainingContentData(record,{...snapshot.data.daySnapshot,exercises:[]}),/1–16/);
+  assert.throws(()=>context.trainingContentData(record,{...snapshot.data.daySnapshot,exercises:[]}),/1–32/);
 });
 
 test('completed content shows actual records and no planned or delete controls',()=>{
