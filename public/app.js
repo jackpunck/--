@@ -10,7 +10,7 @@ import {muscleCatalog, findVisuals, modelUrl} from './visuals.js?v=9';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
-import {exercises, foods, calculateNutrition, generatePlan, estimate1RM, sumFoods, suggestRecipe, planVariants, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=9';
+import {exercises, foods, calculateNutrition, generatePartPlan, trainingParts, partPlanVariants, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=10';
 import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -419,7 +419,7 @@ function renderCalendarCard(record) {
 }
 function renderTraining() {
  const days=weekDates(state.date),p=plan(),draft=state.store.get('plan-draft'),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
- $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary'))+`<section class="timetable-shell"><div class="timetable-toolbar"><div class="week-navigation">${button('‹','calendar-week','data-offset="-7" aria-label="上一周"','small')}<div><strong>${dateLabel(days[0]).replace(/星期.*/,'')} — ${dateLabel(days[6]).replace(/星期.*/,'')}</strong><small>${days[0].slice(0,4)} · 本周 ${weekTasks.length} 项训练</small></div>${button('›','calendar-week','data-offset="7" aria-label="下一周"','small')}</div><div class="row wrap">${button('本周','calendar-today','','small')}<input type="date" id="training-date" value="${state.date}" aria-label="训练日期"></div></div><p class="timetable-hint">拖动训练卡片更换日期，也可点击「调整」。今日饮食会随当天训练安排自动切换训练日或休息日。</p><div class="timetable-scroll" tabindex="0" aria-label="每周训练表，可横向滚动"><div class="timetable" role="table" aria-label="本周训练计划"><div class="timetable-heading" role="row">${days.map((date,i)=>`<div class="timetable-date ${date===today()?'is-today':''} ${date===state.date?'is-selected':''}" role="columnheader"><button data-action="training-day" data-date="${date}" aria-label="${dateLabel(date)}"><span>${['周一','周二','周三','周四','周五','周六','周日'][i]}</span><strong>${Number(date.slice(-2))}</strong>${date===today()?'<em>今天</em>':''}</button></div>`).join('')}</div><div class="timetable-days" role="row">${days.map(date=>{const items=weekTasks.filter(r=>r.data.date===date);return `<div class="timetable-cell ${date===today()?'is-today':''}" data-date="${date}" role="cell" aria-label="${dateLabel(date)}训练">${items.length?items.map(renderCalendarCard).join(''):'<div class="calendar-rest"><span>休息日</span><small>放松一下，恢复体力</small></div>'}<button type="button" class="calendar-cell-add" data-action="calendar-add" data-date="${date}" aria-label="添加 ${dateLabel(date)}训练">＋<span> 添加训练</span></button></div>`;}).join('')}</div></div></div><div class="calendar-status" role="status" aria-live="polite">已完成的训练保留原日期与记录。</div></section>${draft?`<div class="draft-strip row spread"><div><strong>有一份尚未确认的训练草案</strong><p>确认后，可以把训练添加到日程表。</p></div>${button('查看草案','view-draft','','small')}</div>`:''}<details class="training-plan-panel"><summary><div>${icon('dumbbell')}<span><strong>${p?esc(p.name):'创建你的训练内容'}</strong><small>${p?`${p.days.length} 天循环 · 查看动作与组数`:'先创建训练内容，再安排训练日期'}</small></span></div><span class="plan-disclosure">展开⌄</span></summary><div class="training-plan-content"><div class="row spread wrap"><h2>我的训练内容</h2><div class="row wrap">${button(p?'修改计划':'创建计划','plan-builder','','primary small')}${button('最大力量估算','strength','','small')}</div></div>${p?`<div class="plan-days">${p.days.map((d,i)=>`<div class="plan-day"><div class="row spread"><h3><span class="step-badge">${i+1}</span>${esc(d.name)}</h3><small>${d.rest?'恢复':d.exercises.length+' 个动作'}</small></div>${d.exercises.map((e,j)=>exerciseLine(e,j)).join('')}</div>`).join('')}</div><p class="description">${esc(p.source)}</p>`:empty('在这里创建训练内容，或在 AI 对话中让我安排训练。','dumbbell')}</div></details>${p?'':`<div class="calendar-start"><span>还没有训练内容？从适合自己的计划开始。</span>${button('创建训练计划','plan-builder','','small')}</div>`}`;
+ $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary'))+`<section class="timetable-shell"><div class="timetable-toolbar"><div class="week-navigation">${button('‹','calendar-week','data-offset="-7" aria-label="上一周"','small')}<div><strong>${dateLabel(days[0]).replace(/星期.*/,'')} — ${dateLabel(days[6]).replace(/星期.*/,'')}</strong><small>${days[0].slice(0,4)} · 本周 ${weekTasks.length} 项训练</small></div>${button('›','calendar-week','data-offset="7" aria-label="下一周"','small')}</div><div class="row wrap">${button('本周','calendar-today','','small')}<input type="date" id="training-date" value="${state.date}" aria-label="训练日期"></div></div><p class="timetable-hint">拖动训练卡片更换日期，也可点击「调整」。今日饮食会随当天训练安排自动切换训练日或休息日。</p><div class="timetable-scroll" tabindex="0" aria-label="每周训练表，可横向滚动"><div class="timetable" role="table" aria-label="本周训练计划"><div class="timetable-heading" role="row">${days.map((date,i)=>`<div class="timetable-date ${date===today()?'is-today':''} ${date===state.date?'is-selected':''}" role="columnheader"><button data-action="training-day" data-date="${date}" aria-label="${dateLabel(date)}"><span>${['周一','周二','周三','周四','周五','周六','周日'][i]}</span><strong>${Number(date.slice(-2))}</strong>${date===today()?'<em>今天</em>':''}</button></div>`).join('')}</div><div class="timetable-days" role="row">${days.map(date=>{const items=weekTasks.filter(r=>r.data.date===date);return `<div class="timetable-cell ${date===today()?'is-today':''}" data-date="${date}" role="cell" aria-label="${dateLabel(date)}训练">${items.length?items.map(renderCalendarCard).join(''):'<div class="calendar-rest"><span>休息日</span><small>放松一下，恢复体力</small></div>'}<button type="button" class="calendar-cell-add" data-action="calendar-add" data-date="${date}" aria-label="添加 ${dateLabel(date)}训练">＋<span> 添加训练</span></button></div>`;}).join('')}</div></div></div><div class="calendar-status" role="status" aria-live="polite">已完成的训练保留原日期与记录。</div></section>${draft?`<div class="draft-strip row spread"><div><strong>有一份尚未确认的训练草案</strong><p>确认后，可以把训练添加到日程表。</p></div>${button('查看草案','view-draft','','small')}</div>`:''}<details class="training-plan-panel"><summary><div>${icon('dumbbell')}<span><strong>${p?esc(p.name):'创建你的训练内容'}</strong><small>${p?`${p.days.length} 天循环 · 查看动作与组数`:'先创建训练内容，再安排训练日期'}</small></span></div><span class="plan-disclosure">展开⌄</span></summary><div class="training-plan-content"><div class="row spread wrap"><h2>我的训练内容</h2><div class="row wrap">${p?button('安排到日历','calendar-schedule','','small'):''}${button(p?'修改计划':'创建计划','plan-builder','','primary small')}${button('最大力量估算','strength','','small')}</div></div>${p?`<div class="plan-days">${p.days.map((d,i)=>`<div class="plan-day"><div class="row spread"><h3><span class="step-badge">${i+1}</span>${esc(d.name)}</h3><small>${d.rest?'恢复':d.exercises.length+' 个动作'}</small></div>${d.exercises.map((e,j)=>exerciseLine(e,j)).join('')}</div>`).join('')}</div><p class="description">${esc(p.source)}</p>`:empty('在这里创建训练内容，或在 AI 对话中让我安排训练。','dumbbell')}</div></details>${p?'':`<div class="calendar-start"><span>还没有训练内容？从适合自己的计划开始。</span>${button('创建训练计划','plan-builder','','small')}</div>`}`;
  bindCalendarDrag();
 }
 function bindCalendarDrag() {
@@ -450,13 +450,63 @@ function showCalendarTask(id) {
  modal(esc(data.title),`<div class="row wrap"><span class="badge">训练任务</span>${data.completed?'<span class="badge">已完成</span>':''}</div><p class="description">${dateLabel(data.date)}</p>${data.notes?`<div class="notice calendar-task-notes">${esc(data.notes)}</div>`:''}${day?`<h3>${esc(day.name)}</h3>${day.exercises.map((exercise,i)=>exerciseLine(exercise,i)).join('')}`:''}${data.completed&&data.actual?.length?`<div class="notice" style="margin-top:18px"><strong>实际完成</strong><br>${data.actual.map(a=>`${esc(exercises.find(e=>e.id===a.exerciseId)?.name||a.exerciseId)}：${a.sets} 组 × ${esc(a.reps)} 次，${a.weight} kg`).join('<br>')}</div>`:''}<div class="form-footer">${!data.completed?`${button('删除训练','calendar-delete',`data-id="${esc(id)}"`,'danger')}${button('调整日期','calendar-edit',`data-id="${esc(id)}"`)}`:''}${day?button(data.completed?'修改实际训练':'记录实际训练','log-training',`data-id="${esc(id)}"`,'primary'):''}</div>`);
 }
 function exerciseLine(e,i) {const x=exercises.find(x=>x.id===e.exerciseId);return `<div class="exercise-line"><span class="number">${String(i+1).padStart(2,'0')}</span><div class="grow"><button class="link-button" style="padding:0;text-align:left" data-action="exercise" data-id="${esc(e.exerciseId)}"><strong>${esc(x?.name||e.exerciseId)}</strong></button><small>${esc(x?.muscle||'')} · 休息 ${e.restSeconds}s</small></div><span class="rep">${e.sets} × ${esc(e.reps)}</span></div>`;}
-function planBuilder() {
- modal(plan()?'生成修改草案':'找到适合你的训练循环',`<p class="description">选择分化方式，生成可编辑草案。确认后才会替换固定计划。</p><form id="plan-form"><div class="form-grid"><div><label for="split">训练分化</label><select id="split" name="split">${options([[2,'二分化 · 全身 A / B'],[3,'三分化 · 背 / 胸 / 腿'],[4,'四分化 · 细分肌群'],[5,'五分化 · 专项训练']],3)}</select></div><div><label for="variant">模板变式</label><select id="variant" name="variant">${variantOptions(3)}</select></div></div><div class="notice" style="margin-top:20px">三、四分化参考项目 Excel 模板；二、五分化为扩展模板。生成后可调整动作、组数、次数与休息时间。</div><div class="form-footer"><button class="button primary" type="submit">生成循环草案 ${icon('arrow')}</button></div></form>`);
+function planBuilder(date=null) {
+ state.planStartDate=date;
+ state.planParts=[...(plan()?.parts||['back','chest','legs'])].filter(id=>trainingParts.some(part=>part.id===id));
+ modal('创建训练循环',`<form id="plan-form"><fieldset class="training-part-fieldset"><legend>训练部位 <small>可多选</small></legend><div class="training-part-grid">${trainingParts.map(part=>`<button type="button" class="training-part" data-action="toggle-training-part" data-part="${part.id}" aria-pressed="false"><span class="part-order" aria-hidden="true"></span><span class="part-symbol">${part.name}</span><strong>${part.detail}</strong></button>`).join('')}</div></fieldset><div class="split-summary" aria-live="polite"><div><strong id="split-label"></strong></div><div id="split-preview" class="split-preview"></div></div><div class="plan-template-row"><div><label for="variant">模板样式</label><small id="variant-description"></small></div><select id="variant" name="variant">${variantOptions(state.planParts)}</select></div><div class="form-footer"><button class="button primary" type="submit">生成循环草案 ${icon('arrow')}</button></div></form>`);
+ updatePartSelection();
 }
-function variantOptions(split) { return options((planVariants[split]||['standard']).map(x=>[x,{standard:'标准模板',home:'居家训练',shoulders:'肩部单练',arms:'手臂单练'}[x]]),'standard'); }
+function variantOptions(parts,selected='standard') {return options(partPlanVariants(parts).map(id=>[id,{standard:'标准模板',home:'居家训练',shoulders:'肩部单练',arms:'手臂单练'}[id]]),selected);}
+function updatePartSelection() {
+ const parts=state.planParts;
+ document.querySelectorAll('.training-part').forEach(card=>{const index=parts.indexOf(card.dataset.part);card.setAttribute('aria-pressed',String(index>=0));$('.part-order',card).textContent=index>=0?String(index+1):'＋';});
+ $('#split-label').textContent=parts.length?`${['','一','二','三','四','五'][parts.length]}分化`:'请选择训练部位';
+ $('#split-preview').innerHTML=parts.map(id=>`<span>${trainingParts.find(part=>part.id===id).name}</span>`).join('<i aria-hidden="true">→</i>');
+ const variant=$('#variant').value;
+ $('#variant').innerHTML=variantOptions(parts,partPlanVariants(parts).includes(variant)?variant:'standard');
+ updateVariantDescription();
+ $('#plan-form button[type="submit"]').disabled=!parts.length;
+}
+function updateVariantDescription() {
+ const variant=$('#variant').value;
+ $('#variant-description').textContent=variant==='home'?'需要哑铃和可调训练凳':variant==='shoulders'?'肩部安排在最后':variant==='arms'?'手臂安排在最后':'';
+}
+function updateDraftExerciseUnit(target) {
+ if(!target.name?.startsWith('e-'))return;
+ const [,i,j]=target.name.split('-'),previous=state.draftEditor?.days[i]?.exercises[j];
+ const timed=exerciseUsesSeconds(target.value),input=$(`#draft-r-${i}-${j}`);
+ if(previous&&exerciseUsesSeconds(previous.exerciseId)!==timed)input.value=defaultTrainingExercise(target.value).reps.replace(/秒$/,'');
+ $(`label[for="draft-r-${i}-${j}"]`).textContent=timed?'秒':'次数';
+}
+function readDraftForm() {
+ const draft=structuredClone(state.draftEditor),form=$('#draft-form');if(!draft||!form)return draft;
+ const values=formData(form);draft.name=values.name;
+ draft.days.forEach((day,i)=>day.exercises.forEach((exercise,j)=>{exercise.exerciseId=values[`e-${i}-${j}`];exercise.sets=values[`s-${i}-${j}`]===''?'':Number(values[`s-${i}-${j}`]);const reps=values[`r-${i}-${j}`].trim();exercise.reps=exerciseUsesSeconds(exercise.exerciseId)&&reps?reps.replace(/秒$/,'').trim()+'秒':reps;}));
+ return draft;
+}
 function viewDraft() {
- const d=state.store.get('plan-draft');if(!d)return;
- modal('调整并确认训练草案',`<div class="notice">${plan()?'现有计划仍在使用。确认此草案后，才会更新固定训练内容。':'按你的器械和能力调整，准备好后再固定计划。'}</div><form id="draft-form" style="margin-top:20px"><div class="field"><label for="plan-name">计划名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><div class="plan-days">${d.days.map((day,i)=>`<section class="plan-day"><div class="row spread"><h3><span class="step-badge">${i+1}</span>${esc(day.name)}</h3><small>${day.rest?'休息与恢复':'可调整'}</small></div>${day.rest?'':`<div class="food-table-wrap"><table class="food-table"><thead><tr><th>动作</th><th>组数</th><th>次数 / 秒</th><th>休息 s</th></tr></thead><tbody>${day.exercises.map((e,j)=>`<tr><td><select name="e-${i}-${j}" aria-label="第${i+1}天动作${j+1}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select></td><td><input name="s-${i}-${j}" aria-label="组数" type="number" min="1" max="12" value="${e.sets}" required></td><td><input name="r-${i}-${j}" aria-label="次数" value="${esc(e.reps)}" maxlength="30" required></td><td><input name="t-${i}-${j}" aria-label="休息秒数" type="number" min="15" max="600" value="${e.restSeconds}" required></td></tr>`).join('')}</tbody></table></div>`}</section>`).join('')}</div><p class="description" style="margin-top:20px">${esc(Array.isArray(d.notes)?d.notes.join('；'):d.notes)}</p><div class="form-footer">${button('放弃草案','discard-plan')}<button class="button primary" type="submit">确认并固定计划</button></div></form>`,true);
+ const d=state.store.get('plan-draft');if(!d)return;state.draftEditor=d;
+ modal('编辑训练草案',`<form id="draft-form" class="training-draft-form"><div class="field"><label for="plan-name">计划名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><div class="draft-days">${d.days.map((day,i)=>day.rest?`<div class="draft-rest"><span>${icon('leaf')} ${esc(day.name)}</span><small>第 ${i+1} 天</small></div>`:`<section class="draft-day" data-draft-day="${i}"><div class="draft-day-heading"><h3><span class="step-badge">${i+1}</span>${esc(day.name)}</h3><span>${day.exercises.length} 个动作</span></div><div class="draft-exercises">${day.exercises.map((e,j)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(j+1).padStart(2,'0')}</span><label class="sr-only" for="draft-e-${i}-${j}">第${i+1}天动作${j+1}</label><select id="draft-e-${i}-${j}" name="e-${i}-${j}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select>${button(icon('close'),'draft-remove-exercise',`data-day="${i}" data-index="${j}" aria-label="删除第${i+1}天动作${j+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="draft-s-${i}-${j}">组数</label><input id="draft-s-${i}-${j}" name="s-${i}-${j}" type="number" min="1" max="12" step="1" value="${esc(e.sets)}" required><label for="draft-r-${i}-${j}">${exerciseUsesSeconds(e.exerciseId)?'秒':'次数'}</label><input id="draft-r-${i}-${j}" name="r-${i}-${j}" value="${esc(exerciseUsesSeconds(e.exerciseId)?String(e.reps).replace(/秒$/,'').trim():e.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','draft-add-exercise',`data-day="${i}" ${day.exercises.length>=16?'disabled':''}`,'draft-add')}${!day.exercises.length?'<p class="description">至少添加 1 个动作</p>':''}</section>`).join('')}</div>${!d.parts?.length&&d.notes?.length?`<p class="description draft-notes">${esc(Array.isArray(d.notes)?d.notes.join('；'):d.notes)}</p>`:''}<div class="form-footer draft-footer">${button('放弃草案','discard-plan')}<button class="button primary" type="submit">${d.scheduleDate?'确认计划并安排日期':'确认并固定计划'} ${icon('arrow')}</button></div></form>`,true);
+}
+async function changeDraftExercise(target,remove=false) {
+ if(state.draftSaving)return;
+ const draft=readDraftForm(),index=Number(target.dataset.day),day=draft?.days[index];if(!day||day.rest)return;
+ if(remove)day.exercises.splice(Number(target.dataset.index),1);
+ else {
+   if(day.exercises.length>=16)throw new Error('每个训练日最多添加 16 个动作。');
+   const muscle={chest:'胸',back:'背',shoulders:'三角肌',legs:'股',arms:'肱'}[day.part]||'';
+   const candidates=exercises.filter(exercise=>exercise.muscle.includes(muscle));
+   const next=candidates.find(exercise=>!day.exercises.some(item=>item.exerciseId===exercise.id))||candidates[0]||exercises[0];
+   day.exercises.push(defaultTrainingExercise(next.id));
+ }
+ const form=$('#draft-form'),scroll=$('#modal').scrollTop;
+ state.draftSaving=true;
+ try {
+   await state.store.put('draft','plan-draft',draft);
+   if(!form.isConnected||!$('#modal').open)return;
+   viewDraft();$('#modal').scrollTop=scroll;
+   const section=$(`[data-draft-day="${index}"]`);(remove?$('[data-action="draft-add-exercise"]',section):section.querySelector('.draft-exercise:last-child select'))?.focus({preventScroll:remove});
+ } finally {state.draftSaving=false;}
 }
 function logTraining(id) {
  const record=id?calendarTask(id):scheduledRecord(state.date),s=record?.data,day=taskDay(record);if(!day)throw new Error('这项任务没有可记录的训练内容。');state.trainingLog=structuredClone(record);
@@ -698,12 +748,16 @@ document.addEventListener('click',async event=>{
  case 'confirm-delete-meal':await state.store.remove(id);closeModal();renderNutrition();toast('已删除餐食记录');break;
  case 'plan-builder':planBuilder();break;
  case 'view-draft':viewDraft();break;
+ case 'toggle-training-part':{const part=target.dataset.part;state.planParts=state.planParts.includes(part)?state.planParts.filter(id=>id!==part):[...state.planParts,part];updatePartSelection();break;}
+ case 'draft-add-exercise':await changeDraftExercise(target);break;
+ case 'draft-remove-exercise':await changeDraftExercise(target,true);break;
  case 'discard-plan':await state.store.remove('plan-draft');closeModal();renderTraining();break;
  case 'training-day':state.date=target.dataset.date;renderTraining();break;
  case 'log-training':logTraining(id);break;
  case 'calendar-week':state.date=addDays(state.date,Number(target.dataset.offset));renderTraining();break;
  case 'calendar-today':state.date=today();renderTraining();break;
- case 'calendar-add':openCalendarTask(null,target.dataset.date||state.date);break;
+ case 'calendar-add':planBuilder(target.dataset.date||state.date);break;
+ case 'calendar-schedule':openCalendarTask(null,state.date);break;
  case 'calendar-edit':openCalendarTask(id);break;
  case 'calendar-detail':showCalendarTask(id);break;
  case 'calendar-delete':{const record=calendarTask(id);if(!record||record.data.completed)throw new Error('已完成的任务不能删除。');state.calendarDelete=structuredClone(record);confirmDialog('删除训练',`将从训练表移除「${record.data.title}」。`,'calendar-delete-confirm',id);break;}
@@ -749,8 +803,8 @@ document.addEventListener('submit',async event=>{
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await saveMeal(true);break;
  case 'metabolism-form':case 'macro-energy-form':case 'portion-form':updateKnowledgeTool(form);break;
- case 'plan-form':{const draft=generatePlan({split:Number(values.split),variant:values.variant},profile());await state.store.put('draft','plan-draft',draft);viewDraft();break;}
- case 'draft-form':{const draft=structuredClone(state.store.get('plan-draft'));draft.name=values.name;draft.days.forEach((day,i)=>day.exercises.forEach((e,j)=>{e.exerciseId=values[`e-${i}-${j}`];e.sets=Number(values[`s-${i}-${j}`]);e.reps=values[`r-${i}-${j}`];e.restSeconds=Number(values[`t-${i}-${j}`]);}));draft.confirmedAt=new Date().toISOString();draft.planVersion=uid();await state.store.put('plan','active-plan',draft);await state.store.remove('plan-draft');closeModal();renderTraining();toast('训练计划已确认固定');break;}
+ case 'plan-form':{const draft=generatePartPlan({parts:state.planParts,variant:values.variant},profile());if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.put('draft','plan-draft',draft);viewDraft();break;}
+ case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();if(!draft.name)throw new Error('请填写计划名称。');for(const day of draft.days){if(day.rest)continue;if(!day.exercises.length||day.exercises.length>16)throw new Error(`${day.name}需要 1–16 个动作。`);for(const exercise of day.exercises){exercise.reps=exercise.reps.trim();if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps)throw new Error('请检查动作、组数和次数。');}}const date=draft.scheduleDate;delete draft.scheduleDate;draft.confirmedAt=new Date().toISOString();draft.planVersion=uid();await state.store.put('plan','active-plan',draft);await state.store.remove('plan-draft');closeModal();renderTraining();if(date)openCalendarTask(null,date);toast('训练计划已确认固定');break;}
  case 'calendar-task-form':await saveCalendarTask(values);break;
  case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await state.store.put(record.kind,record.id,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});closeModal();renderTraining();toast('训练已记录，辛苦了');break;}
  case 'strength-form':{const r=estimate1RM(Number(values.weight),Number(values.reps));$('#strength-result').innerHTML=`<div class="divider"></div><div class="grid-2"><div class="stat"><small>Epley 参考</small><strong>${r.epley}<em>kg</em></strong></div><div class="stat"><small>Brzycki 参考</small><strong>${r.brzycki}<em>kg</em></strong></div></div><p class="description" style="margin-top:18px">${esc(r.note)}</p>`;break;}
@@ -767,6 +821,7 @@ document.addEventListener('submit',async event=>{
 
 document.addEventListener('change',async event=>{
  const target=event.target;
+ if(target.closest('#draft-form')){try{updateDraftExerciseUnit(target);const draft=readDraftForm();state.draftEditor=draft;await state.store.put('draft','plan-draft',draft);}catch(error){toast(error.message,true);}return;}
  if(target.name==='enabled-model'&&state.providerDraft){const d=state.providerDraft;if(target.checked){const m=d.availableModels.find(m=>m.id===target.value);if(m&&!d.models.some(x=>x.id===m.id))d.models.push(m);}else d.models=d.models.filter(m=>m.id!==target.value);updateProviderSelection();return;}
  try {
  switch(target.id){
@@ -779,7 +834,7 @@ document.addEventListener('change',async event=>{
  case 'meal-food-library':if(target.value){readMealForm();state.mealDraft.items.push(defaultFood(foods.find(f=>f.id===target.value)));renderMealEditor();}break;
  case 'portion-food':choosePortion(target.value);break;
  case 'calc-sex':case 'calc-activity':updateKnowledgeTool(target.closest('form'));break;
- case 'split':$('#variant').innerHTML=variantOptions(Number(target.value));break;
+ case 'variant':if(target.closest('#plan-form'))updateVariantDescription();break;
 
  case 'muscle-filter':state.muscle=target.value;renderLibrary();break;
  case 'equipment-filter':state.equipment=target.value;renderLibrary();break;

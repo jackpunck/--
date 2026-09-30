@@ -115,7 +115,40 @@ export function calculateNutrition(input, dayType = 'training') {
 }
 
 export const planVariants = Object.freeze({ 2: ['standard'], 3: ['standard', 'home'], 4: ['standard', 'shoulders', 'arms'], 5: ['standard'] });
+export const trainingParts = Object.freeze([
+  {id:'chest',name:'胸',detail:'胸部训练',english:'CHEST'},
+  {id:'back',name:'背',detail:'背部训练',english:'BACK'},
+  {id:'shoulders',name:'肩',detail:'肩部训练',english:'SHOULDERS'},
+  {id:'legs',name:'腿',detail:'腿臀训练',english:'LEGS'},
+  {id:'arms',name:'手臂',detail:'二头 · 三头',english:'ARMS'},
+].map(Object.freeze));
+
+export function partPlanVariants(parts) {
+  return ['standard','home',...(parts.length===4&&parts.includes('shoulders')?['shoulders']:[]),...(parts.length===4&&parts.includes('arms')?['arms']:[])];
+}
+
+export function generatePartPlan({parts,variant='standard'} = {}, input) {
+  if (input) validateProfile(input);
+  if (!Array.isArray(parts)||!parts.length||parts.length>trainingParts.length||new Set(parts).size!==parts.length||parts.some(id=>!trainingParts.some(part=>part.id===id))) throw new Error('请至少选择一个训练部位，每个部位只选一次。');
+  if (!partPlanVariants(parts).includes(variant)) throw new Error('请选择适合当前训练部位的模板。');
+  const standard={chest:['bench','incline-bench','chest-press','pushup'],back:['lat-pulldown','row','dumbbell-row','pullup'],shoulders:['shoulder-press','lateral-raise','reverse-fly','incline-bench'],legs:['goblet-squat','rdl','leg-curl','lunge'],arms:['curl','hammer-curl','triceps','overhead-triceps']};
+  const home={chest:['bench','incline-bench','pushup','shoulder-press'],back:['dumbbell-row','reverse-fly','rdl','curl'],shoulders:standard.shoulders,legs:['goblet-squat','rdl','lunge','glute-bridge'],arms:['curl','hammer-curl','overhead-triceps','pushup']};
+  // Specialty templates place their standalone session last and preserve selected parts.
+  const order=['shoulders','arms'].includes(variant)?[...parts.filter(id=>id!==variant),variant]:[...parts];
+  const names={standard:'标准',home:'居家',shoulders:'肩部单练',arms:'手臂单练'};
+  const days=[];
+  order.forEach((part,index)=>{
+    days.push({id:`day-${days.length+1}`,name:trainingParts.find(item=>item.id===part).detail,part,rest:false,exercises:(variant==='home'?home:standard)[part].map(defaultTrainingExercise)});
+    if ((index+1)%2===0||index===order.length-1) days.push({id:`day-${days.length+1}`,name:'休息与轻活动',rest:true,exercises:[]});
+  });
+  return {name:`${parts.length}分化 · ${names[variant]}`,split:parts.length,variant,parts:order,days,source:'按所选部位组合的应用模板，包含主要部位与辅助动作。',notes:[...(variant==='home'?['居家模板使用哑铃、可调训练凳和徒手动作。']:[]),'每个部位默认 4 个动作，可按需要增删或替换。分化数表示训练内容分组数。']};
+}
+
 const compoundIds = new Set(['squat', 'pushup', 'bench', 'incline-bench', 'chest-press', 'lat-pulldown', 'row', 'dumbbell-row', 'pullup', 'shoulder-press', 'goblet-squat', 'rdl', 'lunge']);
+export const exerciseUsesSeconds = exerciseId => exerciseId === 'plank';
+export function defaultTrainingExercise(exerciseId) {
+  return {exerciseId,sets:4,reps:exerciseUsesSeconds(exerciseId)?'20–40秒':'8',restSeconds:compoundIds.has(exerciseId)?150:75};
+}
 const trainingTemplates = {
   pull: ['背、肩后束与二头', ['lat-pulldown', 'row', 'reverse-fly', 'curl']],
   push: ['胸、肩与三头', ['chest-press', 'bench', 'shoulder-press', 'lateral-raise', 'triceps']],
@@ -149,9 +182,9 @@ export function generatePlan({ split = 3, variant = 'standard' } = {}, input) {
   const derived = split === 2 || split === 5 || (split === 4 && variant === 'standard');
   return {
     name: `${split}分化 · ${names[variant]}`, split, variant,
-    days: schedule.map((key, index) => ({ id: `day-${index + 1}`, name: key ? trainingTemplates[key][0] : '休息与轻活动', rest: !key, exercises: key ? trainingTemplates[key][1].map(exerciseId => ({ exerciseId, sets: 3, reps: exerciseId === 'plank' ? '20–40秒' : compoundIds.has(exerciseId) ? '8–12' : '10–15', restSeconds: compoundIds.has(exerciseId) ? 150 : 75 })) : [] })),
+    days: schedule.map((key, index) => ({ id: `day-${index + 1}`, name: key ? trainingTemplates[key][0] : '休息与轻活动', rest: !key, exercises: key ? trainingTemplates[key][1].map(defaultTrainingExercise) : [] })),
     source: derived ? `应用扩展模板；动作类型参考${sources.workbook}，此分化不是原表原样计划。` : `${sources.workbook}；保留分组结构，动作和组数经应用简化。`,
-    notes: ['这是循环草案，确认后再固定；分化数是训练内容分组数，不是每周必须训练次数。', '每个动作从可控重量开始，默认保留约2次余力。疼痛时停止该动作。可调整休息日以适应恢复和日程。', '已将原表较高的单次组数简化为每动作3组。新手可从1–2组开始。', ...(variant === 'home' ? ['居家方案需要哑铃及稳固支撑，使用前检查设备。'] : []), '身体各大肌群的训练频率应结合完整周历检查，模板不会自动判断恢复情况。'],
+    notes: ['这是循环草案，确认后再固定；分化数是训练内容分组数，不是每周必须训练次数。', '每个动作从可控重量开始，默认保留约2次余力。疼痛时停止该动作。可调整休息日以适应恢复和日程。', '默认每个动作 4 组，可按需要调整组数与次数。', ...(variant === 'home' ? ['居家方案需要哑铃及稳固支撑，使用前检查设备。'] : []), '身体各大肌群的训练频率应结合完整周历检查，模板不会自动判断恢复情况。'],
   };
 }
 
