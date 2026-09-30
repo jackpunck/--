@@ -1,3 +1,4 @@
+import {busyPredicate,normalizeBusySettings} from './busy-rules.js';
 /** Shared training calendar rules. Dates are local wall-clock values. */
 export function localDate(value = new Date()) {
   const d = value instanceof Date ? value : new Date(value);
@@ -51,6 +52,7 @@ export function recurringCalendarTasks(cycle, fromDate, toDate, busyDates = []) 
   const plan=cycle.plan;
   if(!cycle.id||!plan?.planVersion||!Array.isArray(plan.days)||!plan.days.length||!plan.days.some(day=>!day.rest))throw new Error('循环训练计划无效。');
   const ordinal=date=>Date.parse(date+'T00:00:00Z')/86400000;
+  if(!Array.isArray(busyDates))return recurringWithRules(cycle,fromDate,toDate,busyDates);
   const busy=normalizeBusyDates(busyDates);
   const first=Math.max(0,ordinal(fromDate)-ordinal(cycle.startDate)-busy.length),last=ordinal(toDate)-ordinal(cycle.startDate);
   if(ordinal(toDate)-ordinal(fromDate)>366)throw new Error('一次最多补齐一年的训练。');
@@ -68,6 +70,36 @@ export function recurringCalendarTasks(cycle, fromDate, toDate, busyDates = []) 
   return tasks;
 }
 
+function recurringWithRules(cycle,from,to,settings) {
+  if((Date.parse(to)-Date.parse(from))/86400000>366)throw new Error('一次最多补齐一年的训练。');
+  const busy=busyPredicate(settings),tasks=[];let offset=0;
+  for(let time=Date.parse(cycle.startDate);time<=Date.parse(to);time+=86400000){
+    const date=new Date(time).toISOString().slice(0,10),day=cycle.plan.days[offset%cycle.plan.days.length];
+    if(!day.rest&&busy(date))continue;
+    if(!day.rest&&date>=from){
+      if(!day.id||!day.exercises?.length)throw new Error('每个训练日需要至少一个动作。');
+      tasks.push({id:`task:cycle:${cycle.id}:${offset}`,kind:'calendar-task',data:{...validateCalendarTask({title:day.name,date}),dayId:day.id,daySnapshot:structuredClone(day),planVersion:cycle.plan.planVersion,cycleId:cycle.id,rest:false}});
+    }
+    offset++;
+  }
+  return tasks;
+}
+
+function cycleDateLookup(cycle,settings) {
+  if(Array.isArray(settings))return offset=>cycleTaskDate(cycle,offset,settings);
+  const busy=busyPredicate(settings),dates=[];let time=Date.parse(cycle.startDate),stalled=0;
+  return offset=>{
+    if(!Number.isSafeInteger(offset)||offset<0)throw new Error('循环训练日期无效。');
+    while(dates.length<=offset){
+      if(time>Date.parse('2199-12-31')||stalled>366)throw new Error('没有足够的空闲日期安排训练，请减少默认繁忙日或手动留出空闲日期。');
+      const date=new Date(time).toISOString().slice(0,10),day=cycle.plan.days[dates.length%cycle.plan.days.length];time+=86400000;
+      if(!day.rest&&busy(date)){stalled++;continue;}
+      stalled=0;dates.push(date);
+    }
+    return dates[offset];
+  };
+}
+
 export function calendarResetChanges(records) {
   return records.filter(record=>!record.deleted&&(['calendar-task','schedule','training-cycle'].includes(record.kind)||record.id==='calendar-busy-days')).map(record=>({id:record.id,kind:record.kind,deleted:true}));
 }
@@ -79,6 +111,7 @@ export function normalizeBusyDates(dates = []) {
 
 /** Busy training slots pause the cycle; a planned rest slot still consumes a day. */
 export function cycleTaskDate(cycle, offset, busyDates = []) {
+  if(!Array.isArray(busyDates))return cycleDateLookup(cycle,busyDates)(offset);
   return validateDate(new Date(cycleTaskOrdinal(cycle,offset,busyDates)*86400000).toISOString().slice(0,10));
 }
 
@@ -103,7 +136,8 @@ function finishedTraining(record) {
 /** Recalculate pending occurrences without replacing their content or resurrecting deletions. */
 export function rescheduleBusyTasks(records, cycle, previousDates, nextDates, today) {
   validateDate(today);
-  const previous=normalizeBusyDates(previousDates),next=normalizeBusyDates(nextDates),busy=new Set(next);
+  const previous=Array.isArray(previousDates)?normalizeBusyDates(previousDates):normalizeBusySettings(previousDates),next=Array.isArray(nextDates)?normalizeBusyDates(nextDates):normalizeBusySettings(nextDates),busy=busyPredicate(next);
+  const previousDate=cycle&&cycleDateLookup(cycle,previous),nextDate=cycle&&cycleDateLookup(cycle,next);
   const changes=[],manual=[],occupied=new Set(),oldOccupied=new Set();
   const prefix=cycle?`task:cycle:${cycle.id}:`:null;
   for(const record of records) {
@@ -111,8 +145,8 @@ export function rescheduleBusyTasks(records, cycle, previousDates, nextDates, to
     if(record.data.date<today||finishedTraining(record)){occupied.add(record.data.date);oldOccupied.add(record.data.date);continue;}
     const suffix=prefix&&record.id.startsWith(prefix)?record.id.slice(prefix.length):'';
     const offset=/^\d+$/.test(suffix)?Number(suffix):null;
-    if(offset!==null&&!record.data.busyBaseDate&&record.data.date===cycleTaskDate(cycle,offset,previous)) {
-      const date=cycleTaskDate(cycle,offset,next);
+    if(offset!==null&&!record.data.busyBaseDate&&record.data.date===previousDate(offset)) {
+      const date=nextDate(offset);
       oldOccupied.add(record.data.date);occupied.add(date);
       if(date>=today&&date!==record.data.date)changes.push({id:record.id,kind:record.kind,data:{...structuredClone(record.data),date}});
     } else manual.push(record);
@@ -122,7 +156,8 @@ export function rescheduleBusyTasks(records, cycle, previousDates, nextDates, to
   let delay=0;
   for(const [base,items] of [...groups].sort(([a],[b])=>a.localeCompare(b))) {
     let date=addDays(base,delay);if(date<today)date=today;
-    while(busy.has(date)||(occupied.has(date)&&(date!==base||!oldOccupied.has(base)))){date=addDays(date,1);}
+    let attempts=0;
+    while(busy(date)||(occupied.has(date)&&(date!==base||!oldOccupied.has(base)))){if(++attempts>366)throw new Error('没有足够的空闲日期安排训练，请减少默认繁忙日或手动留出空闲日期。');date=addDays(date,1);}
     delay=Math.round((Date.parse(date)-Date.parse(base))/86400000);occupied.add(date);
     for(const record of items) {
       if(date===record.data.date)continue;

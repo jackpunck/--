@@ -32,7 +32,7 @@ test('AI calendar operations honor busy dates and settings invalidate the calend
   assert.deepEqual(read.busyDates,[today,'2026-09-30']);
   const rejected=call('create_calendar_task',{task:training(today),calendarVersion:read.calendarVersion});
   assert.equal(rejected.ok,false);assert.match(rejected.message,/繁忙/);
-  assert.deepEqual(calendarState(db,'bob').busyDates,[]);
+  assert.deepEqual(calendarState(db,'bob').busySettings,{weeklyRules:[],overrides:{}});
 });
 
 test('plan distributes training by date, ignores old daily/rest markers and creates no times', t => {
@@ -274,4 +274,15 @@ test('server validates client today and computes its local clock from a bounded 
   assert.throws(() => resolveLocalToday('2026-09-01', now));
   assert.throws(() => resolveLocalTime('2026-09-29', -480, now));
   assert.throws(() => resolveLocalTime('2026-09-30', -1000, now));
+});
+
+
+test('AI scheduling shares recurring defaults, holiday exceptions and manual overrides',t=>{
+ const {put,call}=fixture(t);
+ put('calendar-busy-days','calendar-settings',{weeklyRules:[{from:today,weekdays:[1,3,5]}],overrides:{'2026-10-05':true,'2026-10-09':false}});
+ const created=call('create_training_plan',{plan:plan(),schedule:{days:14}});assert.equal(created.ok,true);
+ assert(created.scheduled.every(r=>!['2026-09-30','2026-10-05','2026-10-12'].includes(r.date)));
+ const read=call('read_calendar',{startDate:'2026-10-01',endDate:'2026-10-12'});assert.equal(read.ok,true);assert.deepEqual(read.busyDates,['2026-10-05','2026-10-12']);
+ const rejected=call('create_calendar_task',{task:training('2026-10-05'),calendarVersion:read.calendarVersion});assert.equal(rejected.ok,false);assert.match(rejected.message,/繁忙/);
+ const free=call('create_calendar_task',{task:training('2026-10-02'),calendarVersion:read.calendarVersion});assert.equal(free.ok,true);
 });

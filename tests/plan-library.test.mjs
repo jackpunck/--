@@ -56,7 +56,7 @@ test('import activates plan and schedule atomically, respects busy days and pres
  const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  const records=new Map(),batches=[];let fail=false,counter=0;
  const store={records,get:id=>{const r=records.get(id);return r&&!r.deleted?structuredClone(r.data):null;},list:kind=>[...records.values()].filter(r=>r.kind===kind&&!r.deleted),putMany:async changes=>{if(fail)throw new Error('disk unavailable');batches.push(structuredClone(changes));for(const r of changes)records.set(r.id,structuredClone(r));}};
- const context={state:{store,date:'2026-10-01'},plan:()=>store.get('active-plan'),today:()=> '2026-10-01',uid:()=>`cycle-${++counter}`,structuredClone,weekDates,addDays,planCalendarTasks,recurringCalendarTasks,calendarResetChanges};
+ const context={loadCalendarHolidayData:async()=>{},state:{store,date:'2026-10-01'},plan:()=>store.get('active-plan'),today:()=> '2026-10-01',uid:()=>`cycle-${++counter}`,structuredClone,weekDates,addDays,planCalendarTasks,recurringCalendarTasks,calendarResetChanges};
  runInNewContext(source.slice(source.indexOf('function cycleWindow('),source.indexOf('function openCalendarTask(')),context);
  const template=lib.createLibraryTemplate([],draft(),'template:a',now)[0],first=lib.libraryPlan(template);
  records.set(template.id,template);records.set('calendar-busy-days',{id:'calendar-busy-days',kind:'calendar-settings',data:{dates:['2026-10-01']}});
@@ -79,7 +79,7 @@ test('editing a saved template refuses stale snapshots instead of overwriting an
  const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  const record=lib.createLibraryTemplate([],draft(),'template:a',now)[0],records=new Map([[record.id,structuredClone(record)]]);
  let writes=0;const store={records,put:async(kind,id,data)=>{writes++;records.set(id,{kind,id,data:structuredClone(data)});}};
- const context={state:{store,libraryEditing:structuredClone(record)},structuredClone,uid:()=> 'revision-2'};
+ const context={loadCalendarHolidayData:async()=>{},state:{store,libraryEditing:structuredClone(record)},structuredClone,uid:()=> 'revision-2'};
  runInNewContext(source.slice(source.indexOf('async function ensurePlanLibrary('),source.indexOf('function planBuilder(')),context);
  const edited=structuredClone(record.data);edited.days[0].exercises[0].sets=5;
  await context.saveLibraryDraft(edited);assert.equal(records.get(record.id).data.days[0].exercises[0].sets,5);assert.equal(records.get(record.id).data.libraryRevision,'revision-2');

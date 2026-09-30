@@ -213,3 +213,30 @@
 .plan-library-empty p{font-size:12px;margin:0}
 #plan-library-error:not(:empty){padding:0 24px;flex:none}
 @media(max-width:600px){.plan-library-modal{width:calc(100vw - 28px);max-height:84dvh;border-radius:14px}.plan-library-modal .modal-head{padding:18px}.plan-library-tools{padding:14px 18px}.plan-library-list{padding:0 14px 14px;gap:10px}.library-template{padding:13px 11px}.library-template-choice{gap:9px}.library-template-body{padding-left:27px}.library-template-days{gap:4px}.library-template-days span{padding:3px 6px;font-size:10px}.library-template-bottom{flex-wrap:wrap;gap:5px}.library-edit{margin-left:auto}.plan-library-footer{padding:14px;gap:10px}.plan-library-footer input{width:143px;font-size:11px}.library-import-action .button{font-size:11px;padding:10px}.library-import-action .icon{width:15px;height:15px}.plan-library-footer label{font-size:10px}}
+
+/* Compact weekly busy defaults; all busy dates share the same appearance. */
+.busy-defaults{margin:-5px 0 22px;border-bottom:1px solid var(--line)}
+.busy-defaults>summary{display:flex;align-items:center;gap:11px;min-height:46px;padding:3px 0 14px;list-style:none;cursor:pointer;border-radius:3px}
+.busy-defaults>summary::-webkit-details-marker{display:none}
+.busy-defaults>summary:focus-visible{outline:2px solid #789784;outline-offset:3px}
+.busy-defaults>summary>.icon{width:18px;height:18px;color:var(--green)}
+.busy-defaults>summary>strong{font-size:12px;font-weight:600;white-space:nowrap}
+.busy-defaults-summary{margin-left:auto;color:var(--muted);font-size:11px;max-width:48%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.busy-defaults-chevron{font-size:18px;line-height:1;transition:transform .15s;color:var(--green)}
+.busy-defaults[open] .busy-defaults-chevron{transform:rotate(180deg)}
+.busy-defaults-content{padding:2px 0 14px}
+.busy-default-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
+.busy-default-weekdays button{padding:9px 0;border:1px solid var(--line);border-radius:8px;background:white;font-size:11px;min-height:35px;color:#6a786f}
+.busy-default-weekdays button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:white}
+.busy-defaults-content p{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted);margin:13px 0 0;line-height:1.6}
+.busy-defaults-content p .icon{width:14px;height:14px;color:#89a278}
+.busy-date{position:relative;border-color:#edf0e9}
+.busy-date.is-busy,.busy-date.is-busy:hover:not(:disabled){background:#eaf2e5;border-color:#d2e1c9;color:var(--green)}
+.busy-date.is-busy>span{color:#678463}
+.busy-date.is-busy.is-today{border-color:#698666}
+.busy-holiday-badge{position:absolute;top:3px;right:4px;display:grid;place-items:center;min-width:15px;height:15px;font-style:normal;font-size:9px;line-height:1;border-radius:50%;background:#faebc9;color:#9b7d40}
+.busy-holiday-badge.is-work{background:#eef0ec;color:#7d8780}
+.busy-days-footer{justify-content:flex-end}
+.busy-holiday-unavailable{font-size:10px;line-height:1.6;color:var(--muted);margin:-5px 0 14px}
+@media(max-width:480px){.busy-default-weekdays{gap:4px}.busy-default-weekdays button{padding:9px 0;font-size:10px}.busy-defaults>summary{gap:8px}.busy-defaults-summary{max-width:43%;font-size:10px}.busy-defaults>summary>strong{font-size:11px}.busy-holiday-badge{top:2px;right:2px;min-width:12px;height:12px;font-size:8px}}
+@media(prefers-reduced-motion:reduce){.busy-defaults-chevron{transition:none}}

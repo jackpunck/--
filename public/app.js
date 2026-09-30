@@ -1,10 +1,12 @@
+import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
+import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=1';
 import {weeklyAchievement, earnedWeeklyAchievements} from './achievements.js?v=1';
 import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=9';
 import {renderMarkdown} from './chat-markdown.js?v=9';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
-import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, normalizeBusyDates, rescheduleBusyTasks} from './schedule.js?v=10';
+import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=11';
 import {parseMealEstimate} from './meal-contract.js?v=9';
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {formulaCards, foodPortions, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion} from './knowledge-tools.js?v=9';
@@ -346,7 +348,7 @@ function aiContext() {
  const relevant=date=>date>=now&&date<=end||visibleDates.has(date);
  const nearby=all.filter(r=>relevant(r.data.date));
  const calendar=nearby.slice(0,200).map(({id,version,data})=>({id,version,data:Object.fromEntries(['taskType','title','date','completed','dayId','planVersion'].filter(key=>data[key]!==undefined).map(key=>[key,data[key]]))}));
- return {knowledge:knowledgeCards,profile:profile(),plan:plan(),nutrition:nutrition(now),date:state.date,localToday:now,timezoneOffset:new Date().getTimezoneOffset(),calendar,busyDates:getBusyDates(),calendarTruncated:nearby.length>calendar.length,meals:records('meal').slice(0,35).map(r=>({...r.data,id:r.id,version:r.version})),training:all.filter(r=>r.data.date<=now).sort((a,b)=>b.data.date.localeCompare(a.data.date)).slice(0,20).map(({id,version,data})=>({id,version,...Object.fromEntries(['taskType','title','date','completed','dayId','daySnapshot','planVersion','actual','notes','completedAt'].filter(key=>data[key]!==undefined).map(key=>[key,data[key]]))})),phases:records('phase').slice(0,10).map(r=>r.data),exerciseCatalog:exercises.map(({id,name,muscle,cues,source})=>({id,name,muscle,cues,source}))};
+ return {knowledge:knowledgeCards,profile:profile(),plan:plan(),nutrition:nutrition(now),date:state.date,localToday:now,timezoneOffset:new Date().getTimezoneOffset(),calendar,busyDates:getBusyDates(now,addDays(now,28)),calendarTruncated:nearby.length>calendar.length,meals:records('meal').slice(0,35).map(r=>({...r.data,id:r.id,version:r.version})),training:all.filter(r=>r.data.date<=now).sort((a,b)=>b.data.date.localeCompare(a.data.date)).slice(0,20).map(({id,version,data})=>({id,version,...Object.fromEntries(['taskType','title','date','completed','dayId','daySnapshot','planVersion','actual','notes','completedAt'].filter(key=>data[key]!==undefined).map(key=>[key,data[key]]))})),phases:records('phase').slice(0,10).map(r=>r.data),exerciseCatalog:exercises.map(({id,name,muscle,cues,source})=>({id,name,muscle,cues,source}))};
 }
 
 function nutritionStats(n,t) {return `${[['kcal','能量','kcal'],['protein','蛋白质','g'],['carbs','碳水化合物','g'],['fat','脂肪','g']].map(([k,l,u])=>`<div class="stat"><small>${l}</small><strong>${numeric(t[k])}<em>/ ${numeric(n[k])} ${u}</em></strong><div class="bar ${k}"><i style="width:${Math.min(100,t[k]/n[k]*100||0)}%"></i></div><p>${t[k]>n[k]?'已超出':'还可摄入'} ${numeric(Math.abs(n[k]-t[k]))} ${u}</p></div>`).join('')}`;}
@@ -466,32 +468,54 @@ function bindCalendarDrag() {
  const table=$('.timetable');if(!table)return;let dragRecord=null;
  table.addEventListener('dragstart',event=>{if(event.target.closest('.task-card-menu')){event.preventDefault();return;}document.querySelectorAll('.task-card-menu[open]').forEach(menu=>menu.open=false);const card=event.target.closest('.calendar-task'),record=card&&calendarTask(card.dataset.taskId);if(!record||record.data.completed){event.preventDefault();return;}dragRecord=structuredClone(record);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-fitness-task',record.id);card.classList.add('dragging');});
  table.addEventListener('dragend',()=>{dragRecord=null;table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));});
- table.addEventListener('dragover',event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord||getBusyDates().includes(cell.dataset.date))return;event.preventDefault();event.dataTransfer.dropEffect='move';table.querySelectorAll('.drop-target').forEach(node=>node.classList.remove('drop-target'));cell.classList.add('drop-target');});
+ table.addEventListener('dragover',event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord||isBusyDate(cell.dataset.date,getBusySettings()))return;event.preventDefault();event.dataTransfer.dropEffect='move';table.querySelectorAll('.drop-target').forEach(node=>node.classList.remove('drop-target'));cell.classList.add('drop-target');});
  table.addEventListener('dragleave',event=>{const cell=event.target.closest('.timetable-cell');if(cell&&!cell.contains(event.relatedTarget))cell.classList.remove('drop-target');});
- table.addEventListener('drop',async event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord)return;event.preventDefault();const snapshot=dragRecord;dragRecord=null;try{const record=assertTaskCurrent(snapshot);if(record.data.completed)throw new Error('已完成的训练保留原日期，不能移动。');const date=cell.dataset.date;if(getBusyDates().includes(date)){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}if(date===record.data.date){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}const data={...record.data,date};delete data.busyBaseDate;await state.store.put(record.kind,record.id,data);renderTraining();}catch(error){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));toast(error.message,true);}});
+ table.addEventListener('drop',async event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord)return;event.preventDefault();const snapshot=dragRecord;dragRecord=null;try{const record=assertTaskCurrent(snapshot);if(record.data.completed)throw new Error('已完成的训练保留原日期，不能移动。');const date=cell.dataset.date;if(isBusyDate(date,getBusySettings())){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}if(date===record.data.date){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}const data={...record.data,date};delete data.busyBaseDate;await state.store.put(record.kind,record.id,data);renderTraining();}catch(error){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));toast(error.message,true);}});
+}
+const holidayRequests=new Map();
+async function ensureHolidayData(year) {
+ if(holidayYear(year))return;
+ try{const cached=JSON.parse(localStorage.getItem('fitness:holidays:'+year)||'null');if(cached){installHolidayYear(cached);return;}}catch{}
+ if(!holidayRequests.has(year))holidayRequests.set(year,api('/holidays?year='+year).then(data=>{if(data.available){const saved=installHolidayYear(data);try{localStorage.setItem('fitness:holidays:'+year,JSON.stringify(saved));}catch{}}}).catch(()=>{}));
+ await holidayRequests.get(year);
+}
+async function loadCalendarHolidayData(from,to) {
+ const years=[];for(let year=Math.max(2007,Number(from.slice(0,4)));year<=Math.min(Number(to.slice(0,4)),new Date().getFullYear()+1);year++)if(!holidayYear(year))years.push(year);
+ await Promise.all(years.map(ensureHolidayData));
 }
 async function openBusyDays() {
- await ensureRecurringSchedule();
- state.busyEditor={month:state.date.slice(0,7),dates:new Set(getBusyDates()),fingerprint:scheduleFingerprint()};
+ await ensureRecurringSchedule();await ensureHolidayData(Number(state.date.slice(0,4)));
+ const settings=normalizeBusySettings(getBusySettings());
+ state.busyEditor={month:state.date.slice(0,7),settings,weekdays:defaultWeekdays(settings,today()),expanded:false,fingerprint:scheduleFingerprint()};
  renderBusyDays();
+}
+function busyEditorSettings() {
+ const editor=state.busyEditor;
+ return JSON.stringify(defaultWeekdays(editor.settings,today()))===JSON.stringify(editor.weekdays)?normalizeBusySettings(editor.settings):setDefaultWeekdays(editor.settings,editor.weekdays,today());
 }
 function renderBusyDays(focusDate) {
  const editor=state.busyEditor,first=editor.month+'-01',year=Number(first.slice(0,4)),month=Number(first.slice(5,7));
  const count=new Date(year,month,0).getDate(),leading=(new Date(first+'T12:00:00').getDay()+6)%7;
- const slots=Array.from({length:42},(_,index)=>{const n=index-leading+1;return n<1||n>count?null:`${editor.month}-${String(n).padStart(2,'0')}`;});
- const planned=new Set(allCalendarTasks().map(record=>record.data.date)),now=today();
- modal('繁忙日设置',`<p class="busy-days-description">点击日期标记繁忙，未完成训练将按顺序顺延。</p><div class="busy-month-toolbar"><strong>${year}年${month}月</strong><div class="row">${button('‹','busy-month',`data-offset="-1" aria-label="上个月" ${editor.month==='1900-01'?'disabled':''}`,'small')}${button('本月','busy-current','','small')}${button('›','busy-month',`data-offset="1" aria-label="下个月" ${editor.month==='2199-12'?'disabled':''}`,'small')}</div></div><div class="busy-weekdays" aria-hidden="true">${['一','二','三','四','五','六','日'].map(day=>`<span>${day}</span>`).join('')}</div><div class="busy-date-grid" role="group" aria-label="${year}年${month}月繁忙日期">${slots.map(date=>date?`<button type="button" class="busy-date ${editor.dates.has(date)?'is-busy':''} ${date===now?'is-today':''}" data-action="busy-toggle" data-date="${date}" aria-pressed="${editor.dates.has(date)}" aria-label="${dateLabel(date)}，${editor.dates.has(date)?'繁忙':planned.has(date)?'有训练':'空闲'}" ${date<now?'disabled':''} ${date===now?'aria-current="date"':''}><strong>${Number(date.slice(-2))}</strong><span>${editor.dates.has(date)?'繁忙':planned.has(date)?'训练':''}</span></button>`:'<span aria-hidden="true"></span>').join('')}</div><div class="busy-days-footer"><small>已选 ${[...editor.dates].filter(date=>date>=now).length} 天</small><div class="row">${button('取消','close-modal')}${button('保存','busy-save','','primary')}</div></div><div id="busy-days-error" role="alert"></div>`);
+ const slots=Array.from({length:Math.ceil((leading+count)/7)*7},(_,index)=>{const n=index-leading+1;return n<1||n>count?null:`${editor.month}-${String(n).padStart(2,'0')}`;});
+ const planned=new Set(allCalendarTasks().map(record=>record.data.date)),now=today(),busy=busyPredicate(busyEditorSettings()),labels=['周一','周二','周三','周四','周五','周六','周日'];
+ modal('繁忙日设置',`<details class="busy-defaults" id="busy-defaults" ${editor.expanded?'open':''}><summary>${icon('calendar')}<strong>默认繁忙日</strong><span class="busy-defaults-summary">${editor.weekdays.length===7?'每天':editor.weekdays.map(day=>labels[day-1]).join(' · ')||'未设置'}</span><span class="busy-defaults-chevron" aria-hidden="true">⌄</span></summary><div class="busy-defaults-content"><div class="busy-default-weekdays" role="group" aria-label="每周默认繁忙日">${labels.map((label,index)=>`<button type="button" data-action="busy-weekday" data-weekday="${index+1}" aria-pressed="${editor.weekdays.includes(index+1)}">${label}</button>`).join('')}</div><p>${icon('leaf')} 节假日自动空闲，手动设置优先</p></div></details><div class="busy-month-toolbar"><strong>${year}年${month}月</strong><div class="row">${button('‹','busy-month',`data-offset="-1" aria-label="上个月" ${editor.month==='1900-01'?'disabled':''}`,'small')}${button('本月','busy-current','','small')}${button('›','busy-month',`data-offset="1" aria-label="下个月" ${editor.month==='2199-12'?'disabled':''}`,'small')}</div></div>${!holidayYear(year)?'<p class="busy-holiday-unavailable">该年节假日数据暂不可用，按每周设置安排。</p>':''}<div class="busy-weekdays" aria-hidden="true">${['一','二','三','四','五','六','日'].map(day=>`<span>${day}</span>`).join('')}</div><div class="busy-date-grid" role="group" aria-label="${year}年${month}月繁忙日期">${slots.map(date=>{if(!date)return '<span aria-hidden="true"></span>';const selected=busy(date),holiday=holidayInfo(date);return `<button type="button" class="busy-date ${selected?'is-busy':''} ${date===now?'is-today':''}" data-action="busy-toggle" data-date="${date}" aria-pressed="${selected}" aria-label="${dateLabel(date)}，${selected?'繁忙':planned.has(date)?'有训练':'空闲'}${holiday?'，'+esc(holiday.isOffDay?holiday.name+'放假':'调休上班'):''}" ${date<now?'disabled':''} ${date===now?'aria-current="date"':''}><strong>${Number(date.slice(-2))}</strong><span>${selected?'繁忙':holiday?.isOffDay?esc(holiday.name):planned.has(date)?'训练':''}</span>${holiday?`<i class="busy-holiday-badge ${holiday.isOffDay?'is-off':'is-work'}" aria-hidden="true">${holiday.isOffDay?'休':'班'}</i>`:''}</button>`;}).join('')}</div><div class="busy-days-footer"><div class="row">${button('取消','close-modal')}${button('保存设置','busy-save','','primary')}</div></div><div id="busy-days-error" role="alert"></div>`);
  $('#modal').classList.add('busy-days-modal');
+ const disclosure=$('#busy-defaults');disclosure.addEventListener('toggle',()=>{if(disclosure.isConnected)editor.expanded=disclosure.open;});
  if(focusDate)$(`.busy-date[data-date="${focusDate}"]`)?.focus({preventScroll:true});
+}
+async function changeBusyMonth(offset,current=false) {
+ const editor=state.busyEditor,d=new Date(editor.month+'-01T12:00:00');d.setMonth(d.getMonth()+offset);
+ editor.month=current?today().slice(0,7):`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+ await ensureHolidayData(Number(editor.month.slice(0,4)));if(state.busyEditor===editor&&$('#modal').open)renderBusyDays();
 }
 async function saveBusyDays() {
  const editor=state.busyEditor,store=state.store;
  if(editor.fingerprint!==scheduleFingerprint())throw new Error('日程已更新，请重新打开繁忙日设置。');
- const previous=getBusyDates(),dates=normalizeBusyDates([...editor.dates]);
- if(JSON.stringify(previous)===JSON.stringify(dates)){closeModal();return;}
+ const previous=normalizeBusySettings(getBusySettings()),settings=busyEditorSettings();
+ if(JSON.stringify(previous)===JSON.stringify(settings)){closeModal();return;}
  const cycle=store.get('calendar-cycle');
- const changes=rescheduleBusyTasks(allCalendarTasks(),cycle,previous,dates,today());
- await store.putMany([{id:'calendar-busy-days',kind:'calendar-settings',data:{dates}},...changes]);
+ const changes=rescheduleBusyTasks(allCalendarTasks(),cycle,previous,settings,today());
+ await store.putMany([{id:'calendar-busy-days',kind:'calendar-settings',data:settings},...changes]);
  closeModal();state.busyEditor=null;renderTraining();
 }
 function cycleWindow(date) {
@@ -499,14 +523,17 @@ function cycleWindow(date) {
  const remaining=Math.round((Date.parse(limit+'T00:00:00Z')-Date.parse(from+'T00:00:00Z'))/86400000);
  return {from,to:addDays(from,Math.min(83,remaining))};
 }
-function getBusyDates() {return state.store?.get('calendar-busy-days')?.dates||[];}
+function getBusySettings() {return state.store?.get('calendar-busy-days')||{dates:[]};}
+function getBusyDates(from=weekDates(state.date)[0],to=addDays(from,6)) {return busyDatesInRange(getBusySettings(),from,to);}
 async function ensureRecurringSchedule(date=state.date) {
  const store=state.store,cycle=store?.get('calendar-cycle');
  if(!cycle||cycle.plan.planVersion!==plan()?.planVersion)return;
+ await loadCalendarHolidayData(cycle.startDate,cycleWindow(date>today()?date:today()).to);
+ if(state.store!==store||JSON.stringify(store.get('calendar-cycle'))!==JSON.stringify(cycle))return;
  const missing=new Map();
  for(const anchor of new Set([date,today()])) {
    const {from,to}=cycleWindow(anchor);
-   for(const task of recurringCalendarTasks(cycle,from,to,getBusyDates()))if(!store.records.has(task.id))missing.set(task.id,task);
+   for(const task of recurringCalendarTasks(cycle,from,to,getBusySettings()))if(!store.records.has(task.id))missing.set(task.id,task);
  }
  // Tombstones count as existing records: deleted occurrences must stay deleted.
  if(missing.size)await store.putMany([...missing.values()]);
@@ -515,13 +542,15 @@ async function addPlanToCalendar(trainingPlan,date,{activate=false}={}) {
  const store=state.store,previous=store.get('calendar-cycle');
  if(previous?.plan.planVersion===trainingPlan?.planVersion&&previous.startDate===date){if(activate&&store.get('active-plan')?.planVersion!==trainingPlan.planVersion)await store.putMany([{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]);await ensureRecurringSchedule(date);return;}
  planCalendarTasks(trainingPlan,date);
+ await loadCalendarHolidayData(date,cycleWindow(date).to);
+ if(state.store!==store||JSON.stringify(store.get('calendar-cycle'))!==JSON.stringify(previous))throw new Error('日程已更新，请重新导入方案。');
  const cycle={id:uid(),startDate:date,plan:structuredClone(trainingPlan)},changes=activate?[{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]:[];
  if(previous)for(const record of store.list('calendar-task')){
    const items=record.data.daySnapshot?.exercises||[],finished=record.data.completed||(items.length>0&&items.every(item=>item.completed===true));
    if(record.data.cycleId===previous.id&&!finished&&record.data.date>=date&&record.data.date>=today())changes.push({id:record.id,kind:record.kind,deleted:true});
  }
  const {to}=cycleWindow(date);
- changes.push({id:'calendar-cycle',kind:'training-cycle',data:cycle},...recurringCalendarTasks(cycle,date,to,getBusyDates()));
+ changes.push({id:'calendar-cycle',kind:'training-cycle',data:cycle},...recurringCalendarTasks(cycle,date,to,getBusySettings()));
  await store.putMany(changes);
 }
 async function resetTrainingCalendar() {
@@ -539,7 +568,7 @@ function openCalendarTask(id) {
 async function saveCalendarTask(values) {
  const original=state.calendarEditor?.record,record=original?assertTaskCurrent(original):null;
  if(record?.data.completed)throw new Error('已完成的训练不能修改日期或内容。');
- if(getBusyDates().includes(values.date))throw new Error('这一天已设为繁忙，请选择其他日期。');
+ if(isBusyDate(values.date,getBusySettings()))throw new Error('这一天已设为繁忙，请选择其他日期。');
  const data={...(record?.data||{}),...validateCalendarTask({...values,taskType:'training',completed:false}),completed:false};
  if(data.date!==record?.data.date)delete data.busyBaseDate;
  const selected=plan()?.days.find(day=>day.id===values.dayId&&!day.rest),preserved=record?.data.dayId===values.dayId&&record.data.daySnapshot;
@@ -1005,9 +1034,10 @@ document.addEventListener('click',async event=>{
  case 'training-day':state.date=target.dataset.date;renderTraining();break;
  case 'log-training':logTraining(id);break;
  case 'busy-days':await openBusyDays();break;
- case 'busy-month':{const editor=state.busyEditor,d=new Date(editor.month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(target.dataset.offset));editor.month=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;renderBusyDays();break;}
- case 'busy-current':state.busyEditor.month=today().slice(0,7);renderBusyDays();break;
- case 'busy-toggle':{const date=target.dataset.date;if(date<today())break;const dates=state.busyEditor.dates;dates.has(date)?dates.delete(date):dates.add(date);renderBusyDays(date);break;}
+ case 'busy-month':await changeBusyMonth(Number(target.dataset.offset));break;
+ case 'busy-current':await changeBusyMonth(0,true);break;
+ case 'busy-weekday':{const editor=state.busyEditor,day=Number(target.dataset.weekday);editor.expanded=true;editor.weekdays=editor.weekdays.includes(day)?editor.weekdays.filter(item=>item!==day):[...editor.weekdays,day].sort((a,b)=>a-b);renderBusyDays();$(`[data-action="busy-weekday"][data-weekday="${day}"]`).focus({preventScroll:true});break;}
+ case 'busy-toggle':{const date=target.dataset.date;if(date<today())break;state.busyEditor.settings.overrides[date]=!isBusyDate(date,busyEditorSettings());renderBusyDays(date);break;}
  case 'busy-save':{const controls=[...$('#modal').querySelectorAll('button')].map(node=>({node,disabled:node.disabled}));controls.forEach(({node})=>node.disabled=true);try{await saveBusyDays();}catch(error){$('#busy-days-error').innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}finally{controls.forEach(({node,disabled})=>node.disabled=disabled);}break;}
  case 'calendar-week':state.date=addDays(state.date,Number(target.dataset.offset));renderTraining();break;
  case 'calendar-today':state.date=today();renderTraining();break;
