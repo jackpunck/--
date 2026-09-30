@@ -415,7 +415,7 @@ function assertTaskCurrent(snapshot) {
 }
 function renderCalendarCard(record) {
  const task=record.data;
- return `<article class="calendar-task training-task ${task.completed?'task-completed':''}" data-task-id="${esc(record.id)}" draggable="${!task.completed}"><div class="task-card-top"><span class="task-kind">${icon('dumbbell')}${task.completed?'已完成':'训练'}</span><details class="task-card-menu" draggable="false"><summary aria-label="${esc(task.title)}的操作"><span class="task-menu-dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></summary><div class="task-card-menu-panel">${button(icon('trash')+' 删除','calendar-delete',`data-id="${esc(record.id)}" aria-label="删除 ${esc(task.title)}"`,'calendar-card-delete')}</div></details></div><button type="button" class="task-open" data-action="calendar-detail" data-id="${esc(record.id)}" aria-label="查看 ${esc(task.title)}"><strong>${esc(task.title)}</strong></button>${task.notes?`<p class="task-note">${esc(task.notes)}</p>`:''}<div class="task-card-bottom"><small>${taskDay(record)?.exercises?.length||0} 个动作</small>${!task.completed?button('调整','calendar-edit',`data-id="${esc(record.id)}" aria-label="调整 ${esc(task.title)} 的日期"`,'small'):button('查看','calendar-detail',`data-id="${esc(record.id)}"`,'small')}</div></article>`;
+ return `<article class="calendar-task training-task ${task.completed?'task-completed':''}" data-task-id="${esc(record.id)}" data-action="calendar-detail" data-id="${esc(record.id)}" draggable="${!task.completed}"><div class="task-card-top"><span class="task-kind">${icon('dumbbell')}${task.completed?'已完成':'训练'}</span><details class="task-card-menu" draggable="false"><summary aria-label="${esc(task.title)}的操作"><span class="task-menu-dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></summary><div class="task-card-menu-panel">${button(icon('trash')+' 删除','calendar-delete',`data-id="${esc(record.id)}" aria-label="删除 ${esc(task.title)}"`,'calendar-card-delete')}</div></details></div><button type="button" class="task-open" data-action="calendar-detail" data-id="${esc(record.id)}" aria-label="查看 ${esc(task.title)}"><strong>${esc(task.title)}</strong></button>${task.notes?`<p class="task-note">${esc(task.notes)}</p>`:''}<div class="task-card-bottom"><small>${taskDay(record)?.exercises?.length||0} 个动作</small>${!task.completed?button('调整','calendar-edit',`data-id="${esc(record.id)}" aria-label="调整 ${esc(task.title)} 的日期"`,'small'):button('查看','calendar-detail',`data-id="${esc(record.id)}"`,'small')}</div></article>`;
 }
 function renderTraining() {
  const days=weekDates(state.date),p=plan(),draft=state.store.get('plan-draft'),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
@@ -452,9 +452,69 @@ async function saveCalendarTask(values) {
  Object.assign(data,{dayId:values.dayId,daySnapshot:structuredClone(preserved||selected),planVersion:preserved?record.data.planVersion:plan().planVersion,rest:false});
  await state.store.put(record?.kind||'calendar-task',record?.id||'task:'+uid(),data);state.date=data.date;closeModal();renderTraining();toast(record?'训练已更新':'已添加到训练表');
 }
+function trainingExerciseSummary(exercise) {
+ const timed=exerciseUsesSeconds(exercise.exerciseId)||/秒$/.test(String(exercise.reps));
+ const reps=String(exercise.reps??'').replace(/(?:秒|次)$/,'').trim();
+ return `${exercise.sets} 组 × ${reps} ${timed?'秒':'次'}`;
+}
+function trainingContentHeader(record,action=null) {
+ const head=$('#modal .modal-head');
+ $('h2',head).outerHTML=`<div class="training-content-title"><h2>${esc(record.data.title)}</h2><p>${dateLabel(record.data.date)}${record.data.completed?' · 已完成':''}</p></div>`;
+ if(action)$('[data-action="close-modal"]',head).insertAdjacentHTML('beforebegin',button('编辑',action,`data-id="${esc(record.id)}"`,'small training-content-edit'));
+ $('#modal').classList.add('training-content-modal');
+}
 function showCalendarTask(id) {
- const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');const data=record.data,day=taskDay(record);state.calendarDetail=structuredClone(record);
- modal(esc(data.title),`<div class="row wrap"><span class="badge">训练任务</span>${data.completed?'<span class="badge">已完成</span>':''}</div><p class="description">${dateLabel(data.date)}</p>${data.notes?`<div class="notice calendar-task-notes">${esc(data.notes)}</div>`:''}${day?`<h3>${esc(day.name)}</h3>${day.exercises.map((exercise,i)=>exerciseLine(exercise,i)).join('')}`:''}${data.completed&&data.actual?.length?`<div class="notice" style="margin-top:18px"><strong>实际完成</strong><br>${data.actual.map(a=>`${esc(exercises.find(e=>e.id===a.exerciseId)?.name||a.exerciseId)}：${a.sets} 组 × ${esc(a.reps)} 次，${a.weight} kg`).join('<br>')}</div>`:''}<div class="form-footer">${button('删除训练','calendar-delete',`data-id="${esc(id)}"`,'danger')}${!data.completed?button('调整日期','calendar-edit',`data-id="${esc(id)}"`):''}${day?button(data.completed?'修改实际训练':'记录实际训练','log-training',`data-id="${esc(id)}"`,'primary'):''}</div>`);
+ const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');
+ const data=record.data,day=taskDay(record),items=data.completed?(data.actual||[]):(day?.exercises||[]);
+ state.calendarDetail=structuredClone(record);
+ modal(esc(data.title),`<div class="training-content-list">${items.length?items.map((exercise,i)=>`<div class="training-content-exercise"><span class="training-content-number">${String(i+1).padStart(2,'0')}</span><strong>${esc(exercises.find(item=>item.id===exercise.exerciseId)?.name||exercise.exerciseId)}</strong><div class="training-content-amount"><span>${esc(trainingExerciseSummary(exercise))}</span>${data.completed&&Number(exercise.weight)>0?`<small>${esc(exercise.weight)} kg</small>`:''}</div></div>`).join(''):`<p class="description">${data.completed?'暂无实际训练记录':'暂无训练动作'}</p>`}</div>${data.notes?`<p class="training-content-notes">${esc(data.notes)}</p>`:''}${!data.completed&&day?`<div class="form-footer">${button('记录训练','log-training',`data-id="${esc(id)}"`,'primary')}</div>`:''}`);
+ trainingContentHeader(record,day?(data.completed?'log-training':'training-content-edit'):null);
+}
+function openTrainingContentEditor(id) {
+ const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');
+ if(record.data.completed){logTraining(id);return;}
+ const day=taskDay(record);if(!day)throw new Error('这项训练没有可编辑的动作。');
+ state.trainingContentEditor={record:structuredClone(record),day:structuredClone(day)};
+ renderTrainingContentEditor();
+}
+function renderTrainingContentEditor() {
+ const {record,day}=state.trainingContentEditor;
+ modal(esc(record.data.title),`<form id="training-content-form"><div class="training-content-editor"><div class="draft-exercises">${day.exercises.map((exercise,index)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(index+1).padStart(2,'0')}</span><select name="exercise-${index}" data-exercise-index="${index}" aria-label="动作 ${index+1}">${options(exercises.map(item=>[item.id,item.name]),exercise.exerciseId)}</select>${button(icon('close'),'training-content-remove',`data-index="${index}" aria-label="删除动作 ${index+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="content-sets-${index}">组数</label><input id="content-sets-${index}" name="sets-${index}" type="number" min="1" max="12" step="1" value="${esc(exercise.sets)}" required><label for="content-reps-${index}">${exerciseUsesSeconds(exercise.exerciseId)?'秒':'次数'}</label><input id="content-reps-${index}" name="reps-${index}" value="${esc(exerciseUsesSeconds(exercise.exerciseId)?String(exercise.reps).replace(/秒$/,'').trim():exercise.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','training-content-add',day.exercises.length>=16?'disabled':'','draft-add')}</div><div id="training-content-error" role="alert"></div><div class="form-footer">${button('取消','calendar-detail',`data-id="${esc(record.id)}"`)}<button type="submit" class="button primary">保存</button></div></form>`);
+ trainingContentHeader(record);
+}
+function readTrainingContentForm() {
+ const editor=state.trainingContentEditor,values=formData($('#training-content-form'));
+ editor.day.exercises=editor.day.exercises.map((exercise,index)=>{
+   const exerciseId=values[`exercise-${index}`],value=values[`reps-${index}`].trim();
+   return {...exercise,exerciseId,sets:values[`sets-${index}`]===''?'':Number(values[`sets-${index}`]),reps:exerciseUsesSeconds(exerciseId)&&value?value.replace(/秒$/,'').trim()+'秒':value};
+ });
+ return editor.day;
+}
+function changeTrainingContentExercise(target,remove=false) {
+ const day=readTrainingContentForm(),index=Number(target.dataset.index);
+ if(remove)day.exercises.splice(index,1);
+ else {
+   if(day.exercises.length>=16)throw new Error('每次训练最多添加 16 个动作。');
+   const muscle={chest:'胸',back:'背',shoulders:'三角肌',legs:'股',arms:'肱'}[day.part]||'';
+   const candidates=exercises.filter(exercise=>exercise.muscle.includes(muscle));
+   const next=candidates.find(exercise=>!day.exercises.some(item=>item.exerciseId===exercise.id))||candidates[0]||exercises[0];
+   day.exercises.push(defaultTrainingExercise(next.id));
+ }
+ const scroll=$('#modal').scrollTop;renderTrainingContentEditor();$('#modal').scrollTop=scroll;
+ (remove?$('[data-action="training-content-add"]'):$('#training-content-form .draft-exercise:last-child select'))?.focus({preventScroll:remove});
+}
+function trainingContentData(record,day) {
+ if(record.data.completed)throw new Error('已完成的训练请编辑实际记录。');
+ if(!day.exercises.length||day.exercises.length>16)throw new Error('请保留 1–16 个动作。');
+ for(const exercise of day.exercises) {
+   if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps.trim()||exercise.reps.length>30)throw new Error('请检查动作、组数和次数。');
+ }
+ return {...structuredClone(record.data),daySnapshot:structuredClone(day)};
+}
+async function saveTrainingContent() {
+ const day=readTrainingContentForm(),record=assertTaskCurrent(state.trainingContentEditor.record);
+ await state.store.put(record.kind,record.id,trainingContentData(record,day));
+ renderTraining();showCalendarTask(record.id);toast('训练内容已保存');
 }
 function exerciseLine(e,i) {const x=exercises.find(x=>x.id===e.exerciseId);return `<div class="exercise-line"><span class="number">${String(i+1).padStart(2,'0')}</span><div class="grow"><button class="link-button" style="padding:0;text-align:left" data-action="exercise" data-id="${esc(e.exerciseId)}"><strong>${esc(x?.name||e.exerciseId)}</strong></button><small>${esc(x?.muscle||'')} · 休息 ${e.restSeconds}s</small></div><span class="rep">${e.sets} × ${esc(e.reps)}</span></div>`;}
 function planBuilder(date=state.date) {
@@ -717,8 +777,8 @@ document.addEventListener('error',event=>{
 },true);
 
 document.addEventListener('click',async event=>{
- document.querySelectorAll('.task-card-menu[open]').forEach(menu=>{if(!menu.contains(event.target)||event.target.closest('[data-action]'))menu.open=false;});
- const target=event.target.closest('[data-action]');if(!target)return;
+ document.querySelectorAll('.task-card-menu[open]').forEach(menu=>{if(!menu.contains(event.target)||event.target.closest('button[data-action],a[data-action]'))menu.open=false;});
+ const target=event.target.closest('[data-action]');if(!target)return;if(target.matches('.calendar-task')&&event.target.closest('.task-card-menu'))return;
  const {action,id}=target.dataset;if(target.tagName==='A')event.preventDefault();
  try {
  switch(action){
@@ -768,6 +828,9 @@ document.addEventListener('click',async event=>{
  case 'calendar-schedule':target.disabled=true;try{await addPlanToCalendar(plan(),state.date);renderTraining();toast('训练已添加到日程表');}finally{target.disabled=false;}break;
  case 'calendar-edit':openCalendarTask(id);break;
  case 'calendar-detail':showCalendarTask(id);break;
+ case 'training-content-edit':openTrainingContentEditor(id);break;
+ case 'training-content-add':changeTrainingContentExercise(target);break;
+ case 'training-content-remove':changeTrainingContentExercise(target,true);break;
  case 'calendar-delete':{const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');state.calendarDelete=structuredClone(record);confirmDialog('删除训练',record.data.completed?`删除「${record.data.title}」及其完成记录？`:`从日程中删除「${record.data.title}」？`,'calendar-delete-confirm',id);break;}
  case 'calendar-delete-confirm':{const record=assertTaskCurrent(state.calendarDelete);if(record.id!==id)throw new Error('这项任务不能删除。');target.disabled=true;try{await state.store.remove(record.id);state.calendarDelete=null;closeModal();renderTraining();toast('已从日程中删除');}finally{target.disabled=false;}break;}
  case 'strength':strengthTool();break;
@@ -814,7 +877,8 @@ document.addEventListener('submit',async event=>{
  case 'plan-form':{const draft=generatePartPlan({parts:state.planParts,variant:values.variant},profile());if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.put('draft','plan-draft',draft);viewDraft();break;}
  case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();if(!draft.name)throw new Error('请填写计划名称。');for(const day of draft.days){if(day.rest)continue;if(!day.exercises.length||day.exercises.length>16)throw new Error(`${day.name}需要 1–16 个动作。`);for(const exercise of day.exercises){exercise.reps=exercise.reps.trim();if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps)throw new Error('请检查动作、组数和次数。');}}const date=draft.scheduleDate||state.date;delete draft.scheduleDate;draft.confirmedAt=new Date().toISOString();draft.planVersion=state.draftEditor.confirmationVersion||=uid();planCalendarTasks(draft,date);await state.store.put('plan','active-plan',draft);await addPlanToCalendar(draft,date);await state.store.remove('plan-draft');state.date=date;closeModal();renderTraining();toast('训练已添加到日程表');break;}
  case 'calendar-task-form':await saveCalendarTask(values);break;
- case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await state.store.put(record.kind,record.id,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});closeModal();renderTraining();toast('训练已记录，辛苦了');break;}
+ case 'training-content-form':await saveTrainingContent();break;
+ case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await state.store.put(record.kind,record.id,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});closeModal();renderTraining();showCalendarTask(record.id);toast('训练已记录');break;}
  case 'strength-form':{const r=estimate1RM(Number(values.weight),Number(values.reps));$('#strength-result').innerHTML=`<div class="divider"></div><div class="grid-2"><div class="stat"><small>Epley 参考</small><strong>${r.epley}<em>kg</em></strong></div><div class="stat"><small>Brzycki 参考</small><strong>${r.brzycki}<em>kg</em></strong></div></div><p class="description" style="margin-top:18px">${esc(r.note)}</p>`;break;}
  case 'provider-form':await saveProvider();break;
  case 'tasks-form':{const tasks={},taskModels={};for(const task of ['chat','meal','planning']){const selected=values[task]?JSON.parse(values[task]):{};tasks[task]=selected.providerId||'';taskModels[task]=selected.modelId||'';}await api('/providers',{method:'PUT',body:{providers:state.providers,tasks,taskModels}});await loadProviders();toast('任务模型已保存');break;}
@@ -823,12 +887,23 @@ document.addEventListener('submit',async event=>{
  case 'cooked-form':{const r=convertFoodWeight(Number(values.grams),Number(values.raw),Number(values.cooked));$('#cooked-result').innerHTML=`<div class="notice">对应熟重约 <strong>${r.grams} g</strong><br>${esc(r.note)}</div>`;break;}
  case 'delete-account-form':await stopChat();await api('/account',{method:'DELETE',body:{password:values.password}});modelViewer.destroy();await chatUploads.clearAll();await state.store.clear();await state.store.close?.();localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;chatDrafts.clear();chatScroll.clear();closeModal();renderAuth();toast('账号与个人数据已删除');break;
  }
- }catch(error){const errorBox=form.id==='auth-form'?$('#auth-error'):form.id==='profile-form'?$('#profile-error'):form.id==='calendar-task-form'?$('#calendar-task-error'):null;if(errorBox)errorBox.innerHTML=`<div class="error-box" style="margin:12px 0">${esc(error.message)}</div>`;else toast(error.message,true);}
+ }catch(error){const errorBox=form.id==='auth-form'?$('#auth-error'):form.id==='profile-form'?$('#profile-error'):form.id==='calendar-task-form'?$('#calendar-task-error'):form.id==='training-content-form'?$('#training-content-error'):null;if(errorBox)errorBox.innerHTML=`<div class="error-box" style="margin:12px 0">${esc(error.message)}</div>`;else toast(error.message,true);}
  finally {if(submit)submit.disabled=false;if(form.id==='chat-form')updateChatControls();}
 });
 
 document.addEventListener('change',async event=>{
  const target=event.target;
+ if(target.closest('#training-content-form')){
+   try {
+     if(target.dataset.exerciseIndex!==undefined){
+       const index=Number(target.dataset.exerciseIndex),previous=state.trainingContentEditor.day.exercises[index],timed=exerciseUsesSeconds(target.value);
+       if(exerciseUsesSeconds(previous.exerciseId)!==timed)$(`#content-reps-${index}`).value=defaultTrainingExercise(target.value).reps.replace(/秒$/,'');
+       $(`label[for="content-reps-${index}"]`).textContent=timed?'秒':'次数';
+     }
+     readTrainingContentForm();
+   }catch(error){toast(error.message,true);}
+   return;
+ }
  if(target.closest('#draft-form')){try{updateDraftExerciseUnit(target);const draft=readDraftForm();state.draftEditor=draft;await state.store.put('draft','plan-draft',draft);}catch(error){toast(error.message,true);}return;}
  if(target.name==='enabled-model'&&state.providerDraft){const d=state.providerDraft;if(target.checked){const m=d.availableModels.find(m=>m.id===target.value);if(m&&!d.models.some(x=>x.id===m.id))d.models.push(m);}else d.models=d.models.filter(m=>m.id!==target.value);updateProviderSelection();return;}
  try {
