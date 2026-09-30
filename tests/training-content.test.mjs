@@ -1,3 +1,4 @@
+import {weeklyAchievement} from '../public/achievements.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -9,7 +10,7 @@ const content=source.slice(source.indexOf('function trainingExerciseSummary('),s
 const conflictCheck=source.slice(source.indexOf('function assertTaskCurrent('),source.indexOf('function renderCalendarCard('));
 const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('function renderTraining('));
 function setup(extra={}) {
-  const context={structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,...extra};
+  const context={weeklyAchievement,allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,...extra};
   runInNewContext(conflictCheck+content,context);
   return context;
 }
@@ -140,4 +141,18 @@ test('completion summary keeps saved training complete and does not complete emp
   const record=task();record.data.daySnapshot.exercises=[];
   assert.equal(context.trainingTaskCompleted(record),false);
   record.data.completed=true;assert.equal(context.trainingTaskCompleted(record),true);
+});
+
+test('last exercise saves its weekly award in the same batch and repeated completion preserves the award',async()=>{
+  const record=task(),stored=new Map([[record.id,record]]),batches=[];
+  record.data.daySnapshot.exercises[0].completed=true;
+  const store={records:stored,put:async(kind,id,data)=>{stored.set(id,{kind,id,data});},putMany:async entries=>{batches.push(structuredClone(entries));for(const entry of entries)stored.set(entry.id,structuredClone(entry));}};
+  const context=setup({state:{user:{id:'one'},calendarDetail:structuredClone(record),store},allCalendarTasks:()=>[stored.get(record.id)],calendarTask:()=>stored.get(record.id),taskDay:r=>r.data.daySnapshot});
+  await context.toggleTrainingExercise(record.id,1);
+  assert.equal(batches.length,1);assert.equal(batches[0].length,2);
+  const award=stored.get('achievement:week:2026-09-28');assert.equal(award.data.trainingCount,1);
+  assert.equal(context.state.weekCelebration.weekStart,award.data.weekStart);
+  context.state.weekCelebration=null;
+  for(let i=0;i<2;i++){context.state.calendarDetail=structuredClone(stored.get(record.id));await context.toggleTrainingExercise(record.id,1);}
+  assert.equal(batches.length,1);assert.deepEqual(stored.get(award.id),award);assert.equal(context.state.weekCelebration,null);
 });

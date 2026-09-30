@@ -128,3 +128,39 @@
 .training-content-exercise.is-completed{background:#f7f8f5;border-color:var(--line)}
 .training-content-exercise.is-completed>strong,.training-content-exercise.is-completed .training-content-amount{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
 @media(max-width:480px){.training-content-exercise{grid-template-columns:36px minmax(0,1fr);column-gap:8px;row-gap:3px}.training-exercise-toggle{grid-row:1 / 3;align-self:center;width:36px;height:36px}.training-content-amount{grid-column:2}}
+
+/* Weekly achievements */
+.timetable-shell{position:relative}
+.weekly-achievement{display:flex;align-items:center;gap:13px;color:var(--green)}
+.weekly-seal{width:70px;height:70px;flex:none}
+.weekly-achievement .calendar-progress{width:142px;gap:6px}
+.weekly-achievement .calendar-progress>span{display:flex;align-items:center;gap:6px}
+.weekly-achievement .calendar-progress strong{margin:0;font-size:16px;font-weight:600}
+.weekly-achievement .calendar-progress .icon{width:15px;height:15px}
+.weekly-achievement .calendar-progress small{font-size:11px}
+.weekly-complete-note{display:flex;align-items:center;gap:10px;margin:0 22px 20px;padding:13px 16px;border:1px solid #e2e9d9;border-radius:10px;background:var(--soft);color:#526c49}
+.weekly-complete-note>.icon{width:20px;height:20px;border:1px solid #9caf8c;border-radius:50%;padding:3px}
+.weekly-complete-note strong{font-size:13px;font-weight:500}
+.weekly-complete-note small{margin-left:auto;font-size:11px;color:#718267}
+.weekly-confetti{position:absolute;inset:0 0 auto;height:190px;overflow:hidden;pointer-events:none;z-index:8;border-radius:16px}
+.weekly-confetti i{position:absolute;left:var(--x);top:8px;width:5px;height:9px;border-radius:2px;background:var(--color);opacity:0;animation:weekly-confetti-fall 1500ms var(--delay) ease-out both}
+.weekly-confetti i:nth-child(3n){height:5px;border-radius:50%}
+@keyframes weekly-confetti-fall{0%{opacity:0;transform:translateY(-12px) rotate(0)}15%{opacity:.85}75%{opacity:.65}100%{opacity:0;transform:translate(var(--drift),160px) rotate(var(--turn))}}
+.achievement-wall{background:#fdfefb;border:1px solid var(--line);border-radius:16px;padding:30px;min-height:340px}
+.achievement-wall-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:25px;border-bottom:1px solid var(--line)}
+.achievement-wall-head h2{color:var(--green);margin:0 0 8px}
+.achievement-wall-head p{font-size:12px;color:var(--muted);margin:0}
+.achievement-total{display:flex;align-items:baseline;gap:8px;white-space:nowrap;color:#677960;font-size:12px}
+.achievement-total strong{font-size:30px;font-weight:500;color:var(--green);font-variant-numeric:tabular-nums}
+.achievement-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px;padding-top:28px}
+.achievement-stamp{text-align:center;padding:24px 10px 22px;border:1px solid #e4eadd;border-radius:12px;background:linear-gradient(160deg,#f4f7ee,#fdfefb)}
+.achievement-stamp>img{display:block;width:112px;height:112px;margin:0 auto 18px}
+.achievement-stamp h3{font-size:14px;letter-spacing:1px;font-weight:500;color:var(--green);margin:0 0 10px}
+.achievement-week{font-size:11px;color:#65765e;font-variant-numeric:tabular-nums;margin:0 0 7px}
+.achievement-stamp time{display:block;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.achievement-empty{padding:40px 10px 20px;text-align:center}
+.achievement-empty img{filter:grayscale(1);opacity:.3;margin-bottom:20px}
+.achievement-empty h3{font-size:14px;font-weight:500;color:#62745c;margin-bottom:8px}
+.achievement-empty p{font-size:12px;color:var(--muted);margin:0}
+@media(max-width:700px){.weekly-seal{width:58px;height:58px}.weekly-complete-note{margin:0 16px 16px;padding:12px}.weekly-complete-note small{display:none}.achievement-wall{padding:20px 16px}.achievement-wall-head{align-items:flex-start;flex-direction:column;gap:12px;padding-bottom:18px}.achievement-total strong{font-size:26px}.achievement-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-top:20px}.achievement-stamp{padding:20px 6px}.achievement-stamp>img{width:94px;height:94px}.achievement-week{font-size:10px}.settings-nav{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.weekly-confetti{display:none}.weekly-confetti i{animation:none}}
