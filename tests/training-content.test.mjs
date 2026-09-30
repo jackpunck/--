@@ -7,6 +7,7 @@ import {exercises,exerciseUsesSeconds,defaultTrainingExercise} from '../public/d
 const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const content=source.slice(source.indexOf('function trainingExerciseSummary('),source.indexOf('function exerciseLine('));
 const conflictCheck=source.slice(source.indexOf('function assertTaskCurrent('),source.indexOf('function renderCalendarCard('));
+const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('function renderTraining('));
 function setup(extra={}) {
   const context={structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,...extra};
   runInNewContext(conflictCheck+content,context);
@@ -115,4 +116,28 @@ test('editing an exercise clears its checkoff while unchanged and removed rows k
   assert.equal(day.exercises[1].completed,true);
   day.exercises.splice(0,1);
   assert.equal(day.exercises[0].exerciseId,'pushup');assert.equal(day.exercises[0].completed,true);
+});
+
+test('calendar card follows all exercise checkoffs and reverts when one is unchecked',async()=>{
+  const record=task();
+  const context=setup({state:{calendarDetail:structuredClone(record),store:{put:async(kind,id,data)=>{record.data=data;}}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot,esc:String,icon:()=>'',button:(text,action)=>`<button data-action="${action}">${text}</button>`});
+  runInNewContext(cardRenderer,context);
+  for(let index=0;index<2;index++){
+    context.state.calendarDetail=structuredClone(record);await context.toggleTrainingExercise(record.id,index);
+    assert.match(context.renderCalendarCard(record),index===0?/待完成/:/已完成/);
+  }
+  assert.match(context.renderCalendarCard(record),/task-completed/);
+  assert.doesNotMatch(context.renderCalendarCard(record),/calendar-edit|调整日期/);
+  context.state.calendarDetail=structuredClone(record);await context.toggleTrainingExercise(record.id,0);
+  assert.match(context.renderCalendarCard(record),/待完成/);
+  assert.doesNotMatch(context.renderCalendarCard(record),/task-completed/);
+  assert.equal(record.data.actual,undefined);
+});
+
+test('completion summary keeps saved training complete and does not complete empty sessions',()=>{
+  const context=setup({taskDay:r=>r.data.daySnapshot});
+  assert.equal(typeof context.trainingTaskCompleted,'function');
+  const record=task();record.data.daySnapshot.exercises=[];
+  assert.equal(context.trainingTaskCompleted(record),false);
+  record.data.completed=true;assert.equal(context.trainingTaskCompleted(record),true);
 });

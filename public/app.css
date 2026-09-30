@@ -106,7 +106,6 @@
 
 .calendar-reset.button{color:#977461}.calendar-reset.button:hover{background:#fbefe9;border-color:#dcc5b8}
 
-.calendar-card-edit.button{display:flex;align-items:center;gap:7px;justify-content:flex-start;width:100%;min-height:32px;padding:6px 9px;border:0;border-radius:5px;background:transparent;color:var(--green);font-size:11px;line-height:1.4}.calendar-card-edit.button .icon{width:13px;height:13px}.calendar-card-edit.button:hover{background:var(--soft)}
 
 /* Per-session exercise checkoff in the expanded training card. */
 .training-content-exercise{grid-template-columns:32px minmax(0,1fr) auto;gap:10px}

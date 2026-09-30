@@ -415,19 +415,23 @@ function assertTaskCurrent(snapshot) {
  if(!current||JSON.stringify(current.data)!==JSON.stringify(snapshot.data))throw new Error('这项任务已在其他位置更新，请关闭窗口后重新打开。');
  return current;
 }
+function trainingTaskCompleted(record) {
+ const items=taskDay(record)?.exercises||[];
+ return record.data.completed===true||(items.length>0&&items.every(exercise=>exercise.completed===true));
+}
 function renderCalendarCard(record) {
- const task=record.data,items=taskDay(record)?.exercises||[];
+ const task=record.data,items=taskDay(record)?.exercises||[],completed=trainingTaskCompleted(record);
  const sets=items.reduce((total,item)=>total+(Number(item.sets)||0),0);
- return `<article class="calendar-task training-task ${task.completed?'task-completed':''}" data-task-id="${esc(record.id)}" data-action="calendar-detail" data-id="${esc(record.id)}" draggable="${!task.completed}">
-  <div class="task-card-top"><button type="button" class="task-open" data-action="calendar-detail" data-id="${esc(record.id)}" aria-label="查看 ${esc(task.title)}"><strong>${esc(task.title)}</strong></button><details class="task-card-menu" draggable="false"><summary aria-label="${esc(task.title)}的操作"><span class="task-menu-dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></summary><div class="task-card-menu-panel">${!task.completed?button(icon('calendar')+' 调整日期','calendar-edit',`data-id="${esc(record.id)}"`,'calendar-card-edit'):''}${button(icon('trash')+' 删除','calendar-delete',`data-id="${esc(record.id)}" aria-label="删除 ${esc(task.title)}"`,'calendar-card-delete')}</div></details></div>
+ return `<article class="calendar-task training-task ${completed?'task-completed':''}" data-task-id="${esc(record.id)}" data-action="calendar-detail" data-id="${esc(record.id)}" draggable="${!task.completed}">
+  <div class="task-card-top"><button type="button" class="task-open" data-action="calendar-detail" data-id="${esc(record.id)}" aria-label="查看 ${esc(task.title)}"><strong>${esc(task.title)}</strong></button><details class="task-card-menu" draggable="false"><summary aria-label="${esc(task.title)}的操作"><span class="task-menu-dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></summary><div class="task-card-menu-panel">${button(icon('trash')+' 删除','calendar-delete',`data-id="${esc(record.id)}" aria-label="删除 ${esc(task.title)}"`,'calendar-card-delete')}</div></details></div>
   <small class="task-meta">${items.length} 个动作 · ${sets} 组</small>
-  <div class="task-card-bottom"><span class="task-state ${task.completed?'is-completed':''}"><span class="task-state-mark" aria-hidden="true">${task.completed?icon('check'):''}</span>${task.completed?'已完成':'待完成'}</span></div>
+  <div class="task-card-bottom"><span class="task-state ${completed?'is-completed':''}"><span class="task-state-mark" aria-hidden="true">${completed?icon('check'):''}</span>${completed?'已完成':'待完成'}</span></div>
  </article>`;
 }
 function renderTraining() {
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
  const days=weekDates(state.date),p=plan(),draft=state.store.get('plan-draft'),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
- const completed=weekTasks.filter(r=>r.data.completed).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
+ const completed=weekTasks.filter(trainingTaskCompleted).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
  const rangeLabel=days.map(date=>`${Number(date.slice(5,7))}月${Number(date.slice(8))}日`);
  $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary'))+`<section class="timetable-shell">
   <div class="timetable-toolbar">
@@ -444,7 +448,7 @@ function bindCalendarDrag() {
  table.addEventListener('dragend',()=>{dragRecord=null;table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));});
  table.addEventListener('dragover',event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord)return;event.preventDefault();event.dataTransfer.dropEffect='move';table.querySelectorAll('.drop-target').forEach(node=>node.classList.remove('drop-target'));cell.classList.add('drop-target');});
  table.addEventListener('dragleave',event=>{const cell=event.target.closest('.timetable-cell');if(cell&&!cell.contains(event.relatedTarget))cell.classList.remove('drop-target');});
- table.addEventListener('drop',async event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord)return;event.preventDefault();const snapshot=dragRecord;dragRecord=null;try{const record=assertTaskCurrent(snapshot);if(record.data.completed)throw new Error('已完成的训练保留原日期，不能移动。');const date=cell.dataset.date;if(date===record.data.date){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}const data={...record.data,date};await state.store.put(record.kind,record.id,data);renderTraining();toast(`已移到 ${dateLabel(date)}`);}catch(error){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));toast(error.message,true);}});
+ table.addEventListener('drop',async event=>{const cell=event.target.closest('.timetable-cell');if(!cell||!dragRecord)return;event.preventDefault();const snapshot=dragRecord;dragRecord=null;try{const record=assertTaskCurrent(snapshot);if(record.data.completed)throw new Error('已完成的训练保留原日期，不能移动。');const date=cell.dataset.date;if(date===record.data.date){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));return;}const data={...record.data,date};await state.store.put(record.kind,record.id,data);renderTraining();}catch(error){table.querySelectorAll('.drop-target,.dragging').forEach(node=>node.classList.remove('drop-target','dragging'));toast(error.message,true);}});
 }
 function cycleWindow(date) {
  const from=weekDates(date)[0],limit='2199-12-31';
@@ -502,7 +506,7 @@ function trainingExerciseSummary(exercise) {
 }
 function trainingContentHeader(record,action=null) {
  const head=$('#modal .modal-head');
- $('h2',head).outerHTML=`<div class="training-content-title"><h2>${esc(record.data.title)}</h2><p>${dateLabel(record.data.date)}${record.data.completed?' · 已完成':''}</p></div>`;
+ $('h2',head).outerHTML=`<div class="training-content-title"><h2>${esc(record.data.title)}</h2><p>${dateLabel(record.data.date)}${trainingTaskCompleted(record)?' · 已完成':''}</p></div>`;
  if(action)$('[data-action="close-modal"]',head).insertAdjacentHTML('beforebegin',button('编辑',action,`data-id="${esc(record.id)}"`,'small training-content-edit'));
  $('#modal').classList.add('training-content-modal');
 }
@@ -892,6 +896,7 @@ document.addEventListener('click',async event=>{
   const toggles=[...dialog.querySelectorAll('.training-exercise-toggle')];toggles.forEach(node=>node.disabled=true);
   try{
    await toggleTrainingExercise(id,index);
+   if(state.page==='training')renderTraining();
    if(dialog.open&&dialog.classList.contains('training-content-modal')&&state.calendarDetail===detail&&dialog.contains(target)){
     showCalendarTask(id);dialog.scrollTop=scroll;
     $(`.training-exercise-toggle[data-index="${index}"]`,dialog)?.focus({preventScroll:true});
