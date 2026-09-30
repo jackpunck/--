@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { exercises } from '../public/domain.js';
+import { exercises, MAX_TRAINING_EXERCISES } from '../public/domain.js';
 import { recordFromRow } from './storage.mjs';
 import { arrangePlan, validateSchedule, recordById } from './calendar-data.mjs';
 
@@ -33,7 +33,7 @@ const planSchema = {
           id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$', description: '已有训练日尽量保留 ID；新增训练日可省略，服务器按顺序生成。' },
           name: { type: 'string', minLength: 1, maxLength: 80 },
           rest: { type: 'boolean' },
-          exercises: { type: 'array', maxItems: 16, items: exerciseSchema, description: '休息日必须为空，训练日至少一个动作。' },
+          exercises: { type: 'array', maxItems: MAX_TRAINING_EXERCISES, items: exerciseSchema, description: '休息日必须为空，训练日至少一个动作。' },
         },
       },
     },
@@ -112,7 +112,7 @@ export function validatePlan(value) {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || dayIds.has(id)) invalid('训练日 ID 必须唯一且仅含英文字母、数字、下划线或短横线。');
     dayIds.add(id);
     if (typeof day.rest !== 'boolean') invalid('训练日 rest 必须为布尔值。');
-    if (!Array.isArray(day.exercises) || day.exercises.length > 16 || (day.rest ? day.exercises.length !== 0 : day.exercises.length === 0)) invalid('休息日动作必须为空；训练日必须包含 1–16 个动作。');
+    if (!Array.isArray(day.exercises) || day.exercises.length > MAX_TRAINING_EXERCISES || (day.rest ? day.exercises.length !== 0 : day.exercises.length === 0)) invalid(`休息日动作必须为空；训练日必须包含 1–${MAX_TRAINING_EXERCISES} 个动作。`);
     return {
       id, name: text(day.name, '训练日名称', 80), rest: day.rest,
       exercises: day.exercises.map(value => {

@@ -1,3 +1,4 @@
+import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
@@ -114,6 +115,7 @@ export function createServer(options = {}) {
   } = options;
   const store = openStore(resolve(dataDir));
   const { db } = store;
+  const loadHolidayYear=createHolidayService(resolve(dataDir),{fetcher:options.holidayFetchImpl});
   const attempts = new Map();
   const activeAi = new Map();
   db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
@@ -222,6 +224,7 @@ export function createServer(options = {}) {
         const user = requireUser(req);
         if (pathname === '/api/auth/me' && method === 'GET') { send(res, 200, { user: publicUser(user) }); return; }
         checkExpectedUser(req, user);
+        if (pathname === '/api/holidays' && method === 'GET') { const year=Number(new URL(req.url,'http://localhost').searchParams.get('year')); if(!Number.isInteger(year)||year<1900||year>2199)throw new HttpError(400,'节假日年份无效。');send(res,200,await loadHolidayYear(year));return; }
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');
           if (expectedUser && expectedUser !== user.id) throw new HttpError(409, '当前登录账号已变更，请重新登录后同步。');
@@ -335,7 +338,7 @@ export function createServer(options = {}) {
           };
           try {
             const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: assistantTools,
-              executeTool: (name, args) => executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }),
+              executeTool: async (name, args) => { const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
               receipt: getAssistantToolReceipts({ db, userId: user.id, requestId: body.requestId }),
               fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal, onEvent: event }));
             if (!controller.signal.aborted) await event('done', result);

@@ -55,7 +55,7 @@ test('all allowed plans have complete exercise references, rest days, and indepe
         for (const e of day.exercises) assert.ok(ids.has(e.exerciseId) && e.sets > 0 && e.restSeconds >= 60);
       }
       plan.days[0].exercises[0].sets = 999;
-      assert.equal(generatePlan({ split, variant }, profile).days[0].exercises[0].sets, 3);
+      assert.equal(generatePlan({ split, variant }, profile).days[0].exercises[0].sets, 4);
     }
   }
   for (const options of [{ split: 2, variant: 'home' }, { split: 3, variant: 'arms' }, { split: 5, variant: 'shoulders' }, { split: 7 }, { split: 2.5 }]) assert.throws(() => generatePlan(options, profile));
