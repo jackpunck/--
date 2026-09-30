@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {addDays,weekDates,validateDate,validateCalendarTask,calendarTasks,trainingDayType,planCalendarTasks} from '../public/schedule.js';
+import {addDays,weekDates,validateDate,validateCalendarTask,calendarTasks,trainingDayType,planCalendarTasks,recurringCalendarTasks,calendarResetChanges} from '../public/schedule.js';
 const date='2026-09-29', next='2026-09-30';
 const task=(id,extra={})=>({id,kind:'calendar-task',version:1,data:{taskType:'training',title:'上肢训练',date,completed:false,...extra}});
 
@@ -74,22 +74,55 @@ test('confirmed cycle creates independent cards across month/year boundaries and
   assert.throws(()=>planCalendarTasks(null,'2026-12-31'));
 });
 
-test('calendar write retries keep existing edited/completed cards and fill only missing cycle entries',async()=>{
+test('recurring cycles preserve their phase across weeks, years and distant date windows',()=>{
+  const rule={id:'repeat-1',startDate:'2026-12-31',plan:cycle()};
+  const first=recurringCalendarTasks(rule,'2026-12-30','2027-01-06');
+  assert.deepEqual(first.map(task=>task.data.date),['2026-12-31','2027-01-02','2027-01-03','2027-01-05','2027-01-06']);
+  assert.deepEqual(first.map(task=>task.data.dayId),['chest','back','chest','back','chest']);
+  const overlap=recurringCalendarTasks(rule,'2027-01-02','2027-01-05');
+  assert.deepEqual(overlap.map(task=>task.id),first.slice(1,4).map(task=>task.id));
+  assert.deepEqual(recurringCalendarTasks(rule,'2026-01-01','2026-01-07'),[]);
+  const distant=recurringCalendarTasks({...rule,startDate:'1900-01-01'},'2199-12-25','2199-12-31');
+  assert.ok(distant.length>0);assert.ok(distant.every(task=>task.data.date>='2199-12-25'));
+  assert.throws(()=>recurringCalendarTasks(rule,'2027-01-01','2029-01-01'),/最多/);
+});
+
+test('recurring scheduling preserves overrides, extends distant weeks and stays empty after reset/reload',async()=>{
   const {readFile}=await import('node:fs/promises');
   const {runInNewContext}=await import('node:vm');
   const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
-  const start=source.indexOf('async function addPlanToCalendar('),end=source.indexOf('function openCalendarTask(',start);
-  const records=new Map([['unrelated',{title:'Existing training',completed:true}]]);
-  let writes=0,fail=true;
-  const state={store:{get:id=>records.get(id),put:async(kind,id,data)=>{writes++;if(fail&&writes===2)throw new Error('disk unavailable');records.set(id,structuredClone(data));}}};
-  const add=runInNewContext(source.slice(start,end)+';addPlanToCalendar',{state,planCalendarTasks});
-  await assert.rejects(add(cycle(),'2026-12-31'),/disk unavailable/);
-  const firstId=planCalendarTasks(cycle(),'2026-12-31')[0].id;
-  records.get(firstId).completed=true;records.get(firstId).date='2027-01-03';
-  fail=false;await add(cycle(),'2026-12-31');
-  assert.equal(records.size,3);
-  assert.equal(records.get(firstId).completed,true);
-  assert.equal(records.get(firstId).date,'2027-01-03');
-  assert.deepEqual(records.get('unrelated'),{title:'Existing training',completed:true});
-  const previousWrites=writes;await add(cycle(),'2026-12-31');assert.equal(writes,previousWrites);
+  const start=source.indexOf('function cycleWindow('),end=source.indexOf('function openCalendarTask(',start);
+  const records=new Map(),template=cycle();let writes=0,fail=false;
+  const store={records,get:id=>{const record=records.get(id);return record&&!record.deleted?structuredClone(record.data):null;},list:kind=>[...records.values()].filter(record=>record.kind===kind&&!record.deleted),putMany:async entries=>{
+    if(fail)throw new Error('disk unavailable');writes++;
+    for(const entry of entries)records.set(entry.id,structuredClone(entry));
+  }};
+  records.set('active-plan',{id:'active-plan',kind:'plan',data:template});
+  records.set('meal',{id:'meal',kind:'meal',data:{date:'2026-12-31'}});
+  let nextId=0;
+  const context={state:{store,date:'2026-12-31'},plan:()=>template,today:()=> '2026-12-31',uid:()=>`cycle-${++nextId}`,structuredClone,weekDates,addDays,planCalendarTasks,recurringCalendarTasks,calendarResetChanges,closeModal:()=>{},renderTraining:()=>{},toast:()=>{}};
+  runInNewContext(source.slice(start,end),context);
+  fail=true;await assert.rejects(context.addPlanToCalendar(template,'2026-12-31'),/disk unavailable/);
+  assert.equal(records.size,2);fail=false;
+  await context.addPlanToCalendar(template,'2026-12-31');
+  const rule=store.get('calendar-cycle'),tasks=store.list('calendar-task');assert.ok(tasks.length>template.days.length);
+  const completed=tasks[0],deleted=tasks[1],edited=tasks[2];
+  completed.data.completed=true;completed.data.date='2027-01-10';deleted.deleted=true;delete deleted.data;
+  edited.data.daySnapshot.exercises[0].sets=11;
+  const previousWrites=writes;await context.ensureRecurringSchedule();assert.equal(writes,previousWrites);
+  assert.equal(records.get(completed.id).data.completed,true);assert.equal(records.get(completed.id).data.date,'2027-01-10');
+  assert.equal(records.get(deleted.id).deleted,true);assert.equal(records.get(edited.id).data.daySnapshot.exercises[0].sets,11);
+  await context.ensureRecurringSchedule('2030-06-01');assert.ok(store.list('calendar-task').some(task=>task.data.date==='2030-06-01'||task.data.date==='2030-06-02'));
+  await context.resetTrainingCalendar();
+  assert.equal(store.list('calendar-task').length,0);assert.equal(store.get('calendar-cycle'),null);
+  await context.ensureRecurringSchedule('2031-06-01');assert.equal(store.list('calendar-task').length,0);
+  runInNewContext(source.slice(start,end),context);await context.ensureRecurringSchedule();assert.equal(store.list('calendar-task').length,0);
+  assert.deepEqual(store.get('active-plan'),template);assert.ok(store.get('meal'));
+  await context.addPlanToCalendar(template,'2026-12-31');assert.notEqual(store.get('calendar-cycle').id,rule.id);assert.ok(store.list('calendar-task').length>0);
+});
+
+test('reset clears current and legacy calendar data and preserves other records',()=>{
+  const records=[{id:'a',kind:'calendar-task'},{id:'b',kind:'schedule'},{id:'c',kind:'training-cycle'},{id:'p',kind:'plan'},{id:'m',kind:'meal'},{id:'d',kind:'draft'},{id:'gone',kind:'calendar-task',deleted:true}];
+  assert.deepEqual(calendarResetChanges(records).map(record=>record.id),['a','b','c']);
+  assert.ok(calendarResetChanges(records).every(record=>record.deleted));
 });

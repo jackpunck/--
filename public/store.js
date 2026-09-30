@@ -68,12 +68,19 @@ export class RecordStore extends EventTarget {
   list(kind) { return structuredClone([...this.records.values()].filter(r => r.kind === kind && !r.deleted).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))); }
   get(id) { const record = this.records.get(id); return record && !record.deleted ? structuredClone(record.data) : null; }
   async put(kind, id, data, deleted = false) {
+    await this.putMany([{kind,id,data,deleted}]); return id;
+  }
+  async putMany(entries) {
     if (this.closed) throw new Error('当前账号已退出，请重新登录。');
-    const previous = this.records.get(id), queued = this.pending.get(id);
-    const updatedAt = new Date().toISOString(), value = deleted ? null : structuredClone(data);
-    const change = {id, kind, data:value, deleted, baseVersion: queued?.baseVersion ?? previous?.version ?? 0, token: createId()};
-    this.records.set(id, {id, kind, data:value, deleted, version: previous?.version || 0, updatedAt}); this.pending.set(id, change); this.blocked.delete(id);
-    await this.persist(); this.emit(); this.sync().catch(() => {}); return id;
+    if (!entries.length) return [];
+    const updatedAt = new Date().toISOString();
+    // Prepare all snapshots before changing memory; persist the whole batch once.
+    const prepared = entries.map(({kind,id,data,deleted=false})=>{
+      const previous=this.records.get(id),queued=this.pending.get(id),value=deleted?null:structuredClone(data);
+      return {record:{id,kind,data:value,deleted,version:previous?.version||0,updatedAt},change:{id,kind,data:value,deleted,baseVersion:queued?.baseVersion??previous?.version??0,token:createId()}};
+    });
+    for(const {record,change} of prepared){this.records.set(record.id,record);this.pending.set(record.id,change);this.blocked.delete(record.id);}
+    await this.persist(); this.emit(); this.sync().catch(() => {}); return prepared.map(({record})=>record.id);
   }
   remove(id) { const record = this.records.get(id); return record ? this.put(record.kind, id, record.data, true) : Promise.resolve(); }
   hasChanges() { return [...this.pending.keys()].some(id => !this.blocked.has(id) && !this.conflicts.some(x => x.id === id)); }

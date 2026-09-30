@@ -45,6 +45,29 @@ export function planCalendarTasks(plan, startDate) {
   });
 }
 
+/** Project any date window from the original start, including rest days. */
+export function recurringCalendarTasks(cycle, fromDate, toDate) {
+  validateDate(cycle.startDate);validateDate(fromDate);validateDate(toDate);
+  const plan=cycle.plan;
+  if(!cycle.id||!plan?.planVersion||!Array.isArray(plan.days)||!plan.days.length||!plan.days.some(day=>!day.rest))throw new Error('循环训练计划无效。');
+  const ordinal=date=>Date.parse(date+'T00:00:00Z')/86400000;
+  const first=Math.max(0,ordinal(fromDate)-ordinal(cycle.startDate)),last=ordinal(toDate)-ordinal(cycle.startDate);
+  if(ordinal(toDate)-ordinal(fromDate)>366)throw new Error('一次最多补齐一年的训练。');
+  const tasks=[];
+  for(let offset=first;offset<=last;offset++){
+    const day=plan.days[offset%plan.days.length];if(day.rest)continue;
+    if(!day.id||!day.exercises?.length)throw new Error('每个训练日需要至少一个动作。');
+    // Use the window as the date anchor so distant years do not hit addDays' span limit.
+    const date=addDays(fromDate,ordinal(cycle.startDate)+offset-ordinal(fromDate));
+    tasks.push({id:`task:cycle:${cycle.id}:${offset}`,kind:'calendar-task',data:{...validateCalendarTask({title:day.name,date}),dayId:day.id,daySnapshot:structuredClone(day),planVersion:plan.planVersion,cycleId:cycle.id,rest:false}});
+  }
+  return tasks;
+}
+
+export function calendarResetChanges(records) {
+  return records.filter(record=>!record.deleted&&['calendar-task','schedule','training-cycle'].includes(record.kind)).map(record=>({id:record.id,kind:record.kind,deleted:true}));
+}
+
 function isTrainingRecord(record) {
   if (!record || record.deleted || !record.data) return false;
   const data = record.data;
