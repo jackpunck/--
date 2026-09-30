@@ -107,3 +107,15 @@
 .calendar-reset.button{color:#977461}.calendar-reset.button:hover{background:#fbefe9;border-color:#dcc5b8}
 
 .calendar-card-edit.button{display:flex;align-items:center;gap:7px;justify-content:flex-start;width:100%;min-height:32px;padding:6px 9px;border:0;border-radius:5px;background:transparent;color:var(--green);font-size:11px;line-height:1.4}.calendar-card-edit.button .icon{width:13px;height:13px}.calendar-card-edit.button:hover{background:var(--soft)}
+
+/* Per-session exercise checkoff in the expanded training card. */
+.training-content-exercise{grid-template-columns:32px minmax(0,1fr) auto;gap:10px}
+.training-exercise-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border-radius:50%;color:var(--green)}
+.training-exercise-toggle>span{display:grid;place-items:center;width:20px;height:20px;border:1.5px solid var(--muted);border-radius:50%}
+.training-exercise-toggle:hover:not(:disabled){background:var(--soft)}
+.training-exercise-toggle[aria-pressed=true]>span{background:var(--green);border-color:var(--green)}
+.training-exercise-toggle[aria-pressed=true]>span::after{content:'';width:8px;height:4px;border-left:1.5px solid white;border-bottom:1.5px solid white;transform:translateY(-1px) rotate(-45deg)}
+.training-exercise-toggle:disabled{opacity:1;cursor:default}
+.training-content-exercise.is-completed{background:#f7f8f5;border-color:var(--line)}
+.training-content-exercise.is-completed>strong,.training-content-exercise.is-completed .training-content-amount{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+@media(max-width:480px){.training-content-exercise{grid-template-columns:36px minmax(0,1fr);column-gap:8px;row-gap:3px}.training-exercise-toggle{grid-row:1 / 3;align-self:center;width:36px;height:36px}.training-content-amount{grid-column:2}}

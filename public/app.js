@@ -510,8 +510,20 @@ function showCalendarTask(id) {
  const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');
  const data=record.data,day=taskDay(record),items=data.completed?(data.actual||[]):(day?.exercises||[]);
  state.calendarDetail=structuredClone(record);
- modal(esc(data.title),`<div class="training-content-list">${items.length?items.map((exercise,i)=>`<div class="training-content-exercise"><span class="training-content-number">${String(i+1).padStart(2,'0')}</span><strong>${esc(exercises.find(item=>item.id===exercise.exerciseId)?.name||exercise.exerciseId)}</strong><div class="training-content-amount"><span>${esc(trainingExerciseSummary(exercise))}</span>${data.completed&&Number(exercise.weight)>0?`<small>${esc(exercise.weight)} kg</small>`:''}</div></div>`).join(''):`<p class="description">${data.completed?'暂无实际训练记录':'暂无训练动作'}</p>`}</div>${data.notes?`<p class="training-content-notes">${esc(data.notes)}</p>`:''}${!data.completed&&day?`<div class="form-footer">${button('记录训练','log-training',`data-id="${esc(id)}"`,'primary')}</div>`:''}`);
+ modal(esc(data.title),`<div class="training-content-list">${items.length?items.map((exercise,i)=>{
+  const name=exercises.find(item=>item.id===exercise.exerciseId)?.name||exercise.exerciseId,done=data.completed?Number(exercise.sets)>0:exercise.completed===true;
+  return `<div class="training-content-exercise${done?' is-completed':''}"><button type="button" class="training-exercise-toggle" data-action="training-exercise-toggle" data-id="${esc(id)}" data-index="${i}" aria-pressed="${done}" aria-label="${done?'取消完成':'标记完成'}：${esc(name)}" ${data.completed?'disabled':''}><span aria-hidden="true"></span></button><strong>${esc(name)}</strong><div class="training-content-amount"><span>${esc(trainingExerciseSummary(exercise))}</span>${data.completed&&Number(exercise.weight)>0?`<small>${esc(exercise.weight)} kg</small>`:''}</div></div>`;
+ }).join(''):`<p class="description">${data.completed?'暂无实际训练记录':'暂无训练动作'}</p>`}</div>${data.notes?`<p class="training-content-notes">${esc(data.notes)}</p>`:''}${!data.completed&&day?`<div class="form-footer">${button('记录训练','log-training',`data-id="${esc(id)}"`,'primary')}</div>`:''}`);
  trainingContentHeader(record,day?(data.completed?'log-training':'training-content-edit'):null);
+}
+async function toggleTrainingExercise(id,index) {
+ const record=assertTaskCurrent(state.calendarDetail);
+ if(record.id!==id)throw new Error('请重新打开这项训练。');
+ if(record.data.completed)throw new Error('已完成的训练请编辑实际记录。');
+ const day=structuredClone(taskDay(record));
+ if(!Number.isInteger(index)||index<0||!day?.exercises?.[index])throw new Error('这项动作已改变，请重新打开训练。');
+ day.exercises[index].completed=day.exercises[index].completed!==true;
+ await state.store.put(record.kind,record.id,{...record.data,daySnapshot:day});
 }
 function openTrainingContentEditor(id) {
  const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');
@@ -529,7 +541,9 @@ function readTrainingContentForm() {
  const editor=state.trainingContentEditor,values=formData($('#training-content-form'));
  editor.day.exercises=editor.day.exercises.map((exercise,index)=>{
    const exerciseId=values[`exercise-${index}`],value=values[`reps-${index}`].trim();
-   return {...exercise,exerciseId,sets:values[`sets-${index}`]===''?'':Number(values[`sets-${index}`]),reps:exerciseUsesSeconds(exerciseId)&&value?value.replace(/秒$/,'').trim()+'秒':value};
+   const updated={...exercise,exerciseId,sets:values[`sets-${index}`]===''?'':Number(values[`sets-${index}`]),reps:exerciseUsesSeconds(exerciseId)&&value?value.replace(/秒$/,'').trim()+'秒':value};
+   if(updated.exerciseId!==exercise.exerciseId||updated.sets!==exercise.sets||updated.reps!==exercise.reps)delete updated.completed;
+   return updated;
  });
  return editor.day;
 }
@@ -873,6 +887,18 @@ document.addEventListener('click',async event=>{
  case 'calendar-schedule':target.disabled=true;try{await addPlanToCalendar(plan(),state.date);renderTraining();toast('已添加循环训练');}finally{target.disabled=false;}break;
  case 'calendar-edit':openCalendarTask(id);break;
  case 'calendar-detail':showCalendarTask(id);break;
+ case 'training-exercise-toggle':{
+  const detail=state.calendarDetail,dialog=$('#modal'),scroll=dialog.scrollTop,index=Number(target.dataset.index);
+  const toggles=[...dialog.querySelectorAll('.training-exercise-toggle')];toggles.forEach(node=>node.disabled=true);
+  try{
+   await toggleTrainingExercise(id,index);
+   if(dialog.open&&dialog.classList.contains('training-content-modal')&&state.calendarDetail===detail&&dialog.contains(target)){
+    showCalendarTask(id);dialog.scrollTop=scroll;
+    $(`.training-exercise-toggle[data-index="${index}"]`,dialog)?.focus({preventScroll:true});
+   }
+  }finally{toggles.forEach(node=>node.disabled=false);}
+  break;
+ }
  case 'training-content-edit':openTrainingContentEditor(id);break;
  case 'training-content-add':changeTrainingContentExercise(target);break;
  case 'training-content-remove':changeTrainingContentExercise(target,true);break;

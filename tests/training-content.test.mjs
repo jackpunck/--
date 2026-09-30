@@ -65,3 +65,54 @@ test('completed content shows actual records and no planned or delete controls',
   assert.ok(!html.includes('calendar-delete'));assert.ok(!html.includes('calendar-edit'));
   assert.ok(!html.includes('休息'));assert.ok(!html.includes('秒 次'));
 });
+
+test('exercise checkoff toggles only the selected session snapshot and preserves other data',async()=>{
+  const record=task(),before=structuredClone(record),writes=[];
+  const context=setup({state:{calendarDetail:structuredClone(record),store:{put:async(kind,id,data)=>{writes.push({kind,id,data});record.data=data;}}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot});
+  assert.equal(typeof context.toggleTrainingExercise,'function');
+  await context.toggleTrainingExercise(record.id,0);
+  assert.equal(writes[0].data.daySnapshot.exercises[0].completed,true);
+  assert.equal(writes[0].data.daySnapshot.exercises[1].completed,undefined);
+  assert.equal(record.data.completed,false);
+  assert.equal(record.data.notes,before.data.notes);
+  assert.equal(record.data.date,before.data.date);
+  assert.equal(record.data.planVersion,before.data.planVersion);
+  assert.deepEqual(before.data.daySnapshot.exercises[0],defaultTrainingExercise('bench'));
+  context.state.calendarDetail=structuredClone(record);
+  await context.toggleTrainingExercise(record.id,0);
+  assert.equal(record.data.daySnapshot.exercises[0].completed,false);
+  assert.equal(writes.length,2);
+});
+
+test('exercise checkoff rejects stale, mismatched, completed and invalid sessions',async()=>{
+  const record=task();let writes=0;
+  const context=setup({state:{calendarDetail:structuredClone(record),store:{put:async()=>writes++}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot});
+  assert.equal(typeof context.toggleTrainingExercise,'function');
+  await assert.rejects(context.toggleTrainingExercise('task:other',0));
+  for(const index of [-1,0.5,2,NaN])await assert.rejects(context.toggleTrainingExercise(record.id,index));
+  record.data.notes='changed';await assert.rejects(context.toggleTrainingExercise(record.id,0),/其他位置更新/);
+  record.data.completed=true;context.state.calendarDetail=structuredClone(record);
+  await assert.rejects(context.toggleTrainingExercise(record.id,0),/实际记录/);
+  assert.equal(writes,0);
+});
+
+test('exercise details expose checkoff state per row',()=>{
+  const record=task();record.data.daySnapshot.exercises[0].completed=true;let html='';
+  const context=setup({state:{},calendarTask:()=>record,taskDay:()=>record.data.daySnapshot,esc:value=>String(value??''),button:()=>'',modal:(title,body)=>{html=body;}});
+  context.trainingContentHeader=()=>{};context.showCalendarTask(record.id);
+  assert.match(html,/training-exercise-toggle/);
+  assert.match(html,/aria-pressed="true"/);
+  assert.match(html,/aria-pressed="false"/);
+  assert.match(html,/training-content-exercise is-completed/);
+});
+
+test('editing an exercise clears its checkoff while unchanged and removed rows keep their own state',()=>{
+  const day=task().data.daySnapshot;day.exercises.forEach(e=>e.completed=true);
+  const values={'exercise-0':'plank','sets-0':'4','reps-0':'30','exercise-1':'pushup','sets-1':'4','reps-1':'8'};
+  const context=setup({state:{trainingContentEditor:{day}},$:()=>({}),formData:()=>values});
+  context.readTrainingContentForm();
+  assert.equal(day.exercises[0].completed,undefined);
+  assert.equal(day.exercises[1].completed,true);
+  day.exercises.splice(0,1);
+  assert.equal(day.exercises[0].exerciseId,'pushup');assert.equal(day.exercises[0].completed,true);
+});
