@@ -118,7 +118,10 @@ test('recurring scheduling preserves overrides, extends distant weeks and stays 
   await context.ensureRecurringSchedule('2031-06-01');assert.equal(store.list('calendar-task').length,0);
   runInNewContext(source.slice(start,end),context);await context.ensureRecurringSchedule();assert.equal(store.list('calendar-task').length,0);
   assert.deepEqual(store.get('active-plan'),template);assert.ok(store.get('meal'));
+  records.set('calendar-busy-days',{id:'calendar-busy-days',kind:'calendar-settings',data:{dates:['2026-12-31','2030-06-01']}});
   await context.addPlanToCalendar(template,'2026-12-31');assert.notEqual(store.get('calendar-cycle').id,rule.id);assert.ok(store.list('calendar-task').length>0);
+  assert.ok(store.list('calendar-task').every(r=>r.data.date!=='2026-12-31'));
+  await context.ensureRecurringSchedule('2030-06-01');assert.ok(store.list('calendar-task').every(r=>r.data.date!=='2030-06-01'));
 });
 
 test('reset clears current and legacy calendar data and preserves other records',()=>{

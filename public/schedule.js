@@ -46,26 +46,92 @@ export function planCalendarTasks(plan, startDate) {
 }
 
 /** Project any date window from the original start, including rest days. */
-export function recurringCalendarTasks(cycle, fromDate, toDate) {
+export function recurringCalendarTasks(cycle, fromDate, toDate, busyDates = []) {
   validateDate(cycle.startDate);validateDate(fromDate);validateDate(toDate);
   const plan=cycle.plan;
   if(!cycle.id||!plan?.planVersion||!Array.isArray(plan.days)||!plan.days.length||!plan.days.some(day=>!day.rest))throw new Error('循环训练计划无效。');
   const ordinal=date=>Date.parse(date+'T00:00:00Z')/86400000;
-  const first=Math.max(0,ordinal(fromDate)-ordinal(cycle.startDate)),last=ordinal(toDate)-ordinal(cycle.startDate);
+  const busy=normalizeBusyDates(busyDates);
+  const first=Math.max(0,ordinal(fromDate)-ordinal(cycle.startDate)-busy.length),last=ordinal(toDate)-ordinal(cycle.startDate);
   if(ordinal(toDate)-ordinal(fromDate)>366)throw new Error('一次最多补齐一年的训练。');
   const tasks=[];
   for(let offset=first;offset<=last;offset++){
     const day=plan.days[offset%plan.days.length];if(day.rest)continue;
     if(!day.id||!day.exercises?.length)throw new Error('每个训练日需要至少一个动作。');
-    // Use the window as the date anchor so distant years do not hit addDays' span limit.
-    const date=addDays(fromDate,ordinal(cycle.startDate)+offset-ordinal(fromDate));
+    const projected=cycleTaskOrdinal(cycle,offset,busy);
+    if(projected>ordinal(toDate))break;
+    const date=new Date(projected*86400000).toISOString().slice(0,10);
+    if(date<fromDate)continue;
+    if(date>toDate)break;
     tasks.push({id:`task:cycle:${cycle.id}:${offset}`,kind:'calendar-task',data:{...validateCalendarTask({title:day.name,date}),dayId:day.id,daySnapshot:structuredClone(day),planVersion:plan.planVersion,cycleId:cycle.id,rest:false}});
   }
   return tasks;
 }
 
 export function calendarResetChanges(records) {
-  return records.filter(record=>!record.deleted&&['calendar-task','schedule','training-cycle'].includes(record.kind)).map(record=>({id:record.id,kind:record.kind,deleted:true}));
+  return records.filter(record=>!record.deleted&&(['calendar-task','schedule','training-cycle'].includes(record.kind)||record.id==='calendar-busy-days')).map(record=>({id:record.id,kind:record.kind,deleted:true}));
+}
+
+export function normalizeBusyDates(dates = []) {
+  if(!Array.isArray(dates))throw new Error('繁忙日期格式无效。');
+  return [...new Set(dates.map(validateDate))].sort();
+}
+
+/** Busy training slots pause the cycle; a planned rest slot still consumes a day. */
+export function cycleTaskDate(cycle, offset, busyDates = []) {
+  return validateDate(new Date(cycleTaskOrdinal(cycle,offset,busyDates)*86400000).toISOString().slice(0,10));
+}
+
+function cycleTaskOrdinal(cycle, offset, busyDates) {
+  validateDate(cycle.startDate);
+  if(!Number.isSafeInteger(offset)||offset<0||!cycle.plan?.days?.length)throw new Error('循环训练日期无效。');
+  const start=Date.parse(cycle.startDate+'T00:00:00Z')/86400000;
+  let delay=0;
+  for(const date of busyDates) {
+    const logical=Date.parse(date+'T00:00:00Z')/86400000-start-delay;
+    if(logical>offset)break;
+    if(logical>=0&&!cycle.plan.days[logical%cycle.plan.days.length].rest)delay++;
+  }
+  return start+offset+delay;
+}
+
+function finishedTraining(record) {
+  const items=record.data.daySnapshot?.exercises||[];
+  return record.data.completed===true||(items.length>0&&items.every(item=>item.completed===true));
+}
+
+/** Recalculate pending occurrences without replacing their content or resurrecting deletions. */
+export function rescheduleBusyTasks(records, cycle, previousDates, nextDates, today) {
+  validateDate(today);
+  const previous=normalizeBusyDates(previousDates),next=normalizeBusyDates(nextDates),busy=new Set(next);
+  const changes=[],manual=[],occupied=new Set(),oldOccupied=new Set();
+  const prefix=cycle?`task:cycle:${cycle.id}:`:null;
+  for(const record of records) {
+    if(!isTrainingRecord(record))continue;
+    if(record.data.date<today||finishedTraining(record)){occupied.add(record.data.date);oldOccupied.add(record.data.date);continue;}
+    const suffix=prefix&&record.id.startsWith(prefix)?record.id.slice(prefix.length):'';
+    const offset=/^\d+$/.test(suffix)?Number(suffix):null;
+    if(offset!==null&&!record.data.busyBaseDate&&record.data.date===cycleTaskDate(cycle,offset,previous)) {
+      const date=cycleTaskDate(cycle,offset,next);
+      oldOccupied.add(record.data.date);occupied.add(date);
+      if(date>=today&&date!==record.data.date)changes.push({id:record.id,kind:record.kind,data:{...structuredClone(record.data),date}});
+    } else manual.push(record);
+  }
+  const groups=new Map();
+  for(const record of manual){const base=record.data.busyBaseDate||record.data.date;validateDate(base);if(!groups.has(base))groups.set(base,[]);groups.get(base).push(record);}
+  let delay=0;
+  for(const [base,items] of [...groups].sort(([a],[b])=>a.localeCompare(b))) {
+    let date=addDays(base,delay);if(date<today)date=today;
+    while(busy.has(date)||(occupied.has(date)&&(date!==base||!oldOccupied.has(base)))){date=addDays(date,1);}
+    delay=Math.round((Date.parse(date)-Date.parse(base))/86400000);occupied.add(date);
+    for(const record of items) {
+      if(date===record.data.date)continue;
+      const data={...structuredClone(record.data),date};
+      if(date!==base)data.busyBaseDate=base;else delete data.busyBaseDate;
+      changes.push({id:record.id,kind:record.kind,data});
+    }
+  }
+  return changes;
 }
 
 function isTrainingRecord(record) {

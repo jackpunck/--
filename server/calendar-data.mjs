@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { recordFromRow } from './storage.mjs';
-import { addDays, calendarTasks } from '../public/schedule.js';
+import { addDays, calendarTasks, normalizeBusyDates, recurringCalendarTasks } from '../public/schedule.js';
 
 export function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
@@ -33,14 +33,16 @@ export function recordById(db, userId, id) {
 
 export function calendarState(db, userId, activePlanOverride) {
   const stored = db.prepare("SELECT * FROM records WHERE user_id = ? AND kind IN ('calendar-task','schedule') AND deleted = 0 ORDER BY id").all(userId).map(recordFromRow);
+  const busyRecord=recordById(db,userId,'calendar-busy-days');
+  const busyDates=normalizeBusyDates(busyRecord&&!busyRecord.deleted?busyRecord.data?.dates||[]:[]);
   const active = recordById(db, userId, 'active-plan');
   const records = calendarTasks(stored.filter(item => item.kind === 'calendar-task'), stored.filter(item => item.kind === 'schedule'), activePlanOverride ?? (active && !active.deleted ? active.data : null));
   // Removed daily tasks and manual nutrition day choices are kept in storage for
   // old data compatibility; they have no effect on today's training calendar.
   const trainingIds = new Set(records.map(record => record.id));
   const raw = stored.filter(record => trainingIds.has(record.id));
-  const calendarVersion = createHash('sha256').update(JSON.stringify({ tasks: raw.map(item => [item.id, item.version, item.deleted, item.data]), plan: active ? [active.id, active.version, active.deleted, active.data] : null })).digest('hex');
-  return { records, calendarVersion, raw };
+  const calendarVersion = createHash('sha256').update(JSON.stringify({ busyDates, tasks: raw.map(item => [item.id, item.version, item.deleted, item.data]), plan: active ? [active.id, active.version, active.deleted, active.data] : null })).digest('hex');
+  return { records, calendarVersion, raw, busyDates };
 }
 
 export function writeRecord(db, userId, { id, kind, data, version = 0, deleted = false }, updatedAt = new Date().toISOString()) {
@@ -78,9 +80,9 @@ export function arrangePlan(db, userId, previousPlan, planRecord, schedule, toda
   if (planRecord.deleted) return { records, scheduled: [], unscheduled, startDate: today, endDate: null };
   const retained = current.records.filter(task => !removedIds.has(task.id));
   const plan = planRecord.data;
-  for (let index = 0; index < schedule.days; index++) {
-    const date = addDays(schedule.startDate, index), day = plan.days[index % plan.days.length];
-    if (day.rest) continue;
+  const rule={id:plan.planVersion,startDate:schedule.startDate,plan};
+  for (const occurrence of recurringCalendarTasks(rule,schedule.startDate,endDate,current.busyDates)) {
+    const date=occurrence.data.date,day=occurrence.data.daySnapshot;
     if (retained.some(task => task.data.date === date)) continue;
     const data = { taskType: 'training', title: day.name, date, notes: '', completed: false, dayId: day.id, daySnapshot: structuredClone(day), planVersion: plan.planVersion, source: 'ai-plan' };
     const record = writeRecord(db, userId, { id: `task:${randomUUID()}`, kind: 'calendar-task', data }, updatedAt);

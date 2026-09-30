@@ -108,6 +108,16 @@
 
 
 /* Per-session exercise checkoff in the expanded training card. */
+.training-page-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.training-page-actions .button{white-space:nowrap}.busy-days-button{background:#fff;color:var(--green)}
+.busy-days-modal{max-width:540px}.busy-days-description{font-size:12px;color:var(--muted);margin:0 0 20px}
+.busy-month-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.busy-month-toolbar>strong{font-size:19px;color:var(--green);font-weight:600}.busy-month-toolbar .row{gap:6px}.busy-month-toolbar .button{min-width:32px;min-height:32px;padding:5px 10px}
+.busy-weekdays,.busy-date-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.busy-weekdays{color:var(--muted);font-size:11px;text-align:center;margin-bottom:10px}
+.busy-date{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:57px;border:1px solid transparent;border-radius:10px;padding:6px 2px;background:#fff}.busy-date strong{font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}.busy-date>span{font-size:9px;min-height:12px;color:var(--muted)}.busy-date:hover:not(:disabled){background:var(--soft);border-color:var(--line)}.busy-date.is-today{border-color:var(--green)}.busy-date.is-busy,.busy-date.is-busy:hover:not(:disabled){background:var(--green);color:white;border-color:var(--green)}.busy-date.is-busy>span{color:#e4efdf}.busy-date:disabled{opacity:.4;cursor:default}
+.busy-days-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:20px;margin-top:15px;border-top:1px solid var(--line)}.busy-days-footer small{font-size:11px}.busy-days-footer .row{gap:8px}.busy-days-footer .button{padding:8px 18px}.busy-days-footer+#busy-days-error:not(:empty){margin-top:12px}
+.timetable-cell.is-busy{background:color-mix(in srgb,var(--soft) 45%,white)}.timetable-cell.is-busy .calendar-rest{color:var(--muted)}
+@media(max-width:700px){.page-title:has(+.timetable-shell)>.training-page-actions{margin-left:auto}.training-page-actions{gap:8px}}
+@media(max-width:480px){.busy-date-grid,.busy-weekdays{gap:3px}.busy-date{min-height:49px;border-radius:8px}.busy-date strong{font-size:14px}.busy-month-toolbar{margin-bottom:16px}.busy-days-description{font-size:11px}.busy-days-footer .button{padding:8px 14px}}
 .training-content-exercise{grid-template-columns:32px minmax(0,1fr) auto;gap:10px}
 .training-exercise-toggle{width:32px;height:32px;display:grid;place-items:center;padding:0;border-radius:50%;color:var(--green)}
 .training-exercise-toggle>span{display:grid;place-items:center;width:20px;height:20px;border:1.5px solid var(--muted);border-radius:50%}

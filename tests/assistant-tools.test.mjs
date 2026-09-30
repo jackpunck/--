@@ -20,6 +20,21 @@ const daily = (date = today, startTime = '18:00', endTime = '20:00') => ({ taskT
 const training = (date = today) => ({ taskType: 'training', title: '上肢训练', date, dayId: 'train', completed: false, notes: '' });
 const meal = (type = '午餐', grams = 150) => ({ type, title: '米饭和鸡肉', notes: '按标签和称重记录', items: [{ name: '熟米饭', grams, kcal: 120, protein: 2, carbs: 25, fat: 1 }] });
 
+test('AI calendar operations honor busy dates and settings invalidate the calendar version',t=>{
+  const {db,put,call}=fixture(t);
+  const before=calendarState(db,'alice').calendarVersion;
+  put('calendar-busy-days','calendar-settings',{dates:[today,'2026-09-30']});
+  assert.notEqual(calendarState(db,'alice').calendarVersion,before);
+  const created=call('create_training_plan',{plan:plan(),schedule:{days:5}});
+  assert.equal(created.ok,true);
+  assert.deepEqual(created.scheduled.map(r=>r.date),['2026-10-01','2026-10-03']);
+  const read=call('read_calendar');
+  assert.deepEqual(read.busyDates,[today,'2026-09-30']);
+  const rejected=call('create_calendar_task',{task:training(today),calendarVersion:read.calendarVersion});
+  assert.equal(rejected.ok,false);assert.match(rejected.message,/繁忙/);
+  assert.deepEqual(calendarState(db,'bob').busyDates,[]);
+});
+
 test('plan distributes training by date, ignores old daily/rest markers and creates no times', t => {
   const { db, put, call } = fixture(t);
   const work = put('task:class', 'calendar-task', daily());
