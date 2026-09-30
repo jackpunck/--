@@ -1,3 +1,4 @@
+import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=1';
 import {weeklyAchievement, earnedWeeklyAchievements} from './achievements.js?v=1';
 import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=9';
 import {renderMarkdown} from './chat-markdown.js?v=9';
@@ -22,6 +23,7 @@ const dateLabel = value => new Date(value+'T12:00:00').toLocaleDateString('zh-CN
 const numeric = value => Math.round(Number(value)||0);
 const goalLabel = goal => ({lose:'减脂',gain:'增肌',maintain:'保持健康'}[goal] || goal);
 const paths = {
+ folder:'M3 6h6l2 2h10v12H3zM3 6V4h6l2 2h10v2', pencil:'m15 4 5 5M4 16l-1 5 5-1L21 7l-5-5Z',
  chat:'M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5',
  food:'M6 3v6a3 3 0 0 0 6 0V3M9 3v18M19 3v18M19 3c-4 4-4 9 0 9',
  dumbbell:'m6 5 13 13M3 8l5-5M2 5l3-3M16 21l5-5M19 22l3-3M5 10l5-5M14 19l5-5',
@@ -90,13 +92,14 @@ async function boot() {
   }
 }
 async function enter(user,offline=false) {
-  if(state.user?.id!==user.id){modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.files=[];state.weekCelebration=null;}
+  if(state.user?.id!==user.id){modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.files=[];state.weekCelebration=null;state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
   setApiUser(user.id);
   state.user=user; state.store=await new RecordStore(user).open(); localStorage.setItem('fitness:last-user',JSON.stringify(user));
   if(offline)state.store.status='offline';
   const store=state.store;state.scheduleFingerprint=scheduleFingerprint();state.scheduleRefreshPending=false;
   store.addEventListener('change',()=>{if(state.store!==store)return;updateSync();renderSidebarHistory();refreshScheduleViews();});
   if(!offline) { await state.store.sync().catch(e=>toast(e.message,true)); await loadProviders(); }
+  await ensurePlanLibrary();
   render(); if(!profile()) showProfile(true);
 }
 async function loadProviders() { try { const result=await api('/providers'); state.providers=result.providers; state.tasks=result.tasks;state.taskModels=result.taskModels||{}; } catch {} }
@@ -356,12 +359,13 @@ function refreshNutritionSummary() {
  if(stats)patchHTML(stats,nutritionStats(n,t));
  if(advice)patchHTML(advice,nutritionAdvice(n));
 }
-function scheduleFingerprint() {return JSON.stringify({tasks:allCalendarTasks().map(({id,data})=>({id,data})),plan:plan(),cycle:state.store?.get('calendar-cycle'),busy:state.store?.get('calendar-busy-days'),profile:profile(),achievements:records('achievement')});}
+function scheduleFingerprint() {return JSON.stringify({tasks:allCalendarTasks().map(({id,data})=>({id,data})),plan:plan(),cycle:state.store?.get('calendar-cycle'),busy:state.store?.get('calendar-busy-days'),profile:profile(),achievements:records('achievement'),templates:records('training-template')});}
 function refreshScheduleViews() {
  if(!$('#page'))return;
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
  const fingerprint=scheduleFingerprint();if(fingerprint===state.scheduleFingerprint)return;
  state.scheduleFingerprint=fingerprint;
+ const libraryCount=$('.plan-library-entry .plan-library-count');if(libraryCount)libraryCount.textContent=records('training-template').length;
  // Update only dependent nutrition panels, including while a meal form is open.
  if(state.page==='nutrition')refreshNutritionSummary();
  if(state.page==='training'){
@@ -432,7 +436,7 @@ function renderCalendarCard(record) {
 }
 function renderTraining() {
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
- const busy=new Set(getBusyDates()),days=weekDates(state.date),p=plan(),draft=state.store.get('plan-draft'),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
+ const busy=new Set(getBusyDates()),days=weekDates(state.date),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
  const completed=weekTasks.filter(trainingTaskCompleted).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
  const achieved=weekTasks.length>0&&completed===weekTasks.length&&earnedWeeklyAchievements(records('achievement')).some(record=>record.data.weekStart===days[0]);
  const rangeLabel=days.map(date=>`${Number(date.slice(5,7))}月${Number(date.slice(8))}日`);
@@ -443,7 +447,7 @@ function renderTraining() {
   </div>
   ${achieved?`<div class="weekly-complete-note">${icon('check')}<strong>这一周，认真练过了。</strong><small>每一次坚持，都算数</small></div>`:''}
   <div class="timetable-scroll" tabindex="0" aria-label="每周训练表，可横向滚动"><div class="timetable" role="table" aria-label="本周训练计划"><div class="timetable-heading" role="row">${days.map((date,i)=>`<div class="timetable-date ${date===today()?'is-today':''} ${date===state.date?'is-selected':''}" role="columnheader"><button type="button" data-action="training-day" data-date="${date}" aria-label="${dateLabel(date)}${date===today()?'，今天':''}" aria-pressed="${date===state.date}" ${date===today()?'aria-current="date"':''}><span>${['周一','周二','周三','周四','周五','周六','周日'][i]}</span><strong>${Number(date.slice(-2))}</strong></button></div>`).join('')}</div><div class="timetable-days" role="row">${days.map(date=>{const items=weekTasks.filter(r=>r.data.date===date);return `<div class="timetable-cell ${date===today()?'is-today':''} ${busy.has(date)?'is-busy':''}" data-date="${date}" role="cell" aria-label="${dateLabel(date)}训练">${items.length?items.map(renderCalendarCard).join(''):`<div class="calendar-rest">${busy.has(date)?'繁忙':'休息'}</div>`}${busy.has(date)?'':`<button type="button" class="calendar-cell-add" data-action="calendar-add" data-date="${date}" aria-label="添加 ${dateLabel(date)}训练">${icon('plus')}</button>`}</div>`;}).join('')}</div></div></div>
- </section>${draft?`<div class="draft-strip row spread"><div><strong>有一份尚未确认的训练草案</strong><p>确认后自动添加到日程表。</p></div>${button('查看草案','view-draft','','small')}</div>`:''}<details class="training-plan-panel"><summary><div>${icon('dumbbell')}<span><strong>${p?esc(p.name):'创建你的训练内容'}</strong>${p?`<small>${p.days.length} 天循环</small>`:''}</span></div><span class="plan-disclosure" aria-hidden="true">›</span></summary><div class="training-plan-content"><div class="row spread wrap"><h2>我的训练内容</h2><div class="row wrap">${p?button('安排到日历','calendar-schedule','','small'):''}${button(p?'修改计划':'创建计划','plan-builder','','primary small')}${button('最大力量估算','strength','','small')}</div></div>${p?`<div class="plan-days">${p.days.map((d,i)=>`<div class="plan-day"><div class="row spread"><h3><span class="step-badge">${i+1}</span>${esc(d.name)}</h3><small>${d.rest?'恢复':d.exercises.length+' 个动作'}</small></div>${d.exercises.map((e,j)=>exerciseLine(e,j)).join('')}</div>`).join('')}</div><p class="description">${esc(p.source)}</p>`:empty('在这里创建训练内容，或在 AI 对话中让我安排训练。','dumbbell')}</div></details>`;
+ </section><div class="plan-library-entry">${button(icon('folder')+' 方案库 <span class="plan-library-count">'+records('training-template').length+'</span>','plan-library','','plan-library-button')}</div>`;
  bindCalendarDrag();
  playWeeklyCelebration();
 }
@@ -507,13 +511,14 @@ async function ensureRecurringSchedule(date=state.date) {
  // Tombstones count as existing records: deleted occurrences must stay deleted.
  if(missing.size)await store.putMany([...missing.values()]);
 }
-async function addPlanToCalendar(trainingPlan,date) {
+async function addPlanToCalendar(trainingPlan,date,{activate=false}={}) {
  const store=state.store,previous=store.get('calendar-cycle');
- if(previous?.plan.planVersion===trainingPlan?.planVersion&&previous.startDate===date){await ensureRecurringSchedule(date);return;}
+ if(previous?.plan.planVersion===trainingPlan?.planVersion&&previous.startDate===date){if(activate&&store.get('active-plan')?.planVersion!==trainingPlan.planVersion)await store.putMany([{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]);await ensureRecurringSchedule(date);return;}
  planCalendarTasks(trainingPlan,date);
- const cycle={id:uid(),startDate:date,plan:structuredClone(trainingPlan)},changes=[];
+ const cycle={id:uid(),startDate:date,plan:structuredClone(trainingPlan)},changes=activate?[{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]:[];
  if(previous)for(const record of store.list('calendar-task')){
-   if(record.data.cycleId===previous.id&&!record.data.completed&&record.data.date>=date&&record.data.date>=today())changes.push({id:record.id,kind:record.kind,deleted:true});
+   const items=record.data.daySnapshot?.exercises||[],finished=record.data.completed||(items.length>0&&items.every(item=>item.completed===true));
+   if(record.data.cycleId===previous.id&&!finished&&record.data.date>=date&&record.data.date>=today())changes.push({id:record.id,kind:record.kind,deleted:true});
  }
  const {to}=cycleWindow(date);
  changes.push({id:'calendar-cycle',kind:'training-cycle',data:cycle},...recurringCalendarTasks(cycle,date,to,getBusyDates()));
@@ -629,6 +634,60 @@ async function saveTrainingContent() {
  renderTraining();showCalendarTask(record.id);toast('训练内容已保存');
 }
 function exerciseLine(e,i) {const x=exercises.find(x=>x.id===e.exerciseId);return `<div class="exercise-line"><span class="number">${String(i+1).padStart(2,'0')}</span><div class="grow"><button class="link-button" style="padding:0;text-align:left" data-action="exercise" data-id="${esc(e.exerciseId)}"><strong>${esc(x?.name||e.exerciseId)}</strong></button><small>${esc(x?.muscle||'')} · 休息 ${e.restSeconds}s</small></div><span class="rep">${e.sets} × ${esc(e.reps)}</span></div>`;}
+async function ensurePlanLibrary() {
+ const store=state.store;if(!store)return;
+ const changes=libraryMigration([...store.records.values()],new Date().toISOString());
+ if(changes.length)await store.putMany(changes);
+}
+function libraryTemplates() {
+ return records('training-template').sort((a,b)=>(a.data.libraryNumber||0)-(b.data.libraryNumber||0)||a.id.localeCompare(b.id));
+}
+function assertLibraryCurrent(snapshot) {
+ const current=state.store.records.get(snapshot?.id);
+ if(!current||current.deleted||JSON.stringify(current.data)!==JSON.stringify(snapshot.data))throw new Error('这份方案已更新，请返回方案库后重新选择。');
+ return structuredClone(current);
+}
+async function openPlanLibrary(selected=null,keepDate=false) {
+ await ensurePlanLibrary();
+ if(!keepDate||!state.libraryDate)state.libraryDate=state.date<today()?today():state.date;
+ state.librarySelected=selected||state.librarySelected;
+ renderPlanLibrary();
+}
+function renderPlanLibrary() {
+ const templates=libraryTemplates();
+ if(!templates.some(record=>record.id===state.librarySelected))state.librarySelected=templates[0]?.id||null;
+ state.librarySnapshots=new Map(templates.map(record=>[record.id,structuredClone(record)]));
+ modal('方案库',`<form id="plan-library-form"><div class="plan-library-tools"><small>${templates.length} 个方案</small>${button(icon('plus')+' 新建方案','library-new','','small')}</div><div class="plan-library-list">${templates.length?templates.map(record=>{
+  const data=record.data,selected=record.id===state.librarySelected,days=data.days||[],training=days.filter(day=>!day.rest),variant={standard:'标准模板',home:'居家训练',shoulders:'肩部单练',arms:'手臂单练'}[data.variant]||'自定义';
+  return `<article class="library-template${selected?' is-selected':''}"><div class="library-template-head"><label class="library-template-choice"><input type="radio" name="library-template" value="${esc(record.id)}" ${selected?'checked':''}><strong>${esc(data.name)}</strong></label>${button(icon('pencil'),'library-rename',`data-id="${esc(record.id)}" aria-label="重命名 ${esc(data.name)}"`,'library-rename')}<details class="library-template-menu"><summary aria-label="${esc(data.name)}的操作">···</summary><div>${button(icon('trash')+' 删除方案','library-delete',`data-id="${esc(record.id)}"`,'small')}</div></details></div><div class="library-template-body"><p>${training.length} 分化 · ${variant}</p><small>${days.length} 天循环 · ${training.reduce((total,day)=>total+(day.exercises?.length||0),0)} 个动作</small><div class="library-template-bottom"><div class="library-template-days">${days.map(day=>`<span class="${day.rest?'is-rest':''}" title="${esc(day.name)}">${esc(day.rest?'休':trainingParts.find(part=>part.id===day.part)?.name||day.name)}</span>`).join('')}</div>${button('编辑动作','library-edit',`data-id="${esc(record.id)}"`,'library-edit')}</div></div></article>`;
+ }).join(''):`<div class="plan-library-empty">${icon('folder')}<h3>把喜欢的训练安排存下来</h3><p>新建方案后，会自动保存在这里。</p></div>`}</div><div id="plan-library-error" role="alert"></div><footer class="plan-library-footer"><div><label for="library-start-date">开始日期</label><input type="date" id="library-start-date" name="startDate" min="${today()}" max="2199-12-31" value="${esc(state.libraryDate)}" required ${templates.length?'':'disabled'}></div><div class="library-import-action"><button type="submit" class="button primary" ${templates.length?'':'disabled'}>循环导入日历 ${icon('arrow')}</button><small>自动避开繁忙日</small></div></footer></form>`);
+ $('#modal').classList.add('plan-library-modal');
+}
+function editLibraryTemplate(id) {
+ const record=assertLibraryCurrent(state.librarySnapshots.get(id));
+ state.librarySelected=id;state.libraryEditing=record;viewDraft();
+}
+function renameLibraryTemplate(id) {
+ const record=assertLibraryCurrent(state.librarySnapshots.get(id));state.libraryRenaming=record;
+ modal('重命名方案',`<form id="library-rename-form"><label for="library-name">方案名称</label><input id="library-name" name="name" value="${esc(record.data.name)}" maxlength="80" required><div class="form-footer">${button('取消','plan-library-return')}<button type="submit" class="button primary">保存名称</button></div></form>`);
+ $('#library-name').focus();$('#library-name').select();
+}
+function deleteLibraryTemplate(id) {
+ const record=assertLibraryCurrent(state.librarySnapshots.get(id));state.libraryDeleting=record;
+ modal('删除方案',`<p class="description">删除「${esc(record.data.name)}」？已经排进日历的训练会保留。</p><div class="form-footer">${button('取消','plan-library-return')}${button('删除方案','library-delete-confirm','','danger')}</div>`);
+}
+async function saveLibraryDraft(draft) {
+ const record=assertLibraryCurrent(state.libraryEditing),data={...structuredClone(draft),libraryRevision:uid()};
+ state.libraryEditing={...record,data};state.draftEditor=structuredClone(data);
+ await state.store.put(record.kind,record.id,data);
+}
+async function importLibraryTemplate(values) {
+ const record=assertLibraryCurrent(state.librarySnapshots.get(values['library-template'])),date=values.startDate;
+ if(date<today())throw new Error('请选择今天或之后的开始日期。');
+ const trainingPlan=libraryPlan(record);trainingPlan.confirmedAt=new Date().toISOString();
+ await addPlanToCalendar(trainingPlan,date,{activate:true});
+ state.date=date;state.libraryDate=date;closeModal();renderTraining();toast('方案已循环安排到日历');
+}
 function planBuilder(date=state.date) {
  state.planStartDate=date;
  state.planParts=[...(plan()?.parts||['back','chest','legs'])].filter(id=>trainingParts.some(part=>part.id===id));
@@ -664,8 +723,8 @@ function readDraftForm() {
  return draft;
 }
 function viewDraft() {
- const d=state.store.get('plan-draft');if(!d)return;state.draftEditor=d;
- modal('编辑训练草案',`<form id="draft-form" class="training-draft-form"><div class="field"><label for="plan-name">计划名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><div class="draft-days">${d.days.map((day,i)=>day.rest?`<div class="draft-rest"><span>${icon('leaf')} ${esc(day.name)}</span><small>第 ${i+1} 天</small></div>`:`<section class="draft-day" data-draft-day="${i}"><div class="draft-day-heading"><h3><span class="step-badge">${i+1}</span>${esc(day.name)}</h3><span>${day.exercises.length} 个动作</span></div><div class="draft-exercises">${day.exercises.map((e,j)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(j+1).padStart(2,'0')}</span><label class="sr-only" for="draft-e-${i}-${j}">第${i+1}天动作${j+1}</label><select id="draft-e-${i}-${j}" name="e-${i}-${j}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select>${button(icon('close'),'draft-remove-exercise',`data-day="${i}" data-index="${j}" aria-label="删除第${i+1}天动作${j+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="draft-s-${i}-${j}">组数</label><input id="draft-s-${i}-${j}" name="s-${i}-${j}" type="number" min="1" max="12" step="1" value="${esc(e.sets)}" required><label for="draft-r-${i}-${j}">${exerciseUsesSeconds(e.exerciseId)?'秒':'次数'}</label><input id="draft-r-${i}-${j}" name="r-${i}-${j}" value="${esc(exerciseUsesSeconds(e.exerciseId)?String(e.reps).replace(/秒$/,'').trim():e.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','draft-add-exercise',`data-day="${i}" ${day.exercises.length>=16?'disabled':''}`,'draft-add')}${!day.exercises.length?'<p class="description">至少添加 1 个动作</p>':''}</section>`).join('')}</div>${!d.parts?.length&&d.notes?.length?`<p class="description draft-notes">${esc(Array.isArray(d.notes)?d.notes.join('；'):d.notes)}</p>`:''}<div class="form-footer draft-footer">${button('放弃草案','discard-plan')}<button class="button primary" type="submit">确认并添加训练 ${icon('arrow')}</button></div></form>`,true);
+ const d=state.store.get(state.libraryEditing?.id);if(!d)return;state.draftEditor=d;
+ modal('编辑训练草案',`<form id="draft-form" class="training-draft-form"><div class="field"><label for="plan-name">计划名称</label><input name="name" id="plan-name" value="${esc(d.name)}" maxlength="80" required></div><div class="draft-days">${d.days.map((day,i)=>day.rest?`<div class="draft-rest"><span>${icon('leaf')} ${esc(day.name)}</span><small>第 ${i+1} 天</small></div>`:`<section class="draft-day" data-draft-day="${i}"><div class="draft-day-heading"><h3><span class="step-badge">${i+1}</span>${esc(day.name)}</h3><span>${day.exercises.length} 个动作</span></div><div class="draft-exercises">${day.exercises.map((e,j)=>`<div class="draft-exercise"><div class="draft-exercise-heading"><span class="draft-exercise-number">${String(j+1).padStart(2,'0')}</span><label class="sr-only" for="draft-e-${i}-${j}">第${i+1}天动作${j+1}</label><select id="draft-e-${i}-${j}" name="e-${i}-${j}">${options(exercises.map(x=>[x.id,x.name]),e.exerciseId)}</select>${button(icon('close'),'draft-remove-exercise',`data-day="${i}" data-index="${j}" aria-label="删除第${i+1}天动作${j+1}"`,'draft-remove')}</div><div class="draft-exercise-fields"><label for="draft-s-${i}-${j}">组数</label><input id="draft-s-${i}-${j}" name="s-${i}-${j}" type="number" min="1" max="12" step="1" value="${esc(e.sets)}" required><label for="draft-r-${i}-${j}">${exerciseUsesSeconds(e.exerciseId)?'秒':'次数'}</label><input id="draft-r-${i}-${j}" name="r-${i}-${j}" value="${esc(exerciseUsesSeconds(e.exerciseId)?String(e.reps).replace(/秒$/,'').trim():e.reps)}" maxlength="30" required></div></div>`).join('')}</div>${button(icon('plus')+' 添加动作','draft-add-exercise',`data-day="${i}" ${day.exercises.length>=16?'disabled':''}`,'draft-add')}${!day.exercises.length?'<p class="description">至少添加 1 个动作</p>':''}</section>`).join('')}</div>${!d.parts?.length&&d.notes?.length?`<p class="description draft-notes">${esc(Array.isArray(d.notes)?d.notes.join('；'):d.notes)}</p>`:''}<div class="form-footer draft-footer">${button('返回方案库','plan-library-return')}<button class="button primary" type="submit">保存方案 ${icon('check')}</button></div></form>`,true);
 }
 async function changeDraftExercise(target,remove=false) {
  if(state.draftSaving)return;
@@ -681,7 +740,7 @@ async function changeDraftExercise(target,remove=false) {
  const form=$('#draft-form'),scroll=$('#modal').scrollTop;
  state.draftSaving=true;
  try {
-   await state.store.put('draft','plan-draft',draft);
+   await saveLibraryDraft(draft);
    if(!form.isConnected||!$('#modal').open)return;
    viewDraft();$('#modal').scrollTop=scroll;
    const section=$(`[data-draft-day="${index}"]`);(remove?$('[data-action="draft-add-exercise"]',section):section.querySelector('.draft-exercise:last-child select'))?.focus({preventScroll:remove});
@@ -931,11 +990,18 @@ document.addEventListener('click',async event=>{
  case 'delete-meal':confirmDialog('删除这餐记录','删除后将从当天摄入总量中扣除。','confirm-delete-meal',id);break;
  case 'confirm-delete-meal':await state.store.remove(id);closeModal();renderNutrition();toast('已删除餐食记录');break;
  case 'plan-builder':planBuilder();break;
- case 'view-draft':viewDraft();break;
+ case 'plan-library':await openPlanLibrary();break;
+ case 'plan-library-return':await openPlanLibrary(state.librarySelected,true);break;
+ case 'library-new':planBuilder(state.libraryDate||state.date);break;
+ case 'library-edit':editLibraryTemplate(id);break;
+ case 'library-rename':renameLibraryTemplate(id);break;
+ case 'library-delete':deleteLibraryTemplate(id);break;
+ case 'library-delete-confirm':{assertLibraryCurrent(state.libraryDeleting);await state.store.remove(state.libraryDeleting.id);await openPlanLibrary(null,true);break;}
+ case 'view-draft':await openPlanLibrary();break;
  case 'toggle-training-part':{const part=target.dataset.part;state.planParts=state.planParts.includes(part)?state.planParts.filter(id=>id!==part):[...state.planParts,part];updatePartSelection();break;}
  case 'draft-add-exercise':await changeDraftExercise(target);break;
  case 'draft-remove-exercise':await changeDraftExercise(target,true);break;
- case 'discard-plan':await state.store.remove('plan-draft');closeModal();renderTraining();break;
+
  case 'training-day':state.date=target.dataset.date;renderTraining();break;
  case 'log-training':logTraining(id);break;
  case 'busy-days':await openBusyDays();break;
@@ -1010,8 +1076,10 @@ document.addEventListener('submit',async event=>{
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await saveMeal(true);break;
  case 'metabolism-form':case 'macro-energy-form':case 'portion-form':updateKnowledgeTool(form);break;
- case 'plan-form':{const draft=generatePartPlan({parts:state.planParts,variant:values.variant},profile());if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.put('draft','plan-draft',draft);viewDraft();break;}
- case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();if(!draft.name)throw new Error('请填写计划名称。');for(const day of draft.days){if(day.rest)continue;if(!day.exercises.length||day.exercises.length>16)throw new Error(`${day.name}需要 1–16 个动作。`);for(const exercise of day.exercises){exercise.reps=exercise.reps.trim();if(!exercises.some(item=>item.id===exercise.exerciseId)||!Number.isInteger(exercise.sets)||exercise.sets<1||exercise.sets>12||!exercise.reps)throw new Error('请检查动作、组数和次数。');}}const date=draft.scheduleDate||state.date;delete draft.scheduleDate;draft.confirmedAt=new Date().toISOString();draft.planVersion=state.draftEditor.confirmationVersion||=uid();planCalendarTasks(draft,date);await state.store.put('plan','active-plan',draft);await addPlanToCalendar(draft,date);await state.store.remove('plan-draft');state.date=date;closeModal();renderTraining();toast('已添加循环训练');break;}
+ case 'plan-form':{await ensurePlanLibrary();const draft=generatePartPlan({parts:state.planParts,variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;await openPlanLibrary(id,true);break;}
+ case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();libraryPlan({id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
+ case 'plan-library-form':await importLibraryTemplate(values);break;
+ case 'library-rename-form':{const record=assertLibraryCurrent(state.libraryRenaming),name=values.name.trim();if(!name||name.length>80)throw new Error('方案名称需为 1–80 个字。');await state.store.put(record.kind,record.id,{...record.data,name,libraryRevision:uid()});await openPlanLibrary(record.id,true);break;}
  case 'calendar-task-form':await saveCalendarTask(values);break;
  case 'training-content-form':await saveTrainingContent();break;
  case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await saveTrainingProgress(record,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});renderTraining();showCalendarTask(record.id);toast('训练已记录');break;}
@@ -1023,7 +1091,7 @@ document.addEventListener('submit',async event=>{
  case 'cooked-form':{const r=convertFoodWeight(Number(values.grams),Number(values.raw),Number(values.cooked));$('#cooked-result').innerHTML=`<div class="notice">对应熟重约 <strong>${r.grams} g</strong><br>${esc(r.note)}</div>`;break;}
  case 'delete-account-form':await stopChat();await api('/account',{method:'DELETE',body:{password:values.password}});modelViewer.destroy();await chatUploads.clearAll();await state.store.clear();await state.store.close?.();localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;chatDrafts.clear();chatScroll.clear();closeModal();renderAuth();toast('账号与个人数据已删除');break;
  }
- }catch(error){const errorBox=form.id==='auth-form'?$('#auth-error'):form.id==='profile-form'?$('#profile-error'):form.id==='calendar-task-form'?$('#calendar-task-error'):form.id==='training-content-form'?$('#training-content-error'):null;if(errorBox)errorBox.innerHTML=`<div class="error-box" style="margin:12px 0">${esc(error.message)}</div>`;else toast(error.message,true);}
+ }catch(error){const errorBox=form.id==='auth-form'?$('#auth-error'):form.id==='profile-form'?$('#profile-error'):form.id==='calendar-task-form'?$('#calendar-task-error'):form.id==='training-content-form'?$('#training-content-error'):form.id==='plan-library-form'?$('#plan-library-error'):null;if(errorBox)errorBox.innerHTML=`<div class="error-box" style="margin:12px 0">${esc(error.message)}</div>`;else toast(error.message,true);}
  finally {if(submit)submit.disabled=false;if(form.id==='chat-form')updateChatControls();}
 });
 
@@ -1040,7 +1108,9 @@ document.addEventListener('change',async event=>{
    }catch(error){toast(error.message,true);}
    return;
  }
- if(target.closest('#draft-form')){try{updateDraftExerciseUnit(target);const draft=readDraftForm();state.draftEditor=draft;await state.store.put('draft','plan-draft',draft);}catch(error){toast(error.message,true);}return;}
+ if(target.closest('#draft-form')){try{updateDraftExerciseUnit(target);const draft=readDraftForm();state.draftEditor=draft;await saveLibraryDraft(draft);}catch(error){toast(error.message,true);}return;}
+ if(target.name==='library-template'){const scroll=$('.plan-library-list').scrollTop;state.librarySelected=target.value;renderPlanLibrary();$('.plan-library-list').scrollTop=scroll;$('input[name="library-template"]:checked').focus({preventScroll:true});return;}
+ if(target.id==='library-start-date'){state.libraryDate=target.value;return;}
  if(target.name==='enabled-model'&&state.providerDraft){const d=state.providerDraft;if(target.checked){const m=d.availableModels.find(m=>m.id===target.value);if(m&&!d.models.some(x=>x.id===m.id))d.models.push(m);}else d.models=d.models.filter(m=>m.id!==target.value);updateProviderSelection();return;}
  try {
  switch(target.id){
