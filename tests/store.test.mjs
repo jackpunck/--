@@ -250,3 +250,14 @@ test('UTF-8 byte limits split multibyte conversations even when the record count
   assert.deepEqual(server.calls.map(c => c.changes.length), [2, 1]);
   assert.equal(store.pending.size, 0);
 });
+
+test('batch calendar updates persist and sync cycle rules together with task tombstones',async()=>{
+  const store=await open();
+  await store.putMany([{id:'cycle',kind:'training-cycle',data:{startDate:'2026-09-30'}},{id:'task',kind:'calendar-task',data:{completed:false}},{id:'plan',kind:'plan',data:{name:'saved plan'}}]);
+  const restored=await open();assert.ok(restored.get('cycle'));assert.ok(restored.get('task'));assert.equal(restored.pending.size,3);
+  await restored.putMany([{id:'cycle',kind:'training-cycle',deleted:true},{id:'task',kind:'calendar-task',deleted:true}]);
+  const afterReset=await open();assert.equal(afterReset.get('cycle'),null);assert.equal(afterReset.get('task'),null);assert.equal(afterReset.get('plan').name,'saved plan');
+  assert.equal(afterReset.records.get('task').deleted,true);
+  const server=fakeServer();globalThis.fetch=server.fetch;online=true;await afterReset.sync();
+  assert.equal(server.remote.get('cycle').deleted,true);assert.equal(server.remote.get('task').deleted,true);assert.equal(server.remote.get('plan').data.name,'saved plan');
+});

@@ -82,7 +82,7 @@ export const exerciseDetails = Object.freeze({
   },
   "chest-press": {
     "title": "器械推胸",
-    "equipment": "固定器械",
+    "equipment": "坐姿配重推胸机（中立握把）",
     "summary": "示范中立握法：掌心相对，沿器械轨迹向前推。",
     "cues": [
       "调座椅使握把对准胸部中段，双脚踩稳",
@@ -97,7 +97,7 @@ export const exerciseDetails = Object.freeze({
   },
   "lat-pulldown": {
     "title": "高位下拉",
-    "equipment": "高位下拉器",
+    "equipment": "配重式高位下拉机（长拉杆）",
     "summary": "将上方拉杆拉向上胸，训练垂直拉力。",
     "cues": [
       "大腿固定，握距舒适",
@@ -112,7 +112,7 @@ export const exerciseDetails = Object.freeze({
   },
   "row": {
     "title": "坐姿绳索划船",
-    "equipment": "绳索器械",
+    "equipment": "坐姿低位绳索划船机（双握把）",
     "summary": "坐姿将把手拉向腹部，训练水平拉力。",
     "cues": [
       "脊柱保持自然位置，躯干稳定",
@@ -143,7 +143,7 @@ export const exerciseDetails = Object.freeze({
   },
   "pullup": {
     "title": "辅助引体向上",
-    "equipment": "单杠、辅助器械",
+    "equipment": "配重辅助引体向上机",
     "summary": "借助辅助器械减重，完成向上拉起身体的动作。",
     "cues": [
       "先检查握杆与辅助设备稳定性",
@@ -202,7 +202,7 @@ export const exerciseDetails = Object.freeze({
   },
   "triceps": {
     "title": "绳索下压",
-    "equipment": "绳索器械",
+    "equipment": "高位滑轮训练器（双头绳）",
     "summary": "保持上臂位置，通过伸肘下压把手。",
     "cues": [
       "上臂贴近身体，肩保持放松",
@@ -291,7 +291,7 @@ export const exerciseDetails = Object.freeze({
   },
   "leg-curl": {
     "title": "器械腿弯举",
-    "equipment": "腿弯举器",
+    "equipment": "坐姿腿弯举机",
     "summary": "屈曲膝关节带动器械配重。",
     "cues": [
       "按器械说明调节转轴与膝关节对齐",
@@ -305,7 +305,7 @@ export const exerciseDetails = Object.freeze({
   },
   "leg-extension": {
     "title": "器械腿屈伸",
-    "equipment": "腿屈伸器",
+    "equipment": "坐姿腿屈伸机",
     "summary": "坐姿伸展膝关节训练大腿前侧。",
     "cues": [
       "调整座椅，使膝与器械转轴对齐",

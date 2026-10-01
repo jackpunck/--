@@ -1,3 +1,4 @@
+import {isBusyDate,busyDatesInRange} from '../public/busy-rules.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { planTools, executePlanTool, getPlanToolReceipt } from './plan-tools.mjs';
 import { calendarState, recordById, writeRecord, validDate, resolveLocalToday } from './calendar-data.mjs';
@@ -89,6 +90,8 @@ function checkedTask(db, userId, value, existing, today) {
   assertObject(value);
   if (value.taskType !== undefined && value.taskType !== 'training') fail('INVALID_ARGUMENTS', '日历只支持训练任务。');
   const task = validateCalendarTask({ ...value, taskType: 'training' });
+  if(existing&&task.date!==existing.data.date){existing=structuredClone(existing);delete existing.data.busyBaseDate;}
+  if(isBusyDate(task.date,calendarState(db,userId).busySettings))fail('BUSY_DATE','这一天已设为繁忙，请选择其他日期。');
   if (task.date < today) fail('HISTORICAL_TASK', '不能通过 AI 改写过去的训练记录。');
   const plan = recordById(db, userId, 'active-plan');
   const dayId = value.dayId || existing?.data?.dayId;
@@ -121,7 +124,7 @@ export function executeAssistantTool({ db, userId, name, args = {}, requestId, l
       const records = current.records.filter(record => record.data.date >= startDate && record.data.date <= endDate).map(record => ({ ...record, data: dateOnlyData(record.data) }));
       const dayTypes = [];
       for (let date = startDate; date <= endDate; date = addDays(date, 1)) { const dayType = trainingDayType(date, records); dayTypes.push({ date, dayType, rest: dayType === 'rest' }); }
-      return { name, ok: true, message: '已读取训练日历。', today, startDate, endDate, calendarVersion: current.calendarVersion, records, dayTypes };
+      return { name, ok: true, message: '已读取训练日历。', today, startDate, endDate, calendarVersion: current.calendarVersion, records, dayTypes, busyDates:busyDatesInRange(current.busySettings,startDate,endDate) };
     }
     if (typeof requestId !== 'string' || !/^[A-Za-z0-9_.:-]{8,128}$/.test(requestId)) fail('INVALID_ARGUMENTS', '写入需要有效的请求 ID。');
     const isMeal = name.endsWith('_meal'), creating = name.startsWith('create_'), deleting = name.startsWith('delete_');
