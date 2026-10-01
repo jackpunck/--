@@ -11,6 +11,7 @@ import { HttpError, validateProvider, selectProviderModel, discoverModels, build
 import { streamChat } from './server/chat-stream.mjs';
 import { assistantTools, executeAssistantTool, getAssistantToolReceipts } from './server/assistant-tools.mjs';
 import { resolveLocalToday, resolveLocalTime } from './server/calendar-data.mjs';
+import { completeNutritionAdvice } from './server/nutrition-advice.mjs';
 
 const scrypt = promisify(scryptCallback);
 const root = dirname(fileURLToPath(import.meta.url));
@@ -169,8 +170,11 @@ export function createServer(options = {}) {
     try { return await operation(); }
     finally { const left = (activeAi.get(userId) ?? 1) - 1; if (left) activeAi.set(userId, left); else activeAi.delete(userId); }
   }
-  async function callAi(userId, provider, messages) {
-    return withAiLimit(userId, () => complete({ provider, messages, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders }));
+  async function callAi(userId, provider, messages, purpose, mealTiming) {
+    return withAiLimit(userId, () => {
+      const options = { provider, messages, purpose, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders };
+      return purpose === 'nutrition-advice' ? completeNutritionAdvice({ ...options, mealTiming }) : complete(options);
+    });
   }
 
   const server = http.createServer(async (req, res) => {
@@ -321,7 +325,7 @@ export function createServer(options = {}) {
           if (!id) throw new HttpError(400, '尚未为此任务配置 AI 模型，请前往个人设置添加供应商并选择任务模型。');
           if (!settings.taskModels[body.task]) throw new HttpError(400, '尚未为此任务选择模型，请在 AI 服务设置中选择任务模型。');
           const provider = selectProviderModel(providerWithKey(user.id, id), settings.taskModels[body.task]);
-          if (!body.stream) { send(res, 200, await callAi(user.id, provider, messages)); return; }
+          if (!body.stream) { send(res, 200, await callAi(user.id, provider, messages, body.task === 'planning' ? body.context?.purpose : undefined, body.context?.mealTiming)); return; }
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('客户端已停止接收回复。', 'AbortError')); };
           res.once('close', disconnect);
