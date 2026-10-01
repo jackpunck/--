@@ -1,4 +1,4 @@
-const CACHE = 'fitness-shell-v29';
+const CACHE = 'fitness-shell-v32';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
 SHELL.push('/energy.css', '/landing.css', '/landing.js');
 SHELL.push('/vendor/gsap.min.js', '/vendor/ScrollTrigger.min.js', '/assets/fonts/cabinet-grotesk-400.woff2', '/assets/fonts/cabinet-grotesk-700.woff2');
