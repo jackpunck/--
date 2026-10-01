@@ -61,7 +61,8 @@ if(process.argv.includes('--export')){
       const positions=new Float32Array(p.count*3),normals=new Float32Array(p.count*3);
       for(let i=0;i<p.count;i++){
         m.getVertexPosition(i,v);v.applyMatrix4(m.matrixWorld);positions.set(v.toArray(),i*3);n0.fromBufferAttribute(n,i);
-        if(m.isSkinnedMesh){normal.set(0,0,0);for(let k=0;k<4;k++){const weight=g.attributes.skinWeight.array[i*4+k];if(!weight)continue;bm.fromArray(m.skeleton.boneMatrices,g.attributes.skinIndex.array[i*4+k]*16);tmp.copy(n0).transformDirection(bm);normal.addScaledVector(tmp,weight);}normal.normalize();}
+        if(m.applyBoneNormal)m.applyBoneNormal(i,normal.copy(n0));
+        else if(m.isSkinnedMesh){normal.set(0,0,0);for(let k=0;k<4;k++){const weight=g.attributes.skinWeight.array[i*4+k];if(!weight)continue;bm.fromArray(m.skeleton.boneMatrices,g.attributes.skinIndex.array[i*4+k]*16);tmp.copy(n0).transformDirection(bm);normal.addScaledVector(tmp,weight);}normal.normalize();}
         else normal.copy(n0);
         normal.applyMatrix3(nmat).normalize();normals.set(normal.toArray(),i*3);
       }

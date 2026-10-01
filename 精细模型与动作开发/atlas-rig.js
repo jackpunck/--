@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import regions from './assets/anatomy-regions.json' with {type:'json'};
 import {createGymEquipment} from './gym-equipment.js';
 import {sampleExtendedPose} from './motion-poses.js';
+import {createDualQuaternionSkinning} from './dual-quaternion-skinning.js';
+import {armRotations,forearmRoll} from './arm-frames.js';
+import {forearmLandmarks,fitForearmBone} from './forearm-bones.js';
 import {alignedGrip,gripNormal,fingerFlexion,horizontalBarGrip,gripOffset,createGripRotations} from './grip-poses.js';
 
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
@@ -16,12 +19,15 @@ export function createAtlasRig(body,sources){
   const bones=[],map={},rest={},fingers={};
   function add(name,p){const b=new THREE.Bone();b.name=name;b.position.copy(p);b.userData.index=bones.length;rest[name]=p.clone();bones.push(b);map[name]=b;body.add(b);return name;}
   add('pelvis',V(0,1.60,-.06));add('spine',V(0,1.99,-.06));add('chest',V(0,2.40,-.06));add('head',V(0,2.78,-.06));
-  const joints={};
+  const joints={},forearmAttachments={};
   const ordinal=['first','second','third','fourth','fifth'];
   for(const sign of [-1,1]){
     const side=sign===1?'l':'r';
     const j=joints[side]={hip:V(sign*.168,1.60,-.06),knee:V(sign*.153,.80,-.055),ankle:V(sign*.14,.155,-.075),shoulder:V(sign*.31,2.56,-.058),elbow:V(sign*.423,2.025,-.060),wrist:V(sign*.51,1.59,.005)};
     for(const [name,point] of [['upper',j.shoulder],['forearm',j.elbow],['hand',j.wrist],['thigh',j.hip],['shin',j.knee],['foot',j.ankle],['patella',j.knee]])add(name+'.'+side,point);
+    add('forearmMid.'+side,j.elbow.clone().lerp(j.wrist,.5));add('forearmRoll.'+side,j.wrist);
+    forearmAttachments[side]=forearmLandmarks(sources,side);
+    for(const landmark of forearmAttachments[side])add(landmark.name,landmark.distal);
     fingers[side]=[];
     for(let f=0;f<5;f++){
       const chain=[];
@@ -41,6 +47,7 @@ export function createAtlasRig(body,sources){
   }
   const gripRotations=Object.fromEntries(['l','r'].map(side=>[side,{closed:createGripRotations(fingers[side],side==='l'?1:-1),cup:createGripRotations(fingers[side],side==='l'?1:-1,'cup')} ]));
   body.updateMatrixWorld(true);const skeleton=new THREE.Skeleton(bones);skeleton.calculateInverses();
+  const skinMesh=createDualQuaternionSkinning(skeleton);
   function fingerWeights(p,side,rigidName){
     const chains=fingers[side];
     if(rigidName){for(const chain of chains)for(const segment of chain)if(segment.source===rigidName)return [[segment.bone,1]];}
@@ -57,11 +64,12 @@ export function createAtlasRig(body,sources){
     return mix(parent,seg.bone,t);
   }
   function skinWeights(p,item){
-    const n=item.name.toLowerCase(),side=p.x>=0?'l':'r',y=p.y,x=Math.abs(p.x),suffix='.'+side;
+    const n=item.name.toLowerCase(),side=n.endsWith('.l')?'l':n.endsWith('.r')?'r':p.x>=0?'l':'r',y=p.y,x=Math.abs(p.x),suffix='.'+side;
     const region=regions[item.name];
     if(item.kind==='bone'){
       if(n.startsWith('humerus'))return [['upper'+suffix,1]];
-      if(n.startsWith('ulna')||n.startsWith('radius'))return [['forearm'+suffix,1]];
+      if(n.startsWith('ulna'))return [['ulna'+suffix,1]];
+      if(n.startsWith('radius'))return [['radius'+suffix,1]];
       if(n.startsWith('femur'))return [['thigh'+suffix,1]];
       if(n.startsWith('tibia')||n.startsWith('fibula'))return [['shin'+suffix,1]];
       if(n.startsWith('patella'))return [['patella'+suffix,1]];
@@ -71,10 +79,20 @@ export function createAtlasRig(body,sources){
       const center=item.rigCenterY;
       return [[center>2.74?'head':center>2.20?'chest':center>1.80?'spine':'pelvis',1]];
     }
+    // Scapular origins must remain with the shoulder girdle. The generic arm
+    // height bands pulled the lower scapular muscles around the humerus,
+    // producing the sharp axillary spikes during overhead movements. Match by
+    // structure, since the source region table classifies the two teres majors
+    // differently. Only the lateral insertion follows the upper arm.
+    if(/teres (major|minor)|subscapularis|infraspinatus|supraspinatus/.test(n))
+      return mix('chest','upper'+suffix,smooth(.235,.33,x)*smooth(n.includes('teres major')?2.36:2.43,n.includes('teres major')?2.47:2.56,y));
     if(region==='trunk'&&/pectoralis|latissimus/.test(n))return mix('chest','upper'+suffix,smooth(.22,.39,x)*smooth(2.28,2.52,y));
     if(region==='arm'){
+      if(n.includes('retinaculum of wrist'))return [['hand'+suffix,1]];
       if(y<1.46)return fingerWeights(p,side);
-      if(y<1.66)return mix('hand'+suffix,'forearm'+suffix,smooth(1.535,1.65,y));
+      if(y<1.66)return mix('hand'+suffix,'forearmRoll'+suffix,smooth(1.535,1.65,y));
+      if(y<1.82)return mix('forearmRoll'+suffix,'forearmMid'+suffix,smooth(1.66,1.82,y));
+      if(y<1.95)return mix('forearmMid'+suffix,'forearm'+suffix,smooth(1.82,1.95,y));
       if(y<2.16)return mix('forearm'+suffix,'upper'+suffix,smooth(1.95,2.10,y));
       return mix('chest','upper'+suffix,1-(1-smooth(.225,.39,x))*smooth(2.28,2.53,y));
     }
@@ -115,6 +133,21 @@ export function createAtlasRig(body,sources){
     return s.clone().addScaledVector(dir,along).addScaledVector(bend,h);
   }
   const poseJoints={};
+  function alignElbows(){
+    for(const side of ['l','r']){
+      const rotations=armRotations(joints[side],poseJoints[side],map.chest.quaternion);
+      map['upper.'+side].quaternion.copy(rotations.upper);
+      map['forearm.'+side].quaternion.copy(rotations.forearm);
+      const posed=poseJoints[side],roll=forearmRoll(joints[side],posed,map['hand.'+side].quaternion);
+      transform('forearmRoll.'+side,posed.wrist,roll);
+      transform('forearmMid.'+side,posed.elbow.clone().lerp(posed.wrist,.5),rotations.forearm.clone().slerp(roll,.5));
+      for(const landmark of forearmAttachments[side]){
+        const proximal=rigidPoint(landmark.proximal,'forearm.'+side),distal=rigidPoint(landmark.distal,'forearmRoll.'+side);
+        const fit=fitForearmBone(landmark,proximal,distal,landmark.name.startsWith('radius')?roll:rotations.forearm);
+        transform(landmark.name,fit.position,fit.rotation);
+      }
+    }
+  }
   function pose(progress,exercise){
     if(!['squat','pushup','curl'].includes(exercise))return staticPose(exercise,progress);
     if(staticProps)staticProps.visible=false;
@@ -161,7 +194,7 @@ export function createAtlasRig(body,sources){
       weight.position.copy(rigidPoint(r.wrist.clone().add(gripOffset(sign)),'hand'+suffix));weight.quaternion.copy(handRotation);
       poseJoints[side]={hip:h,knee:k,ankle:a,shoulder:s,elbow:e,wrist:w};
     }
-    body.updateMatrixWorld(true);skeleton.update();
+    alignElbows();body.updateMatrixWorld(true);skeleton.update();
   }
   const staticProps=new THREE.Group();staticProps.userData.prop=true;staticProps.name='Common gym equipment';body.add(staticProps);
   const propMaterial=new THREE.MeshStandardMaterial({color:'#526257',roughness:.75});
@@ -352,9 +385,9 @@ export function createAtlasRig(body,sources){
     if(gymEquipment.variants[exercise]){frameParts.forEach(p=>p.visible=false);cables.forEach(p=>p.visible=false);}
     gymEquipment.update(exercise,THREE.MathUtils.clamp(progress,0,1),{palms,joints:poseJoints,bar,roller,assistance,handles});
     if(gymEquipment.variants[exercise])equipmentAnchors.cableTargets=gymEquipment.variants[exercise].dynamic.outlet?[gymEquipment.variants[exercise].dynamic.outlet.clone()]:[];
-    body.updateMatrixWorld(true);skeleton.update();return true;
+    alignElbows();body.updateMatrixWorld(true);skeleton.update();return true;
   }
   function attach(point,boneName){const a=new THREE.Object3D();a.position.copy(point).sub(rest[boneName]);map[boneName].add(a);return a;}
   reset();
-  return {bones,map,rest,skeleton,bindGeometry,pose,staticPose,reset,attach,poseJoints,joints,weights,staticProps,equipmentAnchors,gymEquipment,fingerChains:fingers};
+  return {bones,map,rest,skeleton,skinMesh,bindGeometry,pose,staticPose,reset,attach,poseJoints,joints,weights,staticProps,equipmentAnchors,gymEquipment,fingerChains:fingers,forearmAttachments};
 }

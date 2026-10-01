@@ -30,7 +30,7 @@ export function createAnatomyAtlas({rigged=false,decoded=null}={}){
     const material=new THREE.MeshStandardMaterial({color:'#807b71',roughness:.69,metalness:.08,side:THREE.DoubleSide});
     material.shadowSide=THREE.FrontSide;
     const mesh=rig?new THREE.SkinnedMesh(geometry,material):new THREE.Mesh(geometry,material);mesh.name=key;mesh.castShadow=true;mesh.receiveShadow=true;
-    if(rig){mesh.bind(rig.skeleton,new THREE.Matrix4());mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1.3,0),5);mesh.frustumCulled=false;}
+    if(rig){mesh.bind(rig.skeleton,new THREE.Matrix4());rig.skinMesh(mesh);mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1.3,0),5);mesh.frustumCulled=false;}
     mesh.userData.kind=key==='bone'?'bone':'muscle';
     if(!['muscle','bone'].includes(key)){mesh.userData.muscle=key;muscleMeshes.push(mesh);}
     let firstFace=0;mesh.userData.structures=[];
@@ -55,7 +55,7 @@ export function createAnatomyAtlas({rigged=false,decoded=null}={}){
       activityOverlay=rig?new THREE.SkinnedMesh(coreMesh.geometry,material):new THREE.Mesh(coreMesh.geometry,material);
       activityOverlay.userData={...coreMesh.userData,selectionOverlay:true,activityOverlay:true};
       activityOverlay.renderOrder=1;activityOverlay.frustumCulled=false;
-      if(rig)activityOverlay.bind(rig.skeleton,new THREE.Matrix4());
+      if(rig){activityOverlay.bind(rig.skeleton,new THREE.Matrix4());rig.skinMesh(activityOverlay);}
       body.add(activityOverlay);
     }
     if(activityOverlay){
@@ -110,7 +110,7 @@ export function createAnatomyAtlas({rigged=false,decoded=null}={}){
       geometry.setIndex(source.index);
       selectedMesh=rig?new THREE.SkinnedMesh(geometry,selectionMaterial):new THREE.Mesh(geometry,selectionMaterial);
       selectedMesh.userData.selectionOverlay=true;selectedMesh.renderOrder=2;selectedMesh.frustumCulled=false;
-      if(rig){selectedMesh.bind(rig.skeleton,new THREE.Matrix4());selectedMesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1.3,0),5);}
+      if(rig){selectedMesh.bind(rig.skeleton,new THREE.Matrix4());rig.skinMesh(selectedMesh);selectedMesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1.3,0),5);}
       selectionMeshes.set(info.mesh,selectedMesh);
     }
     selectedMesh.geometry.setDrawRange(info.firstFace*3,info.faceCount*3);
