@@ -40,6 +40,45 @@ test('zero-weight slots cannot select the wrong quaternion hemisphere',()=>{
   assert(mesh.getVertexPosition(0,new THREE.Vector3()).distanceTo(new THREE.Vector3(-1,0,0))<1e-6);
 });
 
+test('surface normals follow weight-induced slope and rotational deformation',()=>{
+  const bones=[new THREE.Bone(),new THREE.Bone()],skeleton=new THREE.Skeleton(bones),skin=createDualQuaternionSkinning(skeleton);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute([.2,.3,0],3));
+  g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute([0,1,0,0],4));
+  g.setAttribute('skinWeight',new THREE.Float32BufferAttribute([.6,.4,0,0],4));
+  for(let k=0;k<4;k++)g.setAttribute('skinGradient'+k,new THREE.Float32BufferAttribute([k===0?-.5:k===1?.5:0,0,0],3));
+  const mesh=skin(new THREE.SkinnedMesh(g,new THREE.MeshStandardMaterial()));mesh.bind(skeleton,new THREE.Matrix4());
+  bones[1].position.z=1;bones.forEach(b=>b.updateMatrixWorld());skeleton.update();
+  let n=mesh.applyBoneNormal(0,new THREE.Vector3(0,0,1));
+  assert(n.distanceTo(new THREE.Vector3(-.5,0,1).normalize())<1e-7,'translation with varying weights tilts the surface normal');
+  const position=new THREE.Vector3(.2,.3,0),step=1e-4;
+  for(const angle of [0,.3,1,2,2.9]){
+    bones[1].quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),angle);bones[1].updateMatrixWorld();skeleton.update();
+    function evaluate(dx,dy){
+      const w=.4+.5*dx;g.attributes.skinWeight.setXYZW(0,1-w,w,0,0);
+      return mesh.applyBoneTransform(0,position.clone().add(new THREE.Vector3(dx,dy,0)));
+    }
+    const u=evaluate(step,0).sub(evaluate(-step,0)),v=evaluate(0,step).sub(evaluate(0,-step));
+    g.attributes.skinWeight.setXYZW(0,.6,.4,0,0);
+    n=mesh.applyBoneNormal(0,new THREE.Vector3(0,0,1));
+    assert(n.distanceTo(u.cross(v).normalize())<.001,`normal disagrees with deformed tangent plane: ${angle}`);
+  }
+});
+
+test('surface weight gradients remain finite and preserve a constant weight sum',()=>{
+  const atlas=createAnatomyAtlas({rigged:true});
+  for(const mesh of atlas.pickableMeshes){
+    const g=mesh.geometry;
+    for(let i=0;i<g.attributes.position.count;i++)for(let axis=0;axis<3;axis++){
+      let sum=0;
+      for(let k=0;k<4;k++){
+        const value=g.attributes['skinGradient'+k].array[i*3+axis];assert(Number.isFinite(value));sum+=value;
+      }
+      assert(Math.abs(sum)<.002,`${mesh.name}: weight derivative does not sum to zero`);
+    }
+  }
+});
+
 test('all atlas vertices preserve rest geometry and rigid bones remain rigid in every action',()=>{
   const atlas=createAnatomyAtlas({rigged:true}),p=new THREE.Vector3(),base=new THREE.Vector3(),matrix=new THREE.Matrix4();
   for(const mesh of atlas.pickableMeshes)for(let i=0;i<mesh.geometry.attributes.position.count;i++){

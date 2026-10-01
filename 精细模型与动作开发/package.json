@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "start": "node server.cjs",
-    "test": "node scripts/verify-atlas.mjs && node scripts/verify-rig.mjs && node scripts/verify-static.mjs && node --test scripts/verify-embed.mjs scripts/verify-anatomy.mjs scripts/verify-activity.mjs scripts/verify-grips.mjs scripts/verify-equipment.mjs scripts/verify-decode.mjs scripts/verify-skinning.mjs scripts/verify-elbows.mjs scripts/verify-wrists.mjs",
+    "test": "node scripts/verify-atlas.mjs && node scripts/verify-rig.mjs && node scripts/verify-static.mjs && node --test scripts/verify-embed.mjs scripts/verify-anatomy.mjs scripts/verify-activity.mjs scripts/verify-grips.mjs scripts/verify-equipment.mjs scripts/verify-decode.mjs scripts/verify-skinning.mjs scripts/verify-elbows.mjs scripts/verify-wrists.mjs scripts/verify-surfaces.mjs",
     "preview:export": "node scripts/verify-rig.mjs --export",
     "test:force": "node --test scripts/verify-force.mjs"
   },

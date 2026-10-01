@@ -115,81 +115,81 @@
     "name": "Abductor pollicis longus.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
+    "vertices": 1233,
+    "indices": 7386,
     "offset": 146184
   },
   {
     "name": "Abductor pollicis longus.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 165102
+    "vertices": 1233,
+    "indices": 7386,
+    "offset": 172053
   },
   {
     "name": "Acromial part of deltoid muscle.l",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 184020
+    "vertices": 1482,
+    "indices": 8892,
+    "offset": 197922
   },
   {
     "name": "Acromial part of deltoid muscle.r",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 202920
+    "vertices": 1482,
+    "indices": 8892,
+    "offset": 229044
   },
   {
     "name": "Adductor brevis.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 221820
+    "vertices": 1064,
+    "indices": 6396,
+    "offset": 260166
   },
   {
     "name": "Adductor brevis.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 240702
+    "vertices": 1064,
+    "indices": 6396,
+    "offset": 282534
   },
   {
     "name": "Adductor longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 259584
+    "vertices": 1855,
+    "indices": 11142,
+    "offset": 304902
   },
   {
     "name": "Adductor longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 278466
+    "vertices": 1855,
+    "indices": 11142,
+    "offset": 343881
   },
   {
     "name": "Adductor magnus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 297348
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 382860
   },
   {
     "name": "Adductor magnus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 316248
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 445860
   },
   {
     "name": "Anconeus muscle.l",
@@ -197,7 +197,7 @@
     "role": null,
     "vertices": 723,
     "indices": 4326,
-    "offset": 335148
+    "offset": 508860
   },
   {
     "name": "Anconeus muscle.r",
@@ -205,7 +205,7 @@
     "role": null,
     "vertices": 723,
     "indices": 4326,
-    "offset": 350307
+    "offset": 524019
   },
   {
     "name": "Anterior belly of digastric muscle.l",
@@ -213,7 +213,7 @@
     "role": null,
     "vertices": 198,
     "indices": 1176,
-    "offset": 365466
+    "offset": 539178
   },
   {
     "name": "Anterior belly of digastric muscle.r",
@@ -221,7 +221,7 @@
     "role": null,
     "vertices": 198,
     "indices": 1176,
-    "offset": 369600
+    "offset": 543312
   },
   {
     "name": "Anterior cells of ethmoid bone.l",
@@ -229,7 +229,7 @@
     "role": null,
     "vertices": 72,
     "indices": 408,
-    "offset": 373734
+    "offset": 547446
   },
   {
     "name": "Anterior cells of ethmoid bone.r",
@@ -237,24 +237,24 @@
     "role": null,
     "vertices": 72,
     "indices": 408,
-    "offset": 375198
+    "offset": 548910
   },
   {
     "name": "Descending part of trapezius muscle.l",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 899,
-    "indices": 5394,
-    "offset": 376662,
+    "vertices": 2298,
+    "indices": 13788,
+    "offset": 550374,
     "sourceName": "Ascending part of trapezius muscle.l"
   },
   {
     "name": "Descending part of trapezius muscle.r",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 899,
-    "indices": 5394,
-    "offset": 395541,
+    "vertices": 2298,
+    "indices": 13788,
+    "offset": 598632,
     "sourceName": "Ascending part of trapezius muscle.r"
   },
   {
@@ -263,7 +263,7 @@
     "role": null,
     "vertices": 929,
     "indices": 5520,
-    "offset": 414420
+    "offset": 646890
   },
   {
     "name": "Axis (C2)",
@@ -271,7 +271,7 @@
     "role": null,
     "vertices": 937,
     "indices": 5616,
-    "offset": 433821
+    "offset": 666291
   },
   {
     "name": "Body of sternum",
@@ -279,39 +279,39 @@
     "role": null,
     "vertices": 907,
     "indices": 5400,
-    "offset": 453486
+    "offset": 685956
   },
   {
     "name": "Brachialis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 472449
+    "vertices": 1741,
+    "indices": 10434,
+    "offset": 704919
   },
   {
     "name": "Brachialis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 491346
+    "vertices": 1741,
+    "indices": 10434,
+    "offset": 741456
   },
   {
     "name": "Brachioradialis muscle.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 510243
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 777993
   },
   {
     "name": "Brachioradialis muscle.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 529161
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 841011
   },
   {
     "name": "Bucinator.l",
@@ -319,7 +319,7 @@
     "role": null,
     "vertices": 444,
     "indices": 2652,
-    "offset": 548079
+    "offset": 904029
   },
   {
     "name": "Bucinator.r",
@@ -327,23 +327,23 @@
     "role": null,
     "vertices": 444,
     "indices": 2652,
-    "offset": 557379
+    "offset": 913329
   },
   {
     "name": "Calcaneal tendon.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 911,
-    "indices": 5448,
-    "offset": 566679
+    "vertices": 2191,
+    "indices": 13131,
+    "offset": 922629
   },
   {
     "name": "Calcaneal tendon.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 911,
-    "indices": 5448,
-    "offset": 585774
+    "vertices": 2191,
+    "indices": 13131,
+    "offset": 968610
   },
   {
     "name": "Calcaneus.l",
@@ -351,7 +351,7 @@
     "role": null,
     "vertices": 726,
     "indices": 4344,
-    "offset": 604869
+    "offset": 1014591
   },
   {
     "name": "Calcaneus.r",
@@ -359,7 +359,7 @@
     "role": null,
     "vertices": 726,
     "indices": 4344,
-    "offset": 620091
+    "offset": 1029813
   },
   {
     "name": "Capitate bone.l",
@@ -367,7 +367,7 @@
     "role": null,
     "vertices": 238,
     "indices": 1416,
-    "offset": 635313
+    "offset": 1045035
   },
   {
     "name": "Capitate bone.r",
@@ -375,7 +375,7 @@
     "role": null,
     "vertices": 238,
     "indices": 1416,
-    "offset": 640287
+    "offset": 1050009
   },
   {
     "name": "Clavicle.l",
@@ -383,7 +383,7 @@
     "role": null,
     "vertices": 789,
     "indices": 4650,
-    "offset": 645261
+    "offset": 1054983
   },
   {
     "name": "Clavicle.r",
@@ -391,7 +391,7 @@
     "role": null,
     "vertices": 789,
     "indices": 4650,
-    "offset": 661662
+    "offset": 1071384
   },
   {
     "name": "Clavicular head of pectoralis major muscle.l",
@@ -399,7 +399,7 @@
     "role": "chest",
     "vertices": 425,
     "indices": 2550,
-    "offset": 678063
+    "offset": 1087785
   },
   {
     "name": "Clavicular head of pectoralis major muscle.r",
@@ -407,23 +407,23 @@
     "role": "chest",
     "vertices": 425,
     "indices": 2550,
-    "offset": 686988
+    "offset": 1096710
   },
   {
     "name": "Clavicular part of deltoid muscle.l",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 695913
+    "vertices": 1453,
+    "indices": 8706,
+    "offset": 1105635
   },
   {
     "name": "Clavicular part of deltoid muscle.r",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 714831
+    "vertices": 1453,
+    "indices": 8706,
+    "offset": 1136124
   },
   {
     "name": "Coccyx",
@@ -431,7 +431,7 @@
     "role": null,
     "vertices": 589,
     "indices": 3498,
-    "offset": 733749
+    "offset": 1166613
   },
   {
     "name": "Coracobrachialis muscle.l",
@@ -439,7 +439,7 @@
     "role": null,
     "vertices": 582,
     "indices": 3480,
-    "offset": 746046
+    "offset": 1178910
   },
   {
     "name": "Coracobrachialis muscle.r",
@@ -447,7 +447,7 @@
     "role": null,
     "vertices": 582,
     "indices": 3480,
-    "offset": 758244
+    "offset": 1191108
   },
   {
     "name": "Corniculate cartilage.r",
@@ -455,7 +455,7 @@
     "role": null,
     "vertices": 70,
     "indices": 408,
-    "offset": 770442
+    "offset": 1203306
   },
   {
     "name": "Corniculate cartilage.l",
@@ -463,7 +463,7 @@
     "role": null,
     "vertices": 70,
     "indices": 408,
-    "offset": 771888
+    "offset": 1204752
   },
   {
     "name": "Corrugator supercilii.l",
@@ -471,7 +471,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 773334
+    "offset": 1206198
   },
   {
     "name": "Corrugator supercilii.r",
@@ -479,7 +479,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 776271
+    "offset": 1209135
   },
   {
     "name": "Costal cartilage of eighth rib.l",
@@ -487,7 +487,7 @@
     "role": null,
     "vertices": 328,
     "indices": 1956,
-    "offset": 779208
+    "offset": 1212072
   },
   {
     "name": "Costal cartilage of eighth rib.r",
@@ -495,7 +495,7 @@
     "role": null,
     "vertices": 328,
     "indices": 1956,
-    "offset": 786072
+    "offset": 1218936
   },
   {
     "name": "Costal cartilage of fifth rib.l",
@@ -503,7 +503,7 @@
     "role": null,
     "vertices": 543,
     "indices": 3246,
-    "offset": 792936
+    "offset": 1225800
   },
   {
     "name": "Costal cartilage of fifth rib.r",
@@ -511,7 +511,7 @@
     "role": null,
     "vertices": 543,
     "indices": 3246,
-    "offset": 804315
+    "offset": 1237179
   },
   {
     "name": "Costal cartilage of first rib.l",
@@ -519,7 +519,7 @@
     "role": null,
     "vertices": 233,
     "indices": 1386,
-    "offset": 815694
+    "offset": 1248558
   },
   {
     "name": "Costal cartilage of first rib.r",
@@ -527,7 +527,7 @@
     "role": null,
     "vertices": 233,
     "indices": 1386,
-    "offset": 820563
+    "offset": 1253427
   },
   {
     "name": "Costal cartilage of fourth rib.l",
@@ -535,7 +535,7 @@
     "role": null,
     "vertices": 375,
     "indices": 2238,
-    "offset": 825432
+    "offset": 1258296
   },
   {
     "name": "Costal cartilage of fourth rib.r",
@@ -543,7 +543,7 @@
     "role": null,
     "vertices": 375,
     "indices": 2238,
-    "offset": 833283
+    "offset": 1266147
   },
   {
     "name": "Costal cartilage of ninth rib.l",
@@ -551,7 +551,7 @@
     "role": null,
     "vertices": 246,
     "indices": 1464,
-    "offset": 841134
+    "offset": 1273998
   },
   {
     "name": "Costal cartilage of ninth rib.r",
@@ -559,7 +559,7 @@
     "role": null,
     "vertices": 246,
     "indices": 1464,
-    "offset": 846276
+    "offset": 1279140
   },
   {
     "name": "Costal cartilage of second rib.l",
@@ -567,7 +567,7 @@
     "role": null,
     "vertices": 286,
     "indices": 1704,
-    "offset": 851418
+    "offset": 1284282
   },
   {
     "name": "Costal cartilage of second rib.r",
@@ -575,7 +575,7 @@
     "role": null,
     "vertices": 286,
     "indices": 1704,
-    "offset": 857400
+    "offset": 1290264
   },
   {
     "name": "Costal cartilage of seventh rib.l",
@@ -583,7 +583,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 863382
+    "offset": 1296246
   },
   {
     "name": "Costal cartilage of seventh rib.r",
@@ -591,7 +591,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 882300
+    "offset": 1315164
   },
   {
     "name": "Costal cartilage of sixth rib.l",
@@ -599,7 +599,7 @@
     "role": null,
     "vertices": 679,
     "indices": 4062,
-    "offset": 901218
+    "offset": 1334082
   },
   {
     "name": "Costal cartilage of sixth rib.r",
@@ -607,7 +607,7 @@
     "role": null,
     "vertices": 679,
     "indices": 4062,
-    "offset": 915453
+    "offset": 1348317
   },
   {
     "name": "Costal cartilage of tenth rib.l",
@@ -615,7 +615,7 @@
     "role": null,
     "vertices": 191,
     "indices": 1134,
-    "offset": 929688
+    "offset": 1362552
   },
   {
     "name": "Costal cartilage of tenth rib.r",
@@ -623,7 +623,7 @@
     "role": null,
     "vertices": 191,
     "indices": 1134,
-    "offset": 933675
+    "offset": 1366539
   },
   {
     "name": "Costal cartilage of third rib.l",
@@ -631,7 +631,7 @@
     "role": null,
     "vertices": 302,
     "indices": 1800,
-    "offset": 937662
+    "offset": 1370526
   },
   {
     "name": "Costal cartilage of third rib.r",
@@ -639,7 +639,7 @@
     "role": null,
     "vertices": 302,
     "indices": 1800,
-    "offset": 943980
+    "offset": 1376844
   },
   {
     "name": "Cuboid bone.l",
@@ -647,7 +647,7 @@
     "role": null,
     "vertices": 501,
     "indices": 2994,
-    "offset": 950298
+    "offset": 1383162
   },
   {
     "name": "Cuboid bone.r",
@@ -655,7 +655,7 @@
     "role": null,
     "vertices": 501,
     "indices": 2994,
-    "offset": 960795
+    "offset": 1393659
   },
   {
     "name": "Deep head of flexor pollicis brevis.l",
@@ -663,7 +663,7 @@
     "role": null,
     "vertices": 371,
     "indices": 2238,
-    "offset": 971292
+    "offset": 1404156
   },
   {
     "name": "Deep head of flexor pollicis brevis.r",
@@ -671,7 +671,7 @@
     "role": null,
     "vertices": 371,
     "indices": 2238,
-    "offset": 979107
+    "offset": 1411971
   },
   {
     "name": "Deep head of pronator teres.l",
@@ -679,7 +679,7 @@
     "role": "forearms",
     "vertices": 559,
     "indices": 3342,
-    "offset": 986922
+    "offset": 1419786
   },
   {
     "name": "Deep head of pronator teres.r",
@@ -687,7 +687,7 @@
     "role": "forearms",
     "vertices": 559,
     "indices": 3342,
-    "offset": 998637
+    "offset": 1431501
   },
   {
     "name": "Deep part of masseter.l",
@@ -695,7 +695,7 @@
     "role": null,
     "vertices": 497,
     "indices": 2982,
-    "offset": 1010352
+    "offset": 1443216
   },
   {
     "name": "Deep part of masseter.r",
@@ -703,7 +703,7 @@
     "role": null,
     "vertices": 497,
     "indices": 2982,
-    "offset": 1020789
+    "offset": 1453653
   },
   {
     "name": "Depressor anguli oris.l",
@@ -711,7 +711,7 @@
     "role": null,
     "vertices": 299,
     "indices": 1782,
-    "offset": 1031226
+    "offset": 1464090
   },
   {
     "name": "Depressor anguli oris.r",
@@ -719,7 +719,7 @@
     "role": null,
     "vertices": 299,
     "indices": 1782,
-    "offset": 1037481
+    "offset": 1470345
   },
   {
     "name": "Depressor labii inferioris.l",
@@ -727,7 +727,7 @@
     "role": null,
     "vertices": 418,
     "indices": 2496,
-    "offset": 1043736
+    "offset": 1476600
   },
   {
     "name": "Depressor labii inferioris.r",
@@ -735,7 +735,7 @@
     "role": null,
     "vertices": 418,
     "indices": 2496,
-    "offset": 1052490
+    "offset": 1485354
   },
   {
     "name": "Depressor septi nasi.l",
@@ -743,7 +743,7 @@
     "role": null,
     "vertices": 140,
     "indices": 828,
-    "offset": 1061244
+    "offset": 1494108
   },
   {
     "name": "Depressor septi nasi.r",
@@ -751,24 +751,24 @@
     "role": null,
     "vertices": 140,
     "indices": 828,
-    "offset": 1064160
+    "offset": 1497024
   },
   {
     "name": "Ascending part of trapezius muscle.l",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 1067076,
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 1499940,
     "sourceName": "Descending part of trapezius muscle.l"
   },
   {
     "name": "Ascending part of trapezius muscle.r",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 1085940,
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 1562904,
     "sourceName": "Descending part of trapezius muscle.r"
   },
   {
@@ -777,7 +777,7 @@
     "role": null,
     "vertices": 120,
     "indices": 708,
-    "offset": 1104804
+    "offset": 1625868
   },
   {
     "name": "Distal phalanx of fifth finger of foot.r",
@@ -785,7 +785,7 @@
     "role": null,
     "vertices": 120,
     "indices": 708,
-    "offset": 1107300
+    "offset": 1628364
   },
   {
     "name": "Distal phalanx of fifth finger of hand.l",
@@ -793,7 +793,7 @@
     "role": null,
     "vertices": 98,
     "indices": 576,
-    "offset": 1109796
+    "offset": 1630860
   },
   {
     "name": "Distal phalanx of fifth finger of hand.r",
@@ -801,7 +801,7 @@
     "role": null,
     "vertices": 98,
     "indices": 576,
-    "offset": 1111830
+    "offset": 1632894
   },
   {
     "name": "Distal phalanx of first finger of foot.l",
@@ -809,7 +809,7 @@
     "role": null,
     "vertices": 235,
     "indices": 1398,
-    "offset": 1113864
+    "offset": 1634928
   },
   {
     "name": "Distal phalanx of first finger of foot.r",
@@ -817,7 +817,7 @@
     "role": null,
     "vertices": 235,
     "indices": 1398,
-    "offset": 1118775
+    "offset": 1639839
   },
   {
     "name": "Distal phalanx of first finger of hand.l",
@@ -825,7 +825,7 @@
     "role": null,
     "vertices": 113,
     "indices": 666,
-    "offset": 1123686
+    "offset": 1644750
   },
   {
     "name": "Distal phalanx of first finger of hand.r",
@@ -833,7 +833,7 @@
     "role": null,
     "vertices": 113,
     "indices": 666,
-    "offset": 1126035
+    "offset": 1647099
   },
   {
     "name": "Distal phalanx of fourth finger of foot.l",
@@ -841,7 +841,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 1128384
+    "offset": 1649448
   },
   {
     "name": "Distal phalanx of fourth finger of foot.r",
@@ -849,7 +849,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 1131321
+    "offset": 1652385
   },
   {
     "name": "Distal phalanx of fourth finger of hand.l",
@@ -857,7 +857,7 @@
     "role": null,
     "vertices": 69,
     "indices": 402,
-    "offset": 1134258
+    "offset": 1655322
   },
   {
     "name": "Distal phalanx of fourth finger of hand.r",
@@ -865,7 +865,7 @@
     "role": null,
     "vertices": 69,
     "indices": 402,
-    "offset": 1135683
+    "offset": 1656747
   },
   {
     "name": "Distal phalanx of second finger of foot.l",
@@ -873,7 +873,7 @@
     "role": null,
     "vertices": 120,
     "indices": 708,
-    "offset": 1137108
+    "offset": 1658172
   },
   {
     "name": "Distal phalanx of second finger of foot.r",
@@ -881,7 +881,7 @@
     "role": null,
     "vertices": 120,
     "indices": 708,
-    "offset": 1139604
+    "offset": 1660668
   },
   {
     "name": "Distal phalanx of second finger of hand.l",
@@ -889,7 +889,7 @@
     "role": null,
     "vertices": 127,
     "indices": 750,
-    "offset": 1142100
+    "offset": 1663164
   },
   {
     "name": "Distal phalanx of second finger of hand.r",
@@ -897,7 +897,7 @@
     "role": null,
     "vertices": 127,
     "indices": 750,
-    "offset": 1144743
+    "offset": 1665807
   },
   {
     "name": "Distal phalanx of third finger of foot.l",
@@ -905,7 +905,7 @@
     "role": null,
     "vertices": 161,
     "indices": 954,
-    "offset": 1147386
+    "offset": 1668450
   },
   {
     "name": "Distal phalanx of third finger of foot.r",
@@ -913,7 +913,7 @@
     "role": null,
     "vertices": 161,
     "indices": 954,
-    "offset": 1150743
+    "offset": 1671807
   },
   {
     "name": "Distal phalanx of third finger of hand.l",
@@ -921,7 +921,7 @@
     "role": null,
     "vertices": 98,
     "indices": 576,
-    "offset": 1154100
+    "offset": 1675164
   },
   {
     "name": "Distal phalanx of third finger of hand.r",
@@ -929,23 +929,23 @@
     "role": null,
     "vertices": 98,
     "indices": 576,
-    "offset": 1156134
+    "offset": 1677198
   },
   {
     "name": "Dorsal interossei muscles of foot.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1158168
+    "vertices": 975,
+    "indices": 5838,
+    "offset": 1679232
   },
   {
     "name": "Dorsal interossei muscles of foot.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1177086
+    "vertices": 975,
+    "indices": 5838,
+    "offset": 1699683
   },
   {
     "name": "Dorsal interossei muscles of hand.l",
@@ -953,7 +953,7 @@
     "role": null,
     "vertices": 690,
     "indices": 4092,
-    "offset": 1196004
+    "offset": 1720134
   },
   {
     "name": "Dorsal interossei muscles of hand.r",
@@ -961,7 +961,7 @@
     "role": null,
     "vertices": 690,
     "indices": 4092,
-    "offset": 1210398
+    "offset": 1734528
   },
   {
     "name": "Dorsal parts of lateral intertransversarii lumborum muscles.l",
@@ -969,7 +969,7 @@
     "role": null,
     "vertices": 362,
     "indices": 2160,
-    "offset": 1224792
+    "offset": 1748922
   },
   {
     "name": "Dorsal parts of lateral intertransversarii lumborum muscles.r",
@@ -977,7 +977,7 @@
     "role": null,
     "vertices": 362,
     "indices": 2160,
-    "offset": 1232370
+    "offset": 1756500
   },
   {
     "name": "Eighth rib.l",
@@ -985,7 +985,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1239948
+    "offset": 1764078
   },
   {
     "name": "Eighth rib.r",
@@ -993,7 +993,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1258887
+    "offset": 1783017
   },
   {
     "name": "Eleventh rib.l",
@@ -1001,7 +1001,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 1277826
+    "offset": 1801956
   },
   {
     "name": "Eleventh rib.r",
@@ -1009,23 +1009,23 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 1296744
+    "offset": 1820874
   },
   {
     "name": "Epicranial aponeurosis.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 1203,
-    "indices": 7242,
-    "offset": 1315662
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 1839792
   },
   {
     "name": "Epicranial aponeurosis.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 1203,
-    "indices": 7242,
-    "offset": 1340973
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 1902756
   },
   {
     "name": "Ethmoid bone",
@@ -1033,103 +1033,103 @@
     "role": null,
     "vertices": 1005,
     "indices": 6027,
-    "offset": 1366284
+    "offset": 1965720
   },
   {
     "name": "Extensor carpi radialis brevis.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 1387383
+    "vertices": 1573,
+    "indices": 9426,
+    "offset": 1986819
   },
   {
     "name": "Extensor carpi radialis brevis.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 1406280
+    "vertices": 1573,
+    "indices": 9426,
+    "offset": 2019828
   },
   {
     "name": "Extensor carpi radialis longus.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 1425177
+    "vertices": 1857,
+    "indices": 11118,
+    "offset": 2052837
   },
   {
     "name": "Extensor carpi radialis longus.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 1444113
+    "vertices": 1857,
+    "indices": 11118,
+    "offset": 2091786
   },
   {
     "name": "Extensor digiti minimi.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1463049
+    "vertices": 1078,
+    "indices": 6456,
+    "offset": 2130735
   },
   {
     "name": "Extensor digiti minimi.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1481967
+    "vertices": 1078,
+    "indices": 6456,
+    "offset": 2153349
   },
   {
     "name": "Extensor digitorum brevis.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 1500885
+    "vertices": 1596,
+    "indices": 9552,
+    "offset": 2175963
   },
   {
     "name": "Extensor digitorum brevis.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 1519821
+    "vertices": 1596,
+    "indices": 9552,
+    "offset": 2209431
   },
   {
     "name": "Extensor digitorum longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 906,
-    "indices": 5397,
-    "offset": 1538757
+    "vertices": 1597,
+    "indices": 9528,
+    "offset": 2242899
   },
   {
     "name": "Extensor digitorum longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 906,
-    "indices": 5397,
-    "offset": 1557705
+    "vertices": 1597,
+    "indices": 9528,
+    "offset": 2276328
   },
   {
     "name": "Extensor digitorum.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 895,
-    "indices": 5394,
-    "offset": 1576653
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 2309757
   },
   {
     "name": "Extensor digitorum.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 895,
-    "indices": 5394,
-    "offset": 1595496
+    "vertices": 2996,
+    "indices": 18000,
+    "offset": 2372721
   },
   {
     "name": "Extensor hallucis brevis.l",
@@ -1137,7 +1137,7 @@
     "role": null,
     "vertices": 561,
     "indices": 3354,
-    "offset": 1614339
+    "offset": 2435685
   },
   {
     "name": "Extensor hallucis brevis.r",
@@ -1145,23 +1145,23 @@
     "role": null,
     "vertices": 561,
     "indices": 3354,
-    "offset": 1626096
+    "offset": 2447442
   },
   {
     "name": "Extensor hallucis longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1637853
+    "vertices": 1183,
+    "indices": 7086,
+    "offset": 2459199
   },
   {
     "name": "Extensor hallucis longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 1656771
+    "vertices": 1183,
+    "indices": 7086,
+    "offset": 2484018
   },
   {
     "name": "Extensor indicis.l",
@@ -1169,7 +1169,7 @@
     "role": "forearms",
     "vertices": 573,
     "indices": 3426,
-    "offset": 1675689
+    "offset": 2508837
   },
   {
     "name": "Extensor indicis.r",
@@ -1177,7 +1177,7 @@
     "role": "forearms",
     "vertices": 573,
     "indices": 3426,
-    "offset": 1687698
+    "offset": 2520846
   },
   {
     "name": "Extensor pollicis brevis.l",
@@ -1185,7 +1185,7 @@
     "role": "forearms",
     "vertices": 590,
     "indices": 3528,
-    "offset": 1699707
+    "offset": 2532855
   },
   {
     "name": "Extensor pollicis brevis.r",
@@ -1193,7 +1193,7 @@
     "role": "forearms",
     "vertices": 590,
     "indices": 3528,
-    "offset": 1712073
+    "offset": 2545221
   },
   {
     "name": "Extensor pollicis longus.l",
@@ -1201,7 +1201,7 @@
     "role": "forearms",
     "vertices": 803,
     "indices": 4806,
-    "offset": 1724439
+    "offset": 2557587
   },
   {
     "name": "Extensor pollicis longus.r",
@@ -1209,23 +1209,23 @@
     "role": "forearms",
     "vertices": 803,
     "indices": 4806,
-    "offset": 1741278
+    "offset": 2574426
   },
   {
     "name": "Extensor retinaculum of wrist.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 93,
-    "indices": 438,
-    "offset": 1758117
+    "vertices": 186,
+    "indices": 1104,
+    "offset": 2591265
   },
   {
     "name": "Extensor retinaculum of wrist.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 93,
-    "indices": 438,
-    "offset": 1759830
+    "vertices": 186,
+    "indices": 1104,
+    "offset": 2595147
   },
   {
     "name": "Femur.l",
@@ -1233,7 +1233,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1761543
+    "offset": 2599029
   },
   {
     "name": "Femur.r",
@@ -1241,7 +1241,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1780482
+    "offset": 2617968
   },
   {
     "name": "Fibula.l",
@@ -1249,7 +1249,7 @@
     "role": null,
     "vertices": 653,
     "indices": 3792,
-    "offset": 1799421
+    "offset": 2636907
   },
   {
     "name": "Fibula.r",
@@ -1257,39 +1257,39 @@
     "role": null,
     "vertices": 653,
     "indices": 3792,
-    "offset": 1812882
+    "offset": 2650368
   },
   {
     "name": "Fibularis brevis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 1826343
+    "vertices": 1723,
+    "indices": 10338,
+    "offset": 2663829
   },
   {
     "name": "Fibularis brevis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 1845243
+    "vertices": 1723,
+    "indices": 10338,
+    "offset": 2700012
   },
   {
     "name": "Fibularis longus muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 878,
-    "indices": 5400,
-    "offset": 1864143
+    "vertices": 2739,
+    "indices": 16566,
+    "offset": 2736195
   },
   {
     "name": "Fibularis longus muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 878,
-    "indices": 5400,
-    "offset": 1882845
+    "vertices": 2739,
+    "indices": 16566,
+    "offset": 2793978
   },
   {
     "name": "Fibularis tertius muscle.l",
@@ -1297,7 +1297,7 @@
     "role": null,
     "vertices": 294,
     "indices": 1758,
-    "offset": 1901547
+    "offset": 2851761
   },
   {
     "name": "Fibularis tertius muscle.r",
@@ -1305,7 +1305,7 @@
     "role": null,
     "vertices": 294,
     "indices": 1758,
-    "offset": 1907709
+    "offset": 2857923
   },
   {
     "name": "Fifth metacarpal bone.l",
@@ -1313,7 +1313,7 @@
     "role": null,
     "vertices": 258,
     "indices": 1536,
-    "offset": 1913871
+    "offset": 2864085
   },
   {
     "name": "Fifth metacarpal bone.r",
@@ -1321,7 +1321,7 @@
     "role": null,
     "vertices": 258,
     "indices": 1536,
-    "offset": 1919265
+    "offset": 2869479
   },
   {
     "name": "Fifth metatarsal bone.l",
@@ -1329,7 +1329,7 @@
     "role": null,
     "vertices": 449,
     "indices": 2682,
-    "offset": 1924659
+    "offset": 2874873
   },
   {
     "name": "Fifth metatarsal bone.r",
@@ -1337,7 +1337,7 @@
     "role": null,
     "vertices": 449,
     "indices": 2682,
-    "offset": 1934064
+    "offset": 2884278
   },
   {
     "name": "Fifth rib.l",
@@ -1345,7 +1345,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1943469
+    "offset": 2893683
   },
   {
     "name": "Fifth rib.r",
@@ -1353,7 +1353,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 1962408
+    "offset": 2912622
   },
   {
     "name": "First metacarpal bone.l",
@@ -1361,7 +1361,7 @@
     "role": null,
     "vertices": 343,
     "indices": 2046,
-    "offset": 1981347
+    "offset": 2931561
   },
   {
     "name": "First metacarpal bone.r",
@@ -1369,7 +1369,7 @@
     "role": null,
     "vertices": 343,
     "indices": 2046,
-    "offset": 1988526
+    "offset": 2938740
   },
   {
     "name": "First metatarsal bone.l",
@@ -1377,7 +1377,7 @@
     "role": null,
     "vertices": 546,
     "indices": 3264,
-    "offset": 1995705
+    "offset": 2945919
   },
   {
     "name": "First metatarsal bone.r",
@@ -1385,7 +1385,7 @@
     "role": null,
     "vertices": 546,
     "indices": 3264,
-    "offset": 2007147
+    "offset": 2957361
   },
   {
     "name": "First rib.l",
@@ -1393,7 +1393,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 2018589
+    "offset": 2968803
   },
   {
     "name": "First rib.r",
@@ -1401,7 +1401,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 2037507
+    "offset": 2987721
   },
   {
     "name": "Flexor carpi radialis.l",
@@ -1409,7 +1409,7 @@
     "role": "forearms",
     "vertices": 835,
     "indices": 4998,
-    "offset": 2056425
+    "offset": 3006639
   },
   {
     "name": "Flexor carpi radialis.r",
@@ -1417,7 +1417,7 @@
     "role": "forearms",
     "vertices": 835,
     "indices": 4998,
-    "offset": 2073936
+    "offset": 3024150
   },
   {
     "name": "Flexor digiti minimi of foot.l",
@@ -1425,7 +1425,7 @@
     "role": null,
     "vertices": 230,
     "indices": 1392,
-    "offset": 2091447
+    "offset": 3041661
   },
   {
     "name": "Flexor digiti minimi of foot.r",
@@ -1433,7 +1433,7 @@
     "role": null,
     "vertices": 230,
     "indices": 1392,
-    "offset": 2096301
+    "offset": 3046515
   },
   {
     "name": "Flexor digiti minimi of hand.l",
@@ -1441,7 +1441,7 @@
     "role": null,
     "vertices": 156,
     "indices": 924,
-    "offset": 2101155
+    "offset": 3051369
   },
   {
     "name": "Flexor digiti minimi of hand.r",
@@ -1449,71 +1449,71 @@
     "role": null,
     "vertices": 156,
     "indices": 924,
-    "offset": 2104407
+    "offset": 3054621
   },
   {
     "name": "Flexor digitorum brevis.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2107659
+    "vertices": 1610,
+    "indices": 9672,
+    "offset": 3057873
   },
   {
     "name": "Flexor digitorum brevis.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2126541
+    "vertices": 1610,
+    "indices": 9672,
+    "offset": 3091707
   },
   {
     "name": "Flexor digitorum longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2145423
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 3125541
   },
   {
     "name": "Flexor digitorum longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2164341
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 3188559
   },
   {
     "name": "Flexor digitorum profundus.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 2183259
+    "vertices": 3004,
+    "indices": 18000,
+    "offset": 3251577
   },
   {
     "name": "Flexor digitorum profundus.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 2202195
+    "vertices": 3004,
+    "indices": 18000,
+    "offset": 3314613
   },
   {
     "name": "Flexor hallucis longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2221131
+    "vertices": 2941,
+    "indices": 17634,
+    "offset": 3377649
   },
   {
     "name": "Flexor hallucis longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2240049
+    "vertices": 2941,
+    "indices": 17634,
+    "offset": 3439386
   },
   {
     "name": "Flexor pollicis longus.l",
@@ -1521,7 +1521,7 @@
     "role": "forearms",
     "vertices": 833,
     "indices": 4998,
-    "offset": 2258967
+    "offset": 3501123
   },
   {
     "name": "Flexor pollicis longus.r",
@@ -1529,39 +1529,39 @@
     "role": "forearms",
     "vertices": 833,
     "indices": 4998,
-    "offset": 2276460
+    "offset": 3518616
   },
   {
     "name": "Flexor retinaculum of ankle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 175,
-    "indices": 894,
-    "offset": 2293953
+    "vertices": 350,
+    "indices": 2088,
+    "offset": 3536109
   },
   {
     "name": "Flexor retinaculum of ankle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 175,
-    "indices": 894,
-    "offset": 2297316
+    "vertices": 350,
+    "indices": 2088,
+    "offset": 3543435
   },
   {
     "name": "Flexor retinaculum of wrist.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 132,
-    "indices": 645,
-    "offset": 2300679
+    "vertices": 264,
+    "indices": 1572,
+    "offset": 3550761
   },
   {
     "name": "Flexor retinaculum of wrist.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 132,
-    "indices": 645,
-    "offset": 2303157
+    "vertices": 264,
+    "indices": 1572,
+    "offset": 3556281
   },
   {
     "name": "Fourth metacarpal bone.l",
@@ -1569,7 +1569,7 @@
     "role": null,
     "vertices": 323,
     "indices": 1926,
-    "offset": 2305635
+    "offset": 3561801
   },
   {
     "name": "Fourth metacarpal bone.r",
@@ -1577,7 +1577,7 @@
     "role": null,
     "vertices": 323,
     "indices": 1926,
-    "offset": 2312394
+    "offset": 3568560
   },
   {
     "name": "Fourth metatarsal bone.l",
@@ -1585,7 +1585,7 @@
     "role": null,
     "vertices": 419,
     "indices": 2502,
-    "offset": 2319153
+    "offset": 3575319
   },
   {
     "name": "Fourth metatarsal bone.r",
@@ -1593,7 +1593,7 @@
     "role": null,
     "vertices": 419,
     "indices": 2502,
-    "offset": 2327928
+    "offset": 3584094
   },
   {
     "name": "Fourth rib.l",
@@ -1601,7 +1601,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 2336703
+    "offset": 3592869
   },
   {
     "name": "Fourth rib.r",
@@ -1609,7 +1609,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 2355621
+    "offset": 3611787
   },
   {
     "name": "Frontal bone",
@@ -1617,23 +1617,23 @@
     "role": null,
     "vertices": 909,
     "indices": 5412,
-    "offset": 2374539
+    "offset": 3630705
   },
   {
     "name": "Frontalis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 2393544
+    "vertices": 2933,
+    "indices": 17622,
+    "offset": 3649710
   },
   {
     "name": "Frontalis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 2412408
+    "vertices": 2933,
+    "indices": 17622,
+    "offset": 3711351
   },
   {
     "name": "Geniohyoid muscle.l",
@@ -1641,7 +1641,7 @@
     "role": null,
     "vertices": 267,
     "indices": 1590,
-    "offset": 2431272
+    "offset": 3772992
   },
   {
     "name": "Geniohyoid muscle.r",
@@ -1649,71 +1649,71 @@
     "role": null,
     "vertices": 267,
     "indices": 1590,
-    "offset": 2436855
+    "offset": 3778575
   },
   {
     "name": "Gluteus maximus muscle.l",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 2442438
+    "vertices": 1663,
+    "indices": 9978,
+    "offset": 3784158
   },
   {
     "name": "Gluteus maximus muscle.r",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 2461338
+    "vertices": 1663,
+    "indices": 9978,
+    "offset": 3819081
   },
   {
     "name": "Gluteus medius muscle.l",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2480238
+    "vertices": 2590,
+    "indices": 15528,
+    "offset": 3854004
   },
   {
     "name": "Gluteus medius muscle.r",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2499156
+    "vertices": 2590,
+    "indices": 15528,
+    "offset": 3908370
   },
   {
     "name": "Gluteus minimus muscle.l",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 2518074
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 3962736
   },
   {
     "name": "Gluteus minimus muscle.r",
     "kind": "muscle",
     "role": "glutes",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 2536971
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 4025754
   },
   {
     "name": "Gracilis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2555868
+    "vertices": 2404,
+    "indices": 14436,
+    "offset": 4088772
   },
   {
     "name": "Gracilis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2574750
+    "vertices": 2404,
+    "indices": 14436,
+    "offset": 4139280
   },
   {
     "name": "Hamate bone.l",
@@ -1721,7 +1721,7 @@
     "role": null,
     "vertices": 270,
     "indices": 1608,
-    "offset": 2593632
+    "offset": 4189788
   },
   {
     "name": "Hamate bone.r",
@@ -1729,7 +1729,7 @@
     "role": null,
     "vertices": 270,
     "indices": 1608,
-    "offset": 2599278
+    "offset": 4195434
   },
   {
     "name": "Hip bone.l",
@@ -1737,7 +1737,7 @@
     "role": null,
     "vertices": 944,
     "indices": 5664,
-    "offset": 2604924
+    "offset": 4201080
   },
   {
     "name": "Hip bone.r",
@@ -1745,7 +1745,7 @@
     "role": null,
     "vertices": 944,
     "indices": 5664,
-    "offset": 2624748
+    "offset": 4220904
   },
   {
     "name": "Humeral head of extensor carpi ulnaris.l",
@@ -1753,7 +1753,7 @@
     "role": "forearms",
     "vertices": 411,
     "indices": 2490,
-    "offset": 2644572
+    "offset": 4240728
   },
   {
     "name": "Humeral head of extensor carpi ulnaris.r",
@@ -1761,39 +1761,39 @@
     "role": "forearms",
     "vertices": 411,
     "indices": 2490,
-    "offset": 2653251
+    "offset": 4249407
   },
   {
     "name": "Humeral head of flexor carpi ulnaris.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2661930
+    "vertices": 1954,
+    "indices": 11736,
+    "offset": 4258086
   },
   {
     "name": "Humeral head of flexor carpi ulnaris.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 2680812
+    "vertices": 1954,
+    "indices": 11736,
+    "offset": 4299144
   },
   {
     "name": "Humero-ulnar head of flexor digitorum superficialis.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2699694
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 4340202
   },
   {
     "name": "Humero-ulnar head of flexor digitorum superficialis.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2718612
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 4403220
   },
   {
     "name": "Humerus.l",
@@ -1801,7 +1801,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5400,
-    "offset": 2737530
+    "offset": 4466238
   },
   {
     "name": "Humerus.r",
@@ -1809,7 +1809,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5400,
-    "offset": 2756457
+    "offset": 4485165
   },
   {
     "name": "Hyoid bone",
@@ -1817,103 +1817,103 @@
     "role": null,
     "vertices": 664,
     "indices": 3972,
-    "offset": 2775384
+    "offset": 4504092
   },
   {
     "name": "Iliacus muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2789304
+    "vertices": 2179,
+    "indices": 13062,
+    "offset": 4518012
   },
   {
     "name": "Iliacus muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2808222
+    "vertices": 2179,
+    "indices": 13062,
+    "offset": 4563747
   },
   {
     "name": "Iliocostalis colli muscle",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2827140
+    "vertices": 1027,
+    "indices": 6150,
+    "offset": 4609482
   },
   {
     "name": "Iliocostalis colli muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2846058
+    "vertices": 1027,
+    "indices": 6150,
+    "offset": 4631025
   },
   {
     "name": "Iliocostalis lumborum muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 2864976
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 4652568
   },
   {
     "name": "Iliocostalis lumborum muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 2883876
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 4715568
   },
   {
     "name": "Iliocostalis thoracis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2902776
+    "vertices": 2888,
+    "indices": 17316,
+    "offset": 4778568
   },
   {
     "name": "Iliocostalis thoracis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 2921694
+    "vertices": 2888,
+    "indices": 17316,
+    "offset": 4839192
   },
   {
     "name": "Iliotibial tract.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 2908,
-    "indices": 17496,
-    "offset": 2940612
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 4899816
   },
   {
     "name": "Iliotibial tract.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 2908,
-    "indices": 17496,
-    "offset": 3001776
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 4962744
   },
   {
     "name": "Inferior extensor retinaculum of ankle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 80,
-    "indices": 357,
-    "offset": 3062940
+    "vertices": 160,
+    "indices": 948,
+    "offset": 5025672
   },
   {
     "name": "Inferior extensor retinaculum of ankle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 80,
-    "indices": 357,
-    "offset": 3064374
+    "vertices": 160,
+    "indices": 948,
+    "offset": 5029008
   },
   {
     "name": "Inferior fibular retinaculum.l",
@@ -1921,7 +1921,7 @@
     "role": null,
     "vertices": 32,
     "indices": 105,
-    "offset": 3065808
+    "offset": 5032344
   },
   {
     "name": "Inferior fibular retinaculum.r",
@@ -1929,7 +1929,7 @@
     "role": null,
     "vertices": 32,
     "indices": 105,
-    "offset": 3066306
+    "offset": 5032842
   },
   {
     "name": "Inferior gemellus muscle.l",
@@ -1937,7 +1937,7 @@
     "role": null,
     "vertices": 490,
     "indices": 2928,
-    "offset": 3066804
+    "offset": 5033340
   },
   {
     "name": "Inferior gemellus muscle.r",
@@ -1945,7 +1945,7 @@
     "role": null,
     "vertices": 490,
     "indices": 2928,
-    "offset": 3077070
+    "offset": 5043606
   },
   {
     "name": "Inferior head of lateral pterygoid muscle.l",
@@ -1953,7 +1953,7 @@
     "role": null,
     "vertices": 164,
     "indices": 978,
-    "offset": 3087336
+    "offset": 5053872
   },
   {
     "name": "Inferior head of lateral pterygoid muscle.r",
@@ -1961,7 +1961,7 @@
     "role": null,
     "vertices": 164,
     "indices": 978,
-    "offset": 3090768
+    "offset": 5057304
   },
   {
     "name": "Inferior nasal concha bone.l",
@@ -1969,7 +1969,7 @@
     "role": null,
     "vertices": 238,
     "indices": 1428,
-    "offset": 3094200
+    "offset": 5060736
   },
   {
     "name": "Inferior nasal concha bone.r",
@@ -1977,23 +1977,23 @@
     "role": null,
     "vertices": 238,
     "indices": 1428,
-    "offset": 3099198
+    "offset": 5065734
   },
   {
     "name": "Infraspinatus muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3104196
+    "vertices": 1585,
+    "indices": 9498,
+    "offset": 5070732
   },
   {
     "name": "Infraspinatus muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3123114
+    "vertices": 1585,
+    "indices": 9498,
+    "offset": 5103993
   },
   {
     "name": "Inguinal ligament.l",
@@ -2001,7 +2001,7 @@
     "role": null,
     "vertices": 530,
     "indices": 3168,
-    "offset": 3142032
+    "offset": 5137254
   },
   {
     "name": "Inguinal ligament.r",
@@ -2009,7 +2009,7 @@
     "role": null,
     "vertices": 530,
     "indices": 3168,
-    "offset": 3153138
+    "offset": 5148360
   },
   {
     "name": "Intermediate cuneiform bone.l",
@@ -2017,7 +2017,7 @@
     "role": null,
     "vertices": 224,
     "indices": 1332,
-    "offset": 3164244
+    "offset": 5159466
   },
   {
     "name": "Intermediate cuneiform bone.r",
@@ -2025,7 +2025,7 @@
     "role": null,
     "vertices": 224,
     "indices": 1332,
-    "offset": 3168924
+    "offset": 5164146
   },
   {
     "name": "Intermediate tendon of digastric muscle.l",
@@ -2033,7 +2033,7 @@
     "role": null,
     "vertices": 116,
     "indices": 684,
-    "offset": 3173604
+    "offset": 5168826
   },
   {
     "name": "Intermediate tendon of digastric muscle.r",
@@ -2041,7 +2041,7 @@
     "role": null,
     "vertices": 116,
     "indices": 684,
-    "offset": 3176016
+    "offset": 5171238
   },
   {
     "name": "Interspinales colli muscles.l",
@@ -2049,7 +2049,7 @@
     "role": null,
     "vertices": 234,
     "indices": 1332,
-    "offset": 3178428
+    "offset": 5173650
   },
   {
     "name": "Interspinales colli muscles.r",
@@ -2057,7 +2057,7 @@
     "role": null,
     "vertices": 234,
     "indices": 1332,
-    "offset": 3183198
+    "offset": 5178420
   },
   {
     "name": "Interspinales lumborum muscles.l",
@@ -2065,7 +2065,7 @@
     "role": null,
     "vertices": 291,
     "indices": 1686,
-    "offset": 3187968
+    "offset": 5183190
   },
   {
     "name": "Interspinales lumborum muscles.r",
@@ -2073,7 +2073,7 @@
     "role": null,
     "vertices": 291,
     "indices": 1686,
-    "offset": 3193959
+    "offset": 5189181
   },
   {
     "name": "Interspinales thoracis muscles.l",
@@ -2081,7 +2081,7 @@
     "role": null,
     "vertices": 103,
     "indices": 594,
-    "offset": 3199950
+    "offset": 5195172
   },
   {
     "name": "Interspinales thoracis muscles.r",
@@ -2089,7 +2089,7 @@
     "role": null,
     "vertices": 103,
     "indices": 594,
-    "offset": 3202065
+    "offset": 5197287
   },
   {
     "name": "Lacrimal bone.l",
@@ -2097,7 +2097,7 @@
     "role": null,
     "vertices": 296,
     "indices": 1764,
-    "offset": 3204180
+    "offset": 5199402
   },
   {
     "name": "Lacrimal bone.r",
@@ -2105,7 +2105,7 @@
     "role": null,
     "vertices": 296,
     "indices": 1764,
-    "offset": 3210372
+    "offset": 5205594
   },
   {
     "name": "Lateral cuneiform bone.l",
@@ -2113,7 +2113,7 @@
     "role": null,
     "vertices": 321,
     "indices": 1914,
-    "offset": 3216564
+    "offset": 5211786
   },
   {
     "name": "Lateral cuneiform bone.r",
@@ -2121,7 +2121,7 @@
     "role": null,
     "vertices": 321,
     "indices": 1914,
-    "offset": 3223281
+    "offset": 5218503
   },
   {
     "name": "Lateral head of flexor hallucis brevis.l",
@@ -2129,7 +2129,7 @@
     "role": null,
     "vertices": 481,
     "indices": 2898,
-    "offset": 3229998
+    "offset": 5225220
   },
   {
     "name": "Lateral head of flexor hallucis brevis.r",
@@ -2137,55 +2137,55 @@
     "role": null,
     "vertices": 481,
     "indices": 2898,
-    "offset": 3240123
+    "offset": 5235345
   },
   {
     "name": "Lateral head of gastrocnemius.l",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 3250248
+    "vertices": 2454,
+    "indices": 14724,
+    "offset": 5245470
   },
   {
     "name": "Lateral head of gastrocnemius.r",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 3269148
+    "vertices": 2454,
+    "indices": 14724,
+    "offset": 5297004
   },
   {
     "name": "Lateral head of triceps brachii.l",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3288048
+    "vertices": 1816,
+    "indices": 10884,
+    "offset": 5348538
   },
   {
     "name": "Lateral head of triceps brachii.r",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3306966
+    "vertices": 1816,
+    "indices": 10884,
+    "offset": 5386650
   },
   {
     "name": "Lateral patellar retinaculum.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 9,
-    "indices": 21,
-    "offset": 3325884
+    "vertices": 76,
+    "indices": 444,
+    "offset": 5424762
   },
   {
     "name": "Lateral patellar retinaculum.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 9,
-    "indices": 21,
-    "offset": 3326007
+    "vertices": 76,
+    "indices": 444,
+    "offset": 5426334
   },
   {
     "name": "Lateral process of nasal septal cartilage.l",
@@ -2193,7 +2193,7 @@
     "role": null,
     "vertices": 174,
     "indices": 1041,
-    "offset": 3326130
+    "offset": 5427906
   },
   {
     "name": "Lateral process of nasal septal cartilage.r",
@@ -2201,23 +2201,23 @@
     "role": null,
     "vertices": 174,
     "indices": 1041,
-    "offset": 3329778
+    "offset": 5431554
   },
   {
     "name": "Latissimus dorsi muscle.l",
     "kind": "muscle",
     "role": "lats",
-    "vertices": 1300,
-    "indices": 7764,
-    "offset": 3333426
+    "vertices": 3006,
+    "indices": 18000,
+    "offset": 5435202
   },
   {
     "name": "Latissimus dorsi muscle.r",
     "kind": "muscle",
     "role": "lats",
-    "vertices": 1300,
-    "indices": 7764,
-    "offset": 3360654
+    "vertices": 3006,
+    "indices": 18000,
+    "offset": 5498256
   },
   {
     "name": "Levator anguli oris.l",
@@ -2225,7 +2225,7 @@
     "role": null,
     "vertices": 165,
     "indices": 990,
-    "offset": 3387882
+    "offset": 5561310
   },
   {
     "name": "Levator anguli oris.r",
@@ -2233,7 +2233,7 @@
     "role": null,
     "vertices": 165,
     "indices": 990,
-    "offset": 3391347
+    "offset": 5564775
   },
   {
     "name": "Levator labii superioris.l",
@@ -2241,7 +2241,7 @@
     "role": null,
     "vertices": 272,
     "indices": 1620,
-    "offset": 3394812
+    "offset": 5568240
   },
   {
     "name": "Levator labii superioris.r",
@@ -2249,7 +2249,7 @@
     "role": null,
     "vertices": 272,
     "indices": 1620,
-    "offset": 3400500
+    "offset": 5573928
   },
   {
     "name": "Levator nasolabialis.l",
@@ -2257,7 +2257,7 @@
     "role": null,
     "vertices": 88,
     "indices": 516,
-    "offset": 3406188
+    "offset": 5579616
   },
   {
     "name": "Levator nasolabialis.r",
@@ -2265,55 +2265,55 @@
     "role": null,
     "vertices": 88,
     "indices": 516,
-    "offset": 3408012
+    "offset": 5581440
   },
   {
     "name": "Levator scapulae.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3409836
+    "vertices": 1543,
+    "indices": 9246,
+    "offset": 5583264
   },
   {
     "name": "Levator scapulae.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3428754
+    "vertices": 1543,
+    "indices": 9246,
+    "offset": 5615643
   },
   {
     "name": "Levatores breves costarum.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 915,
-    "indices": 5400,
-    "offset": 3447672
+    "vertices": 1360,
+    "indices": 8070,
+    "offset": 5648022
   },
   {
     "name": "Levatores breves costarum.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 915,
-    "indices": 5400,
-    "offset": 3466707
+    "vertices": 1360,
+    "indices": 8070,
+    "offset": 5676402
   },
   {
     "name": "Levatores longi costarum.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 927,
-    "indices": 5394,
-    "offset": 3485742
+    "vertices": 2993,
+    "indices": 17790,
+    "offset": 5704782
   },
   {
     "name": "Levatores longi costarum.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 927,
-    "indices": 5394,
-    "offset": 3504873
+    "vertices": 2993,
+    "indices": 17790,
+    "offset": 5767299
   },
   {
     "name": "Linea alba",
@@ -2321,55 +2321,55 @@
     "role": null,
     "vertices": 171,
     "indices": 1014,
-    "offset": 3524004
+    "offset": 5829816
   },
   {
     "name": "Long head of biceps brachii.l",
     "kind": "muscle",
     "role": "biceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3527571
+    "vertices": 1611,
+    "indices": 9654,
+    "offset": 5833383
   },
   {
     "name": "Long head of biceps brachii.r",
     "kind": "muscle",
     "role": "biceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3546489
+    "vertices": 1611,
+    "indices": 9654,
+    "offset": 5867190
   },
   {
     "name": "Long head of biceps femoris.l",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 3565407
+    "vertices": 2994,
+    "indices": 18000,
+    "offset": 5900997
   },
   {
     "name": "Long head of biceps femoris.r",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 3584253
+    "vertices": 2994,
+    "indices": 18000,
+    "offset": 5963943
   },
   {
     "name": "Long head of triceps brachii.l",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3603099
+    "vertices": 1977,
+    "indices": 11850,
+    "offset": 6026889
   },
   {
     "name": "Long head of triceps brachii.r",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3622017
+    "vertices": 1977,
+    "indices": 11850,
+    "offset": 6068382
   },
   {
     "name": "Longissimus capitis muscle.l",
@@ -2377,7 +2377,7 @@
     "role": null,
     "vertices": 785,
     "indices": 4722,
-    "offset": 3640935
+    "offset": 6109875
   },
   {
     "name": "Longissimus capitis muscle.r",
@@ -2385,71 +2385,71 @@
     "role": null,
     "vertices": 785,
     "indices": 4722,
-    "offset": 3657444
+    "offset": 6126384
   },
   {
     "name": "Longissimus colli muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3673953
+    "vertices": 915,
+    "indices": 5478,
+    "offset": 6142893
   },
   {
     "name": "Longissimus colli muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 3692871
+    "vertices": 915,
+    "indices": 5478,
+    "offset": 6162084
   },
   {
     "name": "Longissimus thoracis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 3711789
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 6181275
   },
   {
     "name": "Longissimus thoracis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 3730617
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 6244203
   },
   {
     "name": "Longus capitis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 3749445
+    "vertices": 988,
+    "indices": 5940,
+    "offset": 6307131
   },
   {
     "name": "Longus capitis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 3768327
+    "vertices": 988,
+    "indices": 5940,
+    "offset": 6327903
   },
   {
     "name": "Longus colli muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 907,
-    "indices": 5400,
-    "offset": 3787209
+    "vertices": 3007,
+    "indices": 18000,
+    "offset": 6348675
   },
   {
     "name": "Longus colli muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 907,
-    "indices": 5400,
-    "offset": 3806172
+    "vertices": 3007,
+    "indices": 18000,
+    "offset": 6411738
   },
   {
     "name": "Lower canine.l",
@@ -2457,7 +2457,7 @@
     "role": null,
     "vertices": 640,
     "indices": 3828,
-    "offset": 3825135
+    "offset": 6474801
   },
   {
     "name": "Lower canine.r",
@@ -2465,7 +2465,7 @@
     "role": null,
     "vertices": 640,
     "indices": 3828,
-    "offset": 3838551
+    "offset": 6488217
   },
   {
     "name": "Lower first molar tooth.l",
@@ -2473,7 +2473,7 @@
     "role": null,
     "vertices": 912,
     "indices": 5436,
-    "offset": 3851967
+    "offset": 6501633
   },
   {
     "name": "Lower first molar tooth.r",
@@ -2481,7 +2481,7 @@
     "role": null,
     "vertices": 912,
     "indices": 5436,
-    "offset": 3871047
+    "offset": 6520713
   },
   {
     "name": "Lower first premolar.l",
@@ -2489,7 +2489,7 @@
     "role": null,
     "vertices": 613,
     "indices": 3666,
-    "offset": 3890127
+    "offset": 6539793
   },
   {
     "name": "Lower first premolar.r",
@@ -2497,7 +2497,7 @@
     "role": null,
     "vertices": 613,
     "indices": 3666,
-    "offset": 3902976
+    "offset": 6552642
   },
   {
     "name": "Lower lateral incisor.l",
@@ -2505,7 +2505,7 @@
     "role": null,
     "vertices": 522,
     "indices": 3120,
-    "offset": 3915825
+    "offset": 6565491
   },
   {
     "name": "Lower lateral incisor.r",
@@ -2513,7 +2513,7 @@
     "role": null,
     "vertices": 522,
     "indices": 3120,
-    "offset": 3926763
+    "offset": 6576429
   },
   {
     "name": "Lower medial incisor.r",
@@ -2521,7 +2521,7 @@
     "role": null,
     "vertices": 494,
     "indices": 2952,
-    "offset": 3937701
+    "offset": 6587367
   },
   {
     "name": "Lower medial incisor.l",
@@ -2529,7 +2529,7 @@
     "role": null,
     "vertices": 494,
     "indices": 2952,
-    "offset": 3948051
+    "offset": 6597717
   },
   {
     "name": "Lower second molar tooth.l",
@@ -2537,7 +2537,7 @@
     "role": null,
     "vertices": 840,
     "indices": 5028,
-    "offset": 3958401
+    "offset": 6608067
   },
   {
     "name": "Lower second molar tooth.r",
@@ -2545,7 +2545,7 @@
     "role": null,
     "vertices": 840,
     "indices": 5028,
-    "offset": 3976017
+    "offset": 6625683
   },
   {
     "name": "Lower second premolar.l",
@@ -2553,7 +2553,7 @@
     "role": null,
     "vertices": 592,
     "indices": 3540,
-    "offset": 3993633
+    "offset": 6643299
   },
   {
     "name": "Lower second premolar.r",
@@ -2561,7 +2561,7 @@
     "role": null,
     "vertices": 592,
     "indices": 3540,
-    "offset": 4006041
+    "offset": 6655707
   },
   {
     "name": "Lumbrical muscles of foot.l",
@@ -2569,7 +2569,7 @@
     "role": null,
     "vertices": 207,
     "indices": 1254,
-    "offset": 4018449
+    "offset": 6668115
   },
   {
     "name": "Lumbrical muscles of foot.r",
@@ -2577,7 +2577,7 @@
     "role": null,
     "vertices": 207,
     "indices": 1254,
-    "offset": 4022820
+    "offset": 6672486
   },
   {
     "name": "Lumbrical muscles of hand.l",
@@ -2585,7 +2585,7 @@
     "role": null,
     "vertices": 692,
     "indices": 4104,
-    "offset": 4027191
+    "offset": 6676857
   },
   {
     "name": "Lumbrical muscles of hand.r",
@@ -2593,7 +2593,7 @@
     "role": null,
     "vertices": 692,
     "indices": 4104,
-    "offset": 4041627
+    "offset": 6691293
   },
   {
     "name": "Lunate bone.l",
@@ -2601,7 +2601,7 @@
     "role": null,
     "vertices": 176,
     "indices": 1044,
-    "offset": 4056063
+    "offset": 6705729
   },
   {
     "name": "Lunate bone.r",
@@ -2609,7 +2609,7 @@
     "role": null,
     "vertices": 176,
     "indices": 1044,
-    "offset": 4059735
+    "offset": 6709401
   },
   {
     "name": "Major alar cartilage.l",
@@ -2617,7 +2617,7 @@
     "role": null,
     "vertices": 174,
     "indices": 1032,
-    "offset": 4063407
+    "offset": 6713073
   },
   {
     "name": "Major alar cartilage.r",
@@ -2625,7 +2625,7 @@
     "role": null,
     "vertices": 174,
     "indices": 1032,
-    "offset": 4067037
+    "offset": 6716703
   },
   {
     "name": "Mandible",
@@ -2633,7 +2633,7 @@
     "role": null,
     "vertices": 1099,
     "indices": 6780,
-    "offset": 4070667
+    "offset": 6720333
   },
   {
     "name": "Manubrium of sternum",
@@ -2641,7 +2641,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5400,
-    "offset": 4094118
+    "offset": 6743784
   },
   {
     "name": "Maxilla.l",
@@ -2649,7 +2649,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 4113063
+    "offset": 6762729
   },
   {
     "name": "Maxilla.r",
@@ -2657,7 +2657,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 4131963
+    "offset": 6781629
   },
   {
     "name": "Medial cuneiform bone.l",
@@ -2665,7 +2665,7 @@
     "role": null,
     "vertices": 498,
     "indices": 2976,
-    "offset": 4150863
+    "offset": 6800529
   },
   {
     "name": "Medial cuneiform bone.r",
@@ -2673,7 +2673,7 @@
     "role": null,
     "vertices": 498,
     "indices": 2976,
-    "offset": 4161297
+    "offset": 6810963
   },
   {
     "name": "Medial head of flexor hallucis brevis.l",
@@ -2681,7 +2681,7 @@
     "role": null,
     "vertices": 259,
     "indices": 1542,
-    "offset": 4171731
+    "offset": 6821397
   },
   {
     "name": "Medial head of flexor hallucis brevis.r",
@@ -2689,55 +2689,55 @@
     "role": null,
     "vertices": 259,
     "indices": 1542,
-    "offset": 4177146
+    "offset": 6826812
   },
   {
     "name": "Medial head of gastrocnemius.l",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 4182561
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 6832227
   },
   {
     "name": "Medial head of gastrocnemius.r",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 901,
-    "indices": 5394,
-    "offset": 4201458
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 6895245
   },
   {
     "name": "Medial head of triceps brachii.l",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4220355
+    "vertices": 1345,
+    "indices": 8058,
+    "offset": 6958263
   },
   {
     "name": "Medial head of triceps brachii.r",
     "kind": "muscle",
     "role": "triceps",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4239273
+    "vertices": 1345,
+    "indices": 8058,
+    "offset": 6986484
   },
   {
     "name": "Medial patellar retinaculum.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 11,
-    "indices": 30,
-    "offset": 4258191
+    "vertices": 94,
+    "indices": 552,
+    "offset": 7014705
   },
   {
     "name": "Medial patellar retinaculum.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 11,
-    "indices": 30,
-    "offset": 4258350
+    "vertices": 94,
+    "indices": 552,
+    "offset": 7016655
   },
   {
     "name": "Medial pterygoid muscle.l",
@@ -2745,7 +2745,7 @@
     "role": null,
     "vertices": 249,
     "indices": 1488,
-    "offset": 4258509
+    "offset": 7018605
   },
   {
     "name": "Medial pterygoid muscle.r",
@@ -2753,7 +2753,7 @@
     "role": null,
     "vertices": 249,
     "indices": 1488,
-    "offset": 4263726
+    "offset": 7023822
   },
   {
     "name": "Mentalis muscle.l",
@@ -2761,7 +2761,7 @@
     "role": null,
     "vertices": 85,
     "indices": 498,
-    "offset": 4268943
+    "offset": 7029039
   },
   {
     "name": "Mentalis muscle.r",
@@ -2769,7 +2769,7 @@
     "role": null,
     "vertices": 85,
     "indices": 498,
-    "offset": 4270704
+    "offset": 7030800
   },
   {
     "name": "Middle cells of ethmoid bone.l",
@@ -2777,7 +2777,7 @@
     "role": null,
     "vertices": 84,
     "indices": 480,
-    "offset": 4272465
+    "offset": 7032561
   },
   {
     "name": "Middle cells of ethmoid bone.r",
@@ -2785,7 +2785,7 @@
     "role": null,
     "vertices": 84,
     "indices": 480,
-    "offset": 4274181
+    "offset": 7034277
   },
   {
     "name": "Middle phalanx of fifth finger of foot.l",
@@ -2793,7 +2793,7 @@
     "role": null,
     "vertices": 110,
     "indices": 648,
-    "offset": 4275897
+    "offset": 7035993
   },
   {
     "name": "Middle phalanx of fifth finger of foot.r",
@@ -2801,7 +2801,7 @@
     "role": null,
     "vertices": 110,
     "indices": 648,
-    "offset": 4278183
+    "offset": 7038279
   },
   {
     "name": "Middle phalanx of fifth finger of hand.l",
@@ -2809,7 +2809,7 @@
     "role": null,
     "vertices": 148,
     "indices": 876,
-    "offset": 4280469
+    "offset": 7040565
   },
   {
     "name": "Middle phalanx of fifth finger of hand.r",
@@ -2817,7 +2817,7 @@
     "role": null,
     "vertices": 148,
     "indices": 876,
-    "offset": 4283553
+    "offset": 7043649
   },
   {
     "name": "Middle phalanx of fourth finger of foot.l",
@@ -2825,7 +2825,7 @@
     "role": null,
     "vertices": 226,
     "indices": 1344,
-    "offset": 4286637
+    "offset": 7046733
   },
   {
     "name": "Middle phalanx of fourth finger of foot.r",
@@ -2833,7 +2833,7 @@
     "role": null,
     "vertices": 226,
     "indices": 1344,
-    "offset": 4291359
+    "offset": 7051455
   },
   {
     "name": "Middle phalanx of fourth finger of hand.l",
@@ -2841,7 +2841,7 @@
     "role": null,
     "vertices": 225,
     "indices": 1338,
-    "offset": 4296081
+    "offset": 7056177
   },
   {
     "name": "Middle phalanx of fourth finger of hand.r",
@@ -2849,7 +2849,7 @@
     "role": null,
     "vertices": 225,
     "indices": 1338,
-    "offset": 4300782
+    "offset": 7060878
   },
   {
     "name": "Middle phalanx of second finger of foot.l",
@@ -2857,7 +2857,7 @@
     "role": null,
     "vertices": 193,
     "indices": 1146,
-    "offset": 4305483
+    "offset": 7065579
   },
   {
     "name": "Middle phalanx of second finger of foot.r",
@@ -2865,7 +2865,7 @@
     "role": null,
     "vertices": 193,
     "indices": 1146,
-    "offset": 4309512
+    "offset": 7069608
   },
   {
     "name": "Middle phalanx of second finger of hand.l",
@@ -2873,7 +2873,7 @@
     "role": null,
     "vertices": 159,
     "indices": 942,
-    "offset": 4313541
+    "offset": 7073637
   },
   {
     "name": "Middle phalanx of second finger of hand.r",
@@ -2881,7 +2881,7 @@
     "role": null,
     "vertices": 159,
     "indices": 942,
-    "offset": 4316856
+    "offset": 7076952
   },
   {
     "name": "Middle phalanx of third finger of foot.l",
@@ -2889,7 +2889,7 @@
     "role": null,
     "vertices": 202,
     "indices": 1200,
-    "offset": 4320171
+    "offset": 7080267
   },
   {
     "name": "Middle phalanx of third finger of foot.r",
@@ -2897,7 +2897,7 @@
     "role": null,
     "vertices": 202,
     "indices": 1200,
-    "offset": 4324389
+    "offset": 7084485
   },
   {
     "name": "Middle phalanx of third finger of hand.l",
@@ -2905,7 +2905,7 @@
     "role": null,
     "vertices": 182,
     "indices": 1080,
-    "offset": 4328607
+    "offset": 7088703
   },
   {
     "name": "Middle phalanx of third finger of hand.r",
@@ -2913,7 +2913,7 @@
     "role": null,
     "vertices": 182,
     "indices": 1080,
-    "offset": 4332405
+    "offset": 7092501
   },
   {
     "name": "Multifidus colli muscle.l",
@@ -2921,7 +2921,7 @@
     "role": null,
     "vertices": 696,
     "indices": 4170,
-    "offset": 4336203
+    "offset": 7096299
   },
   {
     "name": "Multifidus colli muscle.r",
@@ -2929,39 +2929,39 @@
     "role": null,
     "vertices": 696,
     "indices": 4170,
-    "offset": 4350807
+    "offset": 7110903
   },
   {
     "name": "Multifidus lumborum muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 903,
-    "indices": 5400,
-    "offset": 4365411
+    "vertices": 1413,
+    "indices": 8460,
+    "offset": 7125507
   },
   {
     "name": "Multifidus lumborum muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 903,
-    "indices": 5400,
-    "offset": 4384338
+    "vertices": 1413,
+    "indices": 8460,
+    "offset": 7155144
   },
   {
     "name": "Multifidus thoracis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 936,
-    "indices": 5400,
-    "offset": 4403265
+    "vertices": 1987,
+    "indices": 11706,
+    "offset": 7184781
   },
   {
     "name": "Multifidus thoracis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 936,
-    "indices": 5400,
-    "offset": 4422489
+    "vertices": 1987,
+    "indices": 11706,
+    "offset": 7226076
   },
   {
     "name": "Mylohyoid muscle.l",
@@ -2969,7 +2969,7 @@
     "role": null,
     "vertices": 561,
     "indices": 3366,
-    "offset": 4441713
+    "offset": 7267371
   },
   {
     "name": "Mylohyoid muscle.r",
@@ -2977,7 +2977,7 @@
     "role": null,
     "vertices": 561,
     "indices": 3366,
-    "offset": 4453494
+    "offset": 7279152
   },
   {
     "name": "Nasal bone.l",
@@ -2985,7 +2985,7 @@
     "role": null,
     "vertices": 148,
     "indices": 876,
-    "offset": 4465275
+    "offset": 7290933
   },
   {
     "name": "Nasal bone.r",
@@ -2993,7 +2993,7 @@
     "role": null,
     "vertices": 148,
     "indices": 876,
-    "offset": 4468359
+    "offset": 7294017
   },
   {
     "name": "Nasal septal cartilage",
@@ -3001,7 +3001,7 @@
     "role": null,
     "vertices": 182,
     "indices": 1080,
-    "offset": 4471443
+    "offset": 7297101
   },
   {
     "name": "Nasalis muscle.l",
@@ -3009,7 +3009,7 @@
     "role": null,
     "vertices": 352,
     "indices": 2112,
-    "offset": 4475241
+    "offset": 7300899
   },
   {
     "name": "Nasalis muscle.r",
@@ -3017,7 +3017,7 @@
     "role": null,
     "vertices": 352,
     "indices": 2112,
-    "offset": 4482633
+    "offset": 7308291
   },
   {
     "name": "Navicular bone.l",
@@ -3025,7 +3025,7 @@
     "role": null,
     "vertices": 368,
     "indices": 2196,
-    "offset": 4490025
+    "offset": 7315683
   },
   {
     "name": "Navicular bone.r",
@@ -3033,7 +3033,7 @@
     "role": null,
     "vertices": 368,
     "indices": 2196,
-    "offset": 4497729
+    "offset": 7323387
   },
   {
     "name": "Ninth rib.l",
@@ -3041,7 +3041,7 @@
     "role": null,
     "vertices": 906,
     "indices": 5424,
-    "offset": 4505433
+    "offset": 7331091
   },
   {
     "name": "Ninth rib.r",
@@ -3049,7 +3049,7 @@
     "role": null,
     "vertices": 906,
     "indices": 5424,
-    "offset": 4524435
+    "offset": 7350093
   },
   {
     "name": "Oblique head of adductor hallucis.l",
@@ -3057,7 +3057,7 @@
     "role": null,
     "vertices": 454,
     "indices": 2712,
-    "offset": 4543437
+    "offset": 7369095
   },
   {
     "name": "Oblique head of adductor hallucis.r",
@@ -3065,7 +3065,7 @@
     "role": null,
     "vertices": 454,
     "indices": 2712,
-    "offset": 4552947
+    "offset": 7378605
   },
   {
     "name": "Oblique head of adductor pollicis.l",
@@ -3073,7 +3073,7 @@
     "role": null,
     "vertices": 227,
     "indices": 1350,
-    "offset": 4562457
+    "offset": 7388115
   },
   {
     "name": "Oblique head of adductor pollicis.r",
@@ -3081,7 +3081,7 @@
     "role": null,
     "vertices": 227,
     "indices": 1350,
-    "offset": 4567200
+    "offset": 7392858
   },
   {
     "name": "Obliquus inferior capitis muscle.l",
@@ -3089,7 +3089,7 @@
     "role": null,
     "vertices": 272,
     "indices": 1620,
-    "offset": 4571943
+    "offset": 7397601
   },
   {
     "name": "Obliquus inferior capitis muscle.r",
@@ -3097,7 +3097,7 @@
     "role": null,
     "vertices": 272,
     "indices": 1620,
-    "offset": 4577631
+    "offset": 7403289
   },
   {
     "name": "Obliquus superior capitis muscle.l",
@@ -3105,7 +3105,7 @@
     "role": null,
     "vertices": 325,
     "indices": 1962,
-    "offset": 4583319
+    "offset": 7408977
   },
   {
     "name": "Obliquus superior capitis muscle.r",
@@ -3113,7 +3113,7 @@
     "role": null,
     "vertices": 325,
     "indices": 1962,
-    "offset": 4590168
+    "offset": 7415826
   },
   {
     "name": "Obturator externus.l",
@@ -3121,7 +3121,7 @@
     "role": null,
     "vertices": 582,
     "indices": 3468,
-    "offset": 4597017
+    "offset": 7422675
   },
   {
     "name": "Obturator externus.r",
@@ -3129,23 +3129,23 @@
     "role": null,
     "vertices": 582,
     "indices": 3468,
-    "offset": 4609191
+    "offset": 7434849
   },
   {
     "name": "Obturator internus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4621365
+    "vertices": 1882,
+    "indices": 11280,
+    "offset": 7447023
   },
   {
     "name": "Obturator internus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4640283
+    "vertices": 1882,
+    "indices": 11280,
+    "offset": 7486521
   },
   {
     "name": "Occipital bone",
@@ -3153,39 +3153,39 @@
     "role": null,
     "vertices": 896,
     "indices": 5427,
-    "offset": 4659201
+    "offset": 7526019
   },
   {
     "name": "Occipitalis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 4678119
+    "vertices": 1297,
+    "indices": 7806,
+    "offset": 7544937
   },
   {
     "name": "Occipitalis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 4696983
+    "vertices": 1297,
+    "indices": 7806,
+    "offset": 7572222
   },
   {
     "name": "Omohyoid muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4715847
+    "vertices": 1355,
+    "indices": 8118,
+    "offset": 7599507
   },
   {
     "name": "Omohyoid muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 4734765
+    "vertices": 1355,
+    "indices": 8118,
+    "offset": 7627938
   },
   {
     "name": "Opponens digiti minimi muscle of hand.l",
@@ -3193,7 +3193,7 @@
     "role": null,
     "vertices": 210,
     "indices": 1260,
-    "offset": 4753683
+    "offset": 7656369
   },
   {
     "name": "Opponens digiti minimi muscle of hand.r",
@@ -3201,7 +3201,7 @@
     "role": null,
     "vertices": 210,
     "indices": 1260,
-    "offset": 4758093
+    "offset": 7660779
   },
   {
     "name": "Opponens pollicis muscle.l",
@@ -3209,7 +3209,7 @@
     "role": null,
     "vertices": 194,
     "indices": 1152,
-    "offset": 4762503
+    "offset": 7665189
   },
   {
     "name": "Opponens pollicis muscle.r",
@@ -3217,23 +3217,23 @@
     "role": null,
     "vertices": 194,
     "indices": 1152,
-    "offset": 4766553
+    "offset": 7669239
   },
   {
     "name": "Orbicularis oris muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 4770603
+    "vertices": 940,
+    "indices": 5640,
+    "offset": 7673289
   },
   {
     "name": "Orbicularis oris muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 4789503
+    "vertices": 940,
+    "indices": 5640,
+    "offset": 7693029
   },
   {
     "name": "Palatine bone.l",
@@ -3241,7 +3241,7 @@
     "role": null,
     "vertices": 732,
     "indices": 4380,
-    "offset": 4808403
+    "offset": 7712769
   },
   {
     "name": "Palatine bone.r",
@@ -3249,7 +3249,7 @@
     "role": null,
     "vertices": 732,
     "indices": 4380,
-    "offset": 4823751
+    "offset": 7728117
   },
   {
     "name": "Palmar interossei muscles.l",
@@ -3257,7 +3257,7 @@
     "role": null,
     "vertices": 87,
     "indices": 522,
-    "offset": 4839099
+    "offset": 7743465
   },
   {
     "name": "Palmar interossei muscles.r",
@@ -3265,23 +3265,23 @@
     "role": null,
     "vertices": 87,
     "indices": 522,
-    "offset": 4840926
+    "offset": 7745292
   },
   {
     "name": "Palmaris longus muscle.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 890,
-    "indices": 5400,
-    "offset": 4842753
+    "vertices": 2177,
+    "indices": 13122,
+    "offset": 7747119
   },
   {
     "name": "Palmaris longus muscle.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 890,
-    "indices": 5400,
-    "offset": 4861563
+    "vertices": 2177,
+    "indices": 13122,
+    "offset": 7792956
   },
   {
     "name": "Parietal bone.l",
@@ -3289,7 +3289,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 4880373
+    "offset": 7838793
   },
   {
     "name": "Parietal bone.r",
@@ -3297,7 +3297,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5448,
-    "offset": 4899273
+    "offset": 7857693
   },
   {
     "name": "Patella.l",
@@ -3305,39 +3305,39 @@
     "role": null,
     "vertices": 140,
     "indices": 828,
-    "offset": 4918305
+    "offset": 7876725
   },
   {
     "name": "Pectineus muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 4921221
+    "vertices": 974,
+    "indices": 5856,
+    "offset": 7879641
   },
   {
     "name": "Pectineus muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 4940103
+    "vertices": 974,
+    "indices": 5856,
+    "offset": 7900119
   },
   {
     "name": "Pectoralis minor muscle.l",
     "kind": "muscle",
     "role": "chest",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 4958985
+    "vertices": 2067,
+    "indices": 12426,
+    "offset": 7920597
   },
   {
     "name": "Pectoralis minor muscle.r",
     "kind": "muscle",
     "role": "chest",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 4977849
+    "vertices": 2067,
+    "indices": 12426,
+    "offset": 7964052
   },
   {
     "name": "Piriformis muscle.l",
@@ -3345,7 +3345,7 @@
     "role": null,
     "vertices": 752,
     "indices": 4500,
-    "offset": 4996713
+    "offset": 8007507
   },
   {
     "name": "Piriformis muscle.r",
@@ -3353,7 +3353,7 @@
     "role": null,
     "vertices": 752,
     "indices": 4500,
-    "offset": 5012481
+    "offset": 8023275
   },
   {
     "name": "Pisiform bone.l",
@@ -3361,7 +3361,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 5028249
+    "offset": 8039043
   },
   {
     "name": "Pisiform bone.r",
@@ -3369,7 +3369,7 @@
     "role": null,
     "vertices": 141,
     "indices": 834,
-    "offset": 5031186
+    "offset": 8041980
   },
   {
     "name": "Plantar aponeurosis.l",
@@ -3377,7 +3377,7 @@
     "role": null,
     "vertices": 240,
     "indices": 1218,
-    "offset": 5034123
+    "offset": 8044917
   },
   {
     "name": "Plantar aponeurosis.r",
@@ -3385,7 +3385,7 @@
     "role": null,
     "vertices": 240,
     "indices": 1218,
-    "offset": 5038719
+    "offset": 8049513
   },
   {
     "name": "Plantar interossei muscles.l",
@@ -3393,7 +3393,7 @@
     "role": null,
     "vertices": 627,
     "indices": 3726,
-    "offset": 5043315
+    "offset": 8054109
   },
   {
     "name": "Plantar interossei muscles.r",
@@ -3401,23 +3401,23 @@
     "role": null,
     "vertices": 627,
     "indices": 3726,
-    "offset": 5056410
+    "offset": 8067204
   },
   {
     "name": "Plantaris muscle.l",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 5069505
+    "vertices": 2351,
+    "indices": 14094,
+    "offset": 8080299
   },
   {
     "name": "Plantaris muscle.r",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 5088423
+    "vertices": 2351,
+    "indices": 14094,
+    "offset": 8129646
   },
   {
     "name": "Popliteus muscle.l",
@@ -3425,7 +3425,7 @@
     "role": null,
     "vertices": 566,
     "indices": 3396,
-    "offset": 5107341
+    "offset": 8178993
   },
   {
     "name": "Popliteus muscle.r",
@@ -3433,7 +3433,7 @@
     "role": null,
     "vertices": 566,
     "indices": 3396,
-    "offset": 5119227
+    "offset": 8190879
   },
   {
     "name": "Posterior cells of ethmoid bone.l",
@@ -3441,7 +3441,7 @@
     "role": null,
     "vertices": 114,
     "indices": 648,
-    "offset": 5131113
+    "offset": 8202765
   },
   {
     "name": "Posterior cells of ethmoid bone.r",
@@ -3449,7 +3449,7 @@
     "role": null,
     "vertices": 114,
     "indices": 648,
-    "offset": 5133435
+    "offset": 8205087
   },
   {
     "name": "Procerus muscle.l",
@@ -3457,7 +3457,7 @@
     "role": null,
     "vertices": 273,
     "indices": 1638,
-    "offset": 5135757
+    "offset": 8207409
   },
   {
     "name": "Procerus muscle.r",
@@ -3465,7 +3465,7 @@
     "role": null,
     "vertices": 273,
     "indices": 1638,
-    "offset": 5141490
+    "offset": 8213142
   },
   {
     "name": "Pronator quadratus.l",
@@ -3473,7 +3473,7 @@
     "role": "forearms",
     "vertices": 512,
     "indices": 3060,
-    "offset": 5147223
+    "offset": 8218875
   },
   {
     "name": "Pronator quadratus.r",
@@ -3481,7 +3481,7 @@
     "role": "forearms",
     "vertices": 512,
     "indices": 3060,
-    "offset": 5157951
+    "offset": 8229603
   },
   {
     "name": "Proximal phalanx of fifth finger of foot.l",
@@ -3489,23 +3489,23 @@
     "role": null,
     "vertices": 260,
     "indices": 1548,
-    "offset": 5168679
+    "offset": 8240331
   },
   {
     "name": "Psoas major.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5174115
+    "vertices": 2737,
+    "indices": 16422,
+    "offset": 8245767
   },
   {
     "name": "Psoas major.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5193015
+    "vertices": 2737,
+    "indices": 16422,
+    "offset": 8303244
   },
   {
     "name": "Pyramidalis muscle.l",
@@ -3513,7 +3513,7 @@
     "role": null,
     "vertices": 554,
     "indices": 3336,
-    "offset": 5211915
+    "offset": 8360721
   },
   {
     "name": "Pyramidalis muscle.r",
@@ -3521,7 +3521,7 @@
     "role": null,
     "vertices": 554,
     "indices": 3336,
-    "offset": 5223573
+    "offset": 8372379
   },
   {
     "name": "Quadratus femoris muscle.l",
@@ -3529,7 +3529,7 @@
     "role": null,
     "vertices": 825,
     "indices": 4938,
-    "offset": 5235231
+    "offset": 8384037
   },
   {
     "name": "Quadratus femoris muscle.r",
@@ -3537,23 +3537,23 @@
     "role": null,
     "vertices": 825,
     "indices": 4938,
-    "offset": 5252532
+    "offset": 8401338
   },
   {
     "name": "Quadratus lumborum muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5269833
+    "vertices": 1416,
+    "indices": 8496,
+    "offset": 8418639
   },
   {
     "name": "Quadratus lumborum muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5288733
+    "vertices": 1416,
+    "indices": 8496,
+    "offset": 8448375
   },
   {
     "name": "Quadratus plantae muscle.l",
@@ -3561,7 +3561,7 @@
     "role": null,
     "vertices": 590,
     "indices": 3528,
-    "offset": 5307633
+    "offset": 8478111
   },
   {
     "name": "Quadratus plantae muscle.r",
@@ -3569,7 +3569,7 @@
     "role": null,
     "vertices": 590,
     "indices": 3528,
-    "offset": 5319999
+    "offset": 8490477
   },
   {
     "name": "Radial head of flexor digitorum superficialis.l",
@@ -3577,7 +3577,7 @@
     "role": "forearms",
     "vertices": 640,
     "indices": 3828,
-    "offset": 5332365
+    "offset": 8502843
   },
   {
     "name": "Radial head of flexor digitorum superficialis.r",
@@ -3585,39 +3585,39 @@
     "role": "forearms",
     "vertices": 640,
     "indices": 3828,
-    "offset": 5345781
+    "offset": 8516259
   },
   {
     "name": "Rectus abdominis muscle.l",
     "kind": "muscle",
     "role": "core",
-    "vertices": 1238,
-    "indices": 7416,
-    "offset": 5359197
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 8529675
   },
   {
     "name": "Rectus abdominis muscle.r",
     "kind": "muscle",
     "role": "core",
-    "vertices": 1238,
-    "indices": 7416,
-    "offset": 5385171
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 8592693
   },
   {
     "name": "Rectus femoris muscle.l",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5411145
+    "vertices": 2998,
+    "indices": 18000,
+    "offset": 8655711
   },
   {
     "name": "Rectus femoris muscle.r",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5430027
+    "vertices": 2998,
+    "indices": 18000,
+    "offset": 8718693
   },
   {
     "name": "Rectus posterior major capitis muscle.l",
@@ -3625,7 +3625,7 @@
     "role": null,
     "vertices": 396,
     "indices": 2364,
-    "offset": 5448909
+    "offset": 8781675
   },
   {
     "name": "Rectus posterior major capitis muscle.r",
@@ -3633,7 +3633,7 @@
     "role": null,
     "vertices": 396,
     "indices": 2364,
-    "offset": 5457201
+    "offset": 8789967
   },
   {
     "name": "Rectus posterior minor capitis muscle.l",
@@ -3641,7 +3641,7 @@
     "role": null,
     "vertices": 214,
     "indices": 1296,
-    "offset": 5465493
+    "offset": 8798259
   },
   {
     "name": "Rectus posterior minor capitis muscle.r",
@@ -3649,23 +3649,23 @@
     "role": null,
     "vertices": 214,
     "indices": 1296,
-    "offset": 5470011
+    "offset": 8802777
   },
   {
     "name": "Rhomboid major muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 5474529
+    "vertices": 2402,
+    "indices": 14400,
+    "offset": 8807295
   },
   {
     "name": "Rhomboid major muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 5493447
+    "vertices": 2402,
+    "indices": 14400,
+    "offset": 8857713
   },
   {
     "name": "Rhomboid minor muscle.l",
@@ -3673,7 +3673,7 @@
     "role": null,
     "vertices": 747,
     "indices": 4482,
-    "offset": 5512365
+    "offset": 8908131
   },
   {
     "name": "Rhomboid minor muscle.r",
@@ -3681,7 +3681,7 @@
     "role": null,
     "vertices": 747,
     "indices": 4482,
-    "offset": 5528052
+    "offset": 8923818
   },
   {
     "name": "Risorius muscle.l",
@@ -3689,7 +3689,7 @@
     "role": null,
     "vertices": 296,
     "indices": 1776,
-    "offset": 5543739
+    "offset": 8939505
   },
   {
     "name": "Risorius muscle.r",
@@ -3697,39 +3697,39 @@
     "role": null,
     "vertices": 296,
     "indices": 1776,
-    "offset": 5549955
+    "offset": 8945721
   },
   {
     "name": "Rotatores.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 895,
-    "indices": 5400,
-    "offset": 5556171
+    "vertices": 2995,
+    "indices": 18000,
+    "offset": 8951937
   },
   {
     "name": "Rotatores.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 895,
-    "indices": 5400,
-    "offset": 5575026
+    "vertices": 2995,
+    "indices": 18000,
+    "offset": 9014892
   },
   {
     "name": "Sartorius muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5593881
+    "vertices": 2481,
+    "indices": 14898,
+    "offset": 9077847
   },
   {
     "name": "Sartorius muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5612763
+    "vertices": 2481,
+    "indices": 14898,
+    "offset": 9129972
   },
   {
     "name": "Scalenus anterior muscle.l",
@@ -3737,7 +3737,7 @@
     "role": null,
     "vertices": 700,
     "indices": 4158,
-    "offset": 5631645
+    "offset": 9182097
   },
   {
     "name": "Scalenus anterior muscle.r",
@@ -3745,23 +3745,23 @@
     "role": null,
     "vertices": 700,
     "indices": 4158,
-    "offset": 5646261
+    "offset": 9196713
   },
   {
     "name": "Scalenus medius muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5660877
+    "vertices": 1037,
+    "indices": 6234,
+    "offset": 9211329
   },
   {
     "name": "Scalenus medius muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 5679759
+    "vertices": 1037,
+    "indices": 6234,
+    "offset": 9233130
   },
   {
     "name": "Scalenus posterior muscle.l",
@@ -3769,7 +3769,7 @@
     "role": null,
     "vertices": 665,
     "indices": 3978,
-    "offset": 5698641
+    "offset": 9254931
   },
   {
     "name": "Scalenus posterior muscle.r",
@@ -3777,7 +3777,7 @@
     "role": null,
     "vertices": 665,
     "indices": 3978,
-    "offset": 5712582
+    "offset": 9268872
   },
   {
     "name": "Scaphoid bone.r",
@@ -3785,7 +3785,7 @@
     "role": null,
     "vertices": 197,
     "indices": 1170,
-    "offset": 5726523
+    "offset": 9282813
   },
   {
     "name": "Second metatarsal bone.r",
@@ -3793,7 +3793,7 @@
     "role": null,
     "vertices": 347,
     "indices": 2070,
-    "offset": 5730636
+    "offset": 9286926
   },
   {
     "name": "Second rib.r",
@@ -3801,111 +3801,111 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 5737899
+    "offset": 9294189
   },
   {
     "name": "Semimembranosus muscle.l",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 5756838
+    "vertices": 3004,
+    "indices": 18000,
+    "offset": 9313128
   },
   {
     "name": "Semimembranosus muscle.r",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 904,
-    "indices": 5400,
-    "offset": 5775774
+    "vertices": 3004,
+    "indices": 18000,
+    "offset": 9376164
   },
   {
     "name": "Semispinalis colli muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5794710
+    "vertices": 1292,
+    "indices": 7752,
+    "offset": 9439200
   },
   {
     "name": "Semispinalis colli muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5813610
+    "vertices": 1292,
+    "indices": 7752,
+    "offset": 9466332
   },
   {
     "name": "Semispinalis thoracis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 889,
-    "indices": 5400,
-    "offset": 5832510
+    "vertices": 2475,
+    "indices": 14916,
+    "offset": 9493464
   },
   {
     "name": "Semitendinosus muscle.l",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5851311
+    "vertices": 2158,
+    "indices": 12948,
+    "offset": 9545571
   },
   {
     "name": "Semitendinosus muscle.r",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 5870211
+    "vertices": 2158,
+    "indices": 12948,
+    "offset": 9590889
   },
   {
     "name": "Serratus anterior muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 1512,
-    "indices": 9084,
-    "offset": 5889111
+    "vertices": 2998,
+    "indices": 18000,
+    "offset": 9636207
   },
   {
     "name": "Serratus anterior muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 1512,
-    "indices": 9084,
-    "offset": 5920887
+    "vertices": 2998,
+    "indices": 18000,
+    "offset": 9699189
   },
   {
     "name": "Serratus posterior inferior muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 5952663
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 9762171
   },
   {
     "name": "Serratus posterior inferior muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 5971491
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 9825099
   },
   {
     "name": "Serratus posterior superior muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 899,
-    "indices": 5394,
-    "offset": 5990319
+    "vertices": 2759,
+    "indices": 16554,
+    "offset": 9888027
   },
   {
     "name": "Serratus posterior superior muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 899,
-    "indices": 5394,
-    "offset": 6009198
+    "vertices": 2759,
+    "indices": 16554,
+    "offset": 9945966
   },
   {
     "name": "Sesamoid bones of foot.r",
@@ -3913,55 +3913,55 @@
     "role": null,
     "vertices": 149,
     "indices": 870,
-    "offset": 6028077
+    "offset": 10003905
   },
   {
     "name": "Short head of biceps brachii.l",
     "kind": "muscle",
     "role": "biceps",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 6031158
+    "vertices": 1344,
+    "indices": 8088,
+    "offset": 10006986
   },
   {
     "name": "Short head of biceps brachii.r",
     "kind": "muscle",
     "role": "biceps",
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 6050022
+    "vertices": 1344,
+    "indices": 8088,
+    "offset": 10035258
   },
   {
     "name": "Short head of biceps femoris.l",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6068886
+    "vertices": 1238,
+    "indices": 7428,
+    "offset": 10063530
   },
   {
     "name": "Short head of biceps femoris.r",
     "kind": "muscle",
     "role": "hamstrings",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6087786
+    "vertices": 1238,
+    "indices": 7428,
+    "offset": 10089528
   },
   {
     "name": "Soleus muscle.l",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 6106686
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 10115526
   },
   {
     "name": "Soleus muscle.r",
     "kind": "muscle",
     "role": "calves",
-    "vertices": 892,
-    "indices": 5400,
-    "offset": 6125514
+    "vertices": 2992,
+    "indices": 18000,
+    "offset": 10178454
   },
   {
     "name": "Sphenoid bone",
@@ -3969,23 +3969,23 @@
     "role": null,
     "vertices": 887,
     "indices": 5400,
-    "offset": 6144342
+    "offset": 10241382
   },
   {
     "name": "Orbital part of orbicularis oculi.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6163125
+    "vertices": 1195,
+    "indices": 7170,
+    "offset": 10260165
   },
   {
     "name": "Orbital part of orbicularis oculi.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6182025
+    "vertices": 1195,
+    "indices": 7170,
+    "offset": 10285260
   },
   {
     "name": "Palpebral part of orbicularis oculi.l",
@@ -3993,7 +3993,7 @@
     "role": null,
     "vertices": 415,
     "indices": 2490,
-    "offset": 6200925
+    "offset": 10310355
   },
   {
     "name": "Palpebral part of orbicularis oculi.r",
@@ -4001,7 +4001,7 @@
     "role": null,
     "vertices": 415,
     "indices": 2490,
-    "offset": 6209640
+    "offset": 10319070
   },
   {
     "name": "Patella.r",
@@ -4009,23 +4009,23 @@
     "role": null,
     "vertices": 140,
     "indices": 828,
-    "offset": 6218355
+    "offset": 10327785
   },
   {
     "name": "Platysma.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 6221271
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 10330701
   },
   {
     "name": "Platysma.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 6240189
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 10393719
   },
   {
     "name": "Posterior belly of digastric muscle.l",
@@ -4033,7 +4033,7 @@
     "role": null,
     "vertices": 638,
     "indices": 3828,
-    "offset": 6259107
+    "offset": 10456737
   },
   {
     "name": "Posterior belly of digastric muscle.r",
@@ -4041,7 +4041,7 @@
     "role": null,
     "vertices": 638,
     "indices": 3828,
-    "offset": 6272505
+    "offset": 10470135
   },
   {
     "name": "Proximal phalanx of fifth finger of foot.r",
@@ -4049,7 +4049,7 @@
     "role": null,
     "vertices": 260,
     "indices": 1548,
-    "offset": 6285903
+    "offset": 10483533
   },
   {
     "name": "Proximal phalanx of fifth finger of hand.l",
@@ -4057,7 +4057,7 @@
     "role": null,
     "vertices": 282,
     "indices": 1680,
-    "offset": 6291339
+    "offset": 10488969
   },
   {
     "name": "Proximal phalanx of fifth finger of hand.r",
@@ -4065,7 +4065,7 @@
     "role": null,
     "vertices": 282,
     "indices": 1680,
-    "offset": 6297237
+    "offset": 10494867
   },
   {
     "name": "Proximal phalanx of first finger of foot.l",
@@ -4073,7 +4073,7 @@
     "role": null,
     "vertices": 268,
     "indices": 1596,
-    "offset": 6303135
+    "offset": 10500765
   },
   {
     "name": "Proximal phalanx of first finger of foot.r",
@@ -4081,7 +4081,7 @@
     "role": null,
     "vertices": 268,
     "indices": 1596,
-    "offset": 6308739
+    "offset": 10506369
   },
   {
     "name": "Proximal phalanx of first finger of hand.l",
@@ -4089,7 +4089,7 @@
     "role": null,
     "vertices": 166,
     "indices": 984,
-    "offset": 6314343
+    "offset": 10511973
   },
   {
     "name": "Proximal phalanx of first finger of hand.r",
@@ -4097,7 +4097,7 @@
     "role": null,
     "vertices": 166,
     "indices": 984,
-    "offset": 6317805
+    "offset": 10515435
   },
   {
     "name": "Proximal phalanx of fourth finger of foot.l",
@@ -4105,7 +4105,7 @@
     "role": null,
     "vertices": 232,
     "indices": 1380,
-    "offset": 6321267
+    "offset": 10518897
   },
   {
     "name": "Proximal phalanx of fourth finger of foot.r",
@@ -4113,7 +4113,7 @@
     "role": null,
     "vertices": 232,
     "indices": 1380,
-    "offset": 6326115
+    "offset": 10523745
   },
   {
     "name": "Proximal phalanx of fourth finger of hand.l",
@@ -4121,7 +4121,7 @@
     "role": null,
     "vertices": 186,
     "indices": 1104,
-    "offset": 6330963
+    "offset": 10528593
   },
   {
     "name": "Proximal phalanx of fourth finger of hand.r",
@@ -4129,7 +4129,7 @@
     "role": null,
     "vertices": 186,
     "indices": 1104,
-    "offset": 6334845
+    "offset": 10532475
   },
   {
     "name": "Proximal phalanx of second finger of foot.l",
@@ -4137,7 +4137,7 @@
     "role": null,
     "vertices": 215,
     "indices": 1278,
-    "offset": 6338727
+    "offset": 10536357
   },
   {
     "name": "Proximal phalanx of second finger of foot.r",
@@ -4145,7 +4145,7 @@
     "role": null,
     "vertices": 215,
     "indices": 1278,
-    "offset": 6343218
+    "offset": 10540848
   },
   {
     "name": "Proximal phalanx of second finger of hand.l",
@@ -4153,7 +4153,7 @@
     "role": null,
     "vertices": 209,
     "indices": 1242,
-    "offset": 6347709
+    "offset": 10545339
   },
   {
     "name": "Proximal phalanx of second finger of hand.r",
@@ -4161,7 +4161,7 @@
     "role": null,
     "vertices": 209,
     "indices": 1242,
-    "offset": 6352074
+    "offset": 10549704
   },
   {
     "name": "Proximal phalanx of third finger of foot.l",
@@ -4169,7 +4169,7 @@
     "role": null,
     "vertices": 232,
     "indices": 1380,
-    "offset": 6356439
+    "offset": 10554069
   },
   {
     "name": "Proximal phalanx of third finger of foot.r",
@@ -4177,7 +4177,7 @@
     "role": null,
     "vertices": 232,
     "indices": 1380,
-    "offset": 6361287
+    "offset": 10558917
   },
   {
     "name": "Proximal phalanx of third finger of hand.l",
@@ -4185,7 +4185,7 @@
     "role": null,
     "vertices": 222,
     "indices": 1320,
-    "offset": 6366135
+    "offset": 10563765
   },
   {
     "name": "Proximal phalanx of third finger of hand.r",
@@ -4193,7 +4193,7 @@
     "role": null,
     "vertices": 222,
     "indices": 1320,
-    "offset": 6370773
+    "offset": 10568403
   },
   {
     "name": "Radius.l",
@@ -4201,7 +4201,7 @@
     "role": null,
     "vertices": 394,
     "indices": 2352,
-    "offset": 6375411
+    "offset": 10573041
   },
   {
     "name": "Radius.r",
@@ -4209,7 +4209,7 @@
     "role": null,
     "vertices": 394,
     "indices": 2352,
-    "offset": 6383661
+    "offset": 10581291
   },
   {
     "name": "Rectus anterior capitis muscle.l",
@@ -4217,7 +4217,7 @@
     "role": null,
     "vertices": 200,
     "indices": 1188,
-    "offset": 6391911
+    "offset": 10589541
   },
   {
     "name": "Rectus anterior capitis muscle.r",
@@ -4225,7 +4225,7 @@
     "role": null,
     "vertices": 200,
     "indices": 1188,
-    "offset": 6396087
+    "offset": 10593717
   },
   {
     "name": "Rectus lateralis capitis muscle.l",
@@ -4233,7 +4233,7 @@
     "role": null,
     "vertices": 182,
     "indices": 1080,
-    "offset": 6400263
+    "offset": 10597893
   },
   {
     "name": "Rectus lateralis capitis muscle.r",
@@ -4241,7 +4241,7 @@
     "role": null,
     "vertices": 182,
     "indices": 1080,
-    "offset": 6404061
+    "offset": 10601691
   },
   {
     "name": "Sacrum",
@@ -4249,7 +4249,7 @@
     "role": null,
     "vertices": 1226,
     "indices": 7395,
-    "offset": 6407859
+    "offset": 10605489
   },
   {
     "name": "Scaphoid bone.l",
@@ -4257,7 +4257,7 @@
     "role": null,
     "vertices": 197,
     "indices": 1170,
-    "offset": 6433683
+    "offset": 10631313
   },
   {
     "name": "Scapula.l",
@@ -4265,7 +4265,7 @@
     "role": null,
     "vertices": 1546,
     "indices": 9114,
-    "offset": 6437796
+    "offset": 10635426
   },
   {
     "name": "Scapula.r",
@@ -4273,23 +4273,23 @@
     "role": null,
     "vertices": 1546,
     "indices": 9114,
-    "offset": 6469938
+    "offset": 10667568
   },
   {
     "name": "Scapular spinal part of deltoid muscle.l",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6502080
+    "vertices": 2189,
+    "indices": 13134,
+    "offset": 10699710
   },
   {
     "name": "Scapular spinal part of deltoid muscle.r",
     "kind": "muscle",
     "role": "deltoids",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 6520980
+    "vertices": 2189,
+    "indices": 13134,
+    "offset": 10745679
   },
   {
     "name": "Second metacarpal bone.l",
@@ -4297,7 +4297,7 @@
     "role": null,
     "vertices": 384,
     "indices": 2292,
-    "offset": 6539880
+    "offset": 10791648
   },
   {
     "name": "Second metacarpal bone.r",
@@ -4305,7 +4305,7 @@
     "role": null,
     "vertices": 384,
     "indices": 2292,
-    "offset": 6547920
+    "offset": 10799688
   },
   {
     "name": "Second metatarsal bone.l",
@@ -4313,7 +4313,7 @@
     "role": null,
     "vertices": 347,
     "indices": 2070,
-    "offset": 6555960
+    "offset": 10807728
   },
   {
     "name": "Second rib.l",
@@ -4321,15 +4321,15 @@
     "role": null,
     "vertices": 903,
     "indices": 5406,
-    "offset": 6563223
+    "offset": 10814991
   },
   {
     "name": "Semispinalis thoracis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 889,
-    "indices": 5400,
-    "offset": 6582162
+    "vertices": 2475,
+    "indices": 14916,
+    "offset": 10833930
   },
   {
     "name": "Sesamoid bones of foot.l",
@@ -4337,7 +4337,7 @@
     "role": null,
     "vertices": 149,
     "indices": 870,
-    "offset": 6600963
+    "offset": 10886037
   },
   {
     "name": "Seventh rib.l",
@@ -4345,7 +4345,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 6604044
+    "offset": 10889118
   },
   {
     "name": "Seventh rib.r",
@@ -4353,7 +4353,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 6623025
+    "offset": 10908099
   },
   {
     "name": "Sinus of frontal bone",
@@ -4361,7 +4361,7 @@
     "role": null,
     "vertices": 770,
     "indices": 4512,
-    "offset": 6642006
+    "offset": 10927080
   },
   {
     "name": "Sinus of sphenoid bone",
@@ -4369,7 +4369,7 @@
     "role": null,
     "vertices": 210,
     "indices": 1152,
-    "offset": 6657960
+    "offset": 10943034
   },
   {
     "name": "Sixth rib.l",
@@ -4377,7 +4377,7 @@
     "role": null,
     "vertices": 915,
     "indices": 5418,
-    "offset": 6662154
+    "offset": 10947228
   },
   {
     "name": "Sixth rib.r",
@@ -4385,23 +4385,23 @@
     "role": null,
     "vertices": 915,
     "indices": 5418,
-    "offset": 6681225
+    "offset": 10966299
   },
   {
     "name": "Spinalis capitis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 895,
-    "indices": 5400,
-    "offset": 6700296
+    "vertices": 1275,
+    "indices": 7680,
+    "offset": 10985370
   },
   {
     "name": "Spinalis capitis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 895,
-    "indices": 5400,
-    "offset": 6719151
+    "vertices": 1275,
+    "indices": 7680,
+    "offset": 11012205
   },
   {
     "name": "Spinalis colli muscle.l",
@@ -4409,7 +4409,7 @@
     "role": null,
     "vertices": 298,
     "indices": 1788,
-    "offset": 6738006
+    "offset": 11039040
   },
   {
     "name": "Spinalis colli muscle.r",
@@ -4417,87 +4417,87 @@
     "role": null,
     "vertices": 298,
     "indices": 1788,
-    "offset": 6744264
+    "offset": 11045298
   },
   {
     "name": "Spinalis thoracis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 6750522
+    "vertices": 2768,
+    "indices": 16596,
+    "offset": 11051556
   },
   {
     "name": "Spinalis thoracis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 6769440
+    "vertices": 2768,
+    "indices": 16596,
+    "offset": 11109660
   },
   {
     "name": "Splenius capitis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 6788358
+    "vertices": 2629,
+    "indices": 15786,
+    "offset": 11167764
   },
   {
     "name": "Splenius capitis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 6807240
+    "vertices": 2629,
+    "indices": 15786,
+    "offset": 11222997
   },
   {
     "name": "Splenius colli muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 901,
-    "indices": 5400,
-    "offset": 6826122
+    "vertices": 2158,
+    "indices": 12942,
+    "offset": 11278230
   },
   {
     "name": "Splenius colli muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 901,
-    "indices": 5400,
-    "offset": 6845031
+    "vertices": 2158,
+    "indices": 12942,
+    "offset": 11323536
   },
   {
     "name": "Sternocleidomastoid muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 6863940
+    "vertices": 2472,
+    "indices": 14856,
+    "offset": 11368842
   },
   {
     "name": "Sternocleidomastoid muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 6882804
+    "vertices": 2472,
+    "indices": 14856,
+    "offset": 11420802
   },
   {
     "name": "Sternocostal head of pectoralis major muscle.l",
     "kind": "muscle",
     "role": "chest",
-    "vertices": 901,
-    "indices": 5406,
-    "offset": 6901668
+    "vertices": 1611,
+    "indices": 9666,
+    "offset": 11472762
   },
   {
     "name": "Sternocostal head of pectoralis major muscle.r",
     "kind": "muscle",
     "role": "chest",
-    "vertices": 901,
-    "indices": 5406,
-    "offset": 6920589
+    "vertices": 1611,
+    "indices": 9666,
+    "offset": 11506593
   },
   {
     "name": "Sternohyoid muscle.l",
@@ -4505,7 +4505,7 @@
     "role": null,
     "vertices": 697,
     "indices": 4182,
-    "offset": 6939510
+    "offset": 11540424
   },
   {
     "name": "Sternohyoid muscle.r",
@@ -4513,7 +4513,7 @@
     "role": null,
     "vertices": 697,
     "indices": 4182,
-    "offset": 6954147
+    "offset": 11555061
   },
   {
     "name": "Stylohyoid muscle.l",
@@ -4521,7 +4521,7 @@
     "role": null,
     "vertices": 349,
     "indices": 2082,
-    "offset": 6968784
+    "offset": 11569698
   },
   {
     "name": "Stylohyoid muscle.r",
@@ -4529,7 +4529,7 @@
     "role": null,
     "vertices": 349,
     "indices": 2082,
-    "offset": 6976089
+    "offset": 11577003
   },
   {
     "name": "Subclavius muscle.l",
@@ -4537,7 +4537,7 @@
     "role": null,
     "vertices": 397,
     "indices": 2382,
-    "offset": 6983394
+    "offset": 11584308
   },
   {
     "name": "Subclavius muscle.r",
@@ -4545,23 +4545,23 @@
     "role": null,
     "vertices": 397,
     "indices": 2382,
-    "offset": 6991731
+    "offset": 11592645
   },
   {
     "name": "Subscapularis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 7000068
+    "vertices": 1471,
+    "indices": 8862,
+    "offset": 11600982
   },
   {
     "name": "Subscapularis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 7018914
+    "vertices": 1471,
+    "indices": 8862,
+    "offset": 11631945
   },
   {
     "name": "Superficial head of flexor pollicis brevis.l",
@@ -4569,7 +4569,7 @@
     "role": null,
     "vertices": 136,
     "indices": 828,
-    "offset": 7037760
+    "offset": 11662908
   },
   {
     "name": "Superficial head of flexor pollicis brevis.r",
@@ -4577,23 +4577,23 @@
     "role": null,
     "vertices": 136,
     "indices": 828,
-    "offset": 7040640
+    "offset": 11665788
   },
   {
     "name": "Superficial head of pronator teres.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 7043520
+    "vertices": 1273,
+    "indices": 7638,
+    "offset": 11668668
   },
   {
     "name": "Superficial head of pronator teres.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 7062420
+    "vertices": 1273,
+    "indices": 7638,
+    "offset": 11695401
   },
   {
     "name": "Superficial part of masseter.l",
@@ -4601,7 +4601,7 @@
     "role": null,
     "vertices": 702,
     "indices": 4212,
-    "offset": 7081320
+    "offset": 11722134
   },
   {
     "name": "Superficial part of masseter.r",
@@ -4609,23 +4609,23 @@
     "role": null,
     "vertices": 702,
     "indices": 4212,
-    "offset": 7096062
+    "offset": 11736876
   },
   {
     "name": "Superficial transverse metacarpal ligament.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 49,
-    "indices": 192,
-    "offset": 7110804
+    "vertices": 98,
+    "indices": 576,
+    "offset": 11751618
   },
   {
     "name": "Superficial transverse metacarpal ligament.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 49,
-    "indices": 192,
-    "offset": 7111629
+    "vertices": 98,
+    "indices": 576,
+    "offset": 11753652
   },
   {
     "name": "Superficial transverse metatarsal ligament.l",
@@ -4633,7 +4633,7 @@
     "role": null,
     "vertices": 66,
     "indices": 297,
-    "offset": 7112454
+    "offset": 11755686
   },
   {
     "name": "Superficial transverse metatarsal ligament.r",
@@ -4641,39 +4641,39 @@
     "role": null,
     "vertices": 66,
     "indices": 297,
-    "offset": 7113642
+    "offset": 11756874
   },
   {
     "name": "Superior extensor retinaculum of ankle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 66,
-    "indices": 291,
-    "offset": 7114830
+    "vertices": 132,
+    "indices": 780,
+    "offset": 11758062
   },
   {
     "name": "Superior extensor retinaculum of ankle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 66,
-    "indices": 291,
-    "offset": 7116006
+    "vertices": 132,
+    "indices": 780,
+    "offset": 11760810
   },
   {
     "name": "Superior fibular retinaculum.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 164,
-    "indices": 762,
-    "offset": 7117182
+    "vertices": 328,
+    "indices": 1956,
+    "offset": 11763558
   },
   {
     "name": "Superior fibular retinaculum.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 164,
-    "indices": 762,
-    "offset": 7120182
+    "vertices": 328,
+    "indices": 1956,
+    "offset": 11770422
   },
   {
     "name": "Superior gemellus muscle.l",
@@ -4681,7 +4681,7 @@
     "role": null,
     "vertices": 204,
     "indices": 1212,
-    "offset": 7123182
+    "offset": 11777286
   },
   {
     "name": "Superior gemellus muscle.r",
@@ -4689,7 +4689,7 @@
     "role": null,
     "vertices": 204,
     "indices": 1212,
-    "offset": 7127442
+    "offset": 11781546
   },
   {
     "name": "Superior head of lateral pterygoid muscle.l",
@@ -4697,7 +4697,7 @@
     "role": null,
     "vertices": 115,
     "indices": 678,
-    "offset": 7131702
+    "offset": 11785806
   },
   {
     "name": "Superior head of lateral pterygoid muscle.r",
@@ -4705,23 +4705,23 @@
     "role": null,
     "vertices": 115,
     "indices": 678,
-    "offset": 7134093
+    "offset": 11788197
   },
   {
     "name": "Supinator.l",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 7136484
+    "vertices": 1379,
+    "indices": 8262,
+    "offset": 11790588
   },
   {
     "name": "Supinator.r",
     "kind": "muscle",
     "role": "forearms",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 7155402
+    "vertices": 1379,
+    "indices": 8262,
+    "offset": 11819523
   },
   {
     "name": "Supraspinatus muscle.l",
@@ -4729,7 +4729,7 @@
     "role": null,
     "vertices": 717,
     "indices": 4290,
-    "offset": 7174320
+    "offset": 11848458
   },
   {
     "name": "Supraspinatus muscle.r",
@@ -4737,7 +4737,7 @@
     "role": null,
     "vertices": 717,
     "indices": 4290,
-    "offset": 7189353
+    "offset": 11863491
   },
   {
     "name": "Talus.l",
@@ -4745,7 +4745,7 @@
     "role": null,
     "vertices": 677,
     "indices": 4050,
-    "offset": 7204386
+    "offset": 11878524
   },
   {
     "name": "Talus.r",
@@ -4753,7 +4753,7 @@
     "role": null,
     "vertices": 677,
     "indices": 4050,
-    "offset": 7218579
+    "offset": 11892717
   },
   {
     "name": "Temporal bone.l",
@@ -4761,7 +4761,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5400,
-    "offset": 7232772
+    "offset": 11906910
   },
   {
     "name": "Temporal bone.r",
@@ -4769,71 +4769,71 @@
     "role": null,
     "vertices": 904,
     "indices": 5400,
-    "offset": 7251708
+    "offset": 11925846
   },
   {
     "name": "Temporalis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 7270644
+    "vertices": 2995,
+    "indices": 17994,
+    "offset": 11944782
   },
   {
     "name": "Temporalis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 896,
-    "indices": 5400,
-    "offset": 7289508
+    "vertices": 2995,
+    "indices": 17994,
+    "offset": 12007725
   },
   {
     "name": "Temporoparietalis muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 888,
-    "indices": 5400,
-    "offset": 7308372
+    "vertices": 2988,
+    "indices": 18000,
+    "offset": 12070668
   },
   {
     "name": "Temporoparietalis muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 888,
-    "indices": 5400,
-    "offset": 7327164
+    "vertices": 2988,
+    "indices": 18000,
+    "offset": 12133560
   },
   {
     "name": "Tendon of extensor digitorum longus.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 947,
-    "indices": 5394,
-    "offset": 7345956
+    "vertices": 2640,
+    "indices": 15552,
+    "offset": 12196452
   },
   {
     "name": "Tendon of extensor digitorum longus.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 947,
-    "indices": 5394,
-    "offset": 7365267
+    "vertices": 2640,
+    "indices": 15552,
+    "offset": 12251316
   },
   {
     "name": "Tensor fasciae latae.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 7384578
+    "vertices": 933,
+    "indices": 5586,
+    "offset": 12306180
   },
   {
     "name": "Tensor fasciae latae.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 7403496
+    "vertices": 933,
+    "indices": 5586,
+    "offset": 12325749
   },
   {
     "name": "Tenth rib.l",
@@ -4841,7 +4841,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 7422414
+    "offset": 12345318
   },
   {
     "name": "Tenth rib.r",
@@ -4849,7 +4849,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 7441395
+    "offset": 12364299
   },
   {
     "name": "Teres major muscle.l",
@@ -4857,7 +4857,7 @@
     "role": null,
     "vertices": 577,
     "indices": 3462,
-    "offset": 7460376
+    "offset": 12383280
   },
   {
     "name": "Teres major muscle.r",
@@ -4865,7 +4865,7 @@
     "role": null,
     "vertices": 577,
     "indices": 3462,
-    "offset": 7472493
+    "offset": 12395397
   },
   {
     "name": "Teres minor muscle.l",
@@ -4873,7 +4873,7 @@
     "role": null,
     "vertices": 763,
     "indices": 4566,
-    "offset": 7484610
+    "offset": 12407514
   },
   {
     "name": "Teres minor muscle.r",
@@ -4881,7 +4881,7 @@
     "role": null,
     "vertices": 763,
     "indices": 4566,
-    "offset": 7500609
+    "offset": 12423513
   },
   {
     "name": "Third metacarpal bone.l",
@@ -4889,7 +4889,7 @@
     "role": null,
     "vertices": 356,
     "indices": 2124,
-    "offset": 7516608
+    "offset": 12439512
   },
   {
     "name": "Third metacarpal bone.r",
@@ -4897,7 +4897,7 @@
     "role": null,
     "vertices": 356,
     "indices": 2124,
-    "offset": 7524060
+    "offset": 12446964
   },
   {
     "name": "Third metatarsal bone.l",
@@ -4905,7 +4905,7 @@
     "role": null,
     "vertices": 409,
     "indices": 2442,
-    "offset": 7531512
+    "offset": 12454416
   },
   {
     "name": "Third metatarsal bone.r",
@@ -4913,7 +4913,7 @@
     "role": null,
     "vertices": 409,
     "indices": 2442,
-    "offset": 7540077
+    "offset": 12462981
   },
   {
     "name": "Third rib.l",
@@ -4921,7 +4921,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5412,
-    "offset": 7548642
+    "offset": 12471546
   },
   {
     "name": "Third rib.r",
@@ -4929,7 +4929,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5412,
-    "offset": 7567602
+    "offset": 12490506
   },
   {
     "name": "Tibia.l",
@@ -4937,7 +4937,7 @@
     "role": null,
     "vertices": 837,
     "indices": 5010,
-    "offset": 7586562
+    "offset": 12509466
   },
   {
     "name": "Tibia.r",
@@ -4945,39 +4945,39 @@
     "role": null,
     "vertices": 837,
     "indices": 5010,
-    "offset": 7604115
+    "offset": 12527019
   },
   {
     "name": "Tibialis anterior muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 897,
-    "indices": 5394,
-    "offset": 7621668
+    "vertices": 1761,
+    "indices": 10578,
+    "offset": 12544572
   },
   {
     "name": "Tibialis anterior muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 897,
-    "indices": 5394,
-    "offset": 7640529
+    "vertices": 1761,
+    "indices": 10578,
+    "offset": 12581577
   },
   {
     "name": "Tibialis posterior muscle.l",
     "kind": "muscle",
     "role": null,
-    "vertices": 877,
-    "indices": 5394,
-    "offset": 7659390
+    "vertices": 2741,
+    "indices": 16578,
+    "offset": 12618582
   },
   {
     "name": "Tibialis posterior muscle.r",
     "kind": "muscle",
     "role": null,
-    "vertices": 877,
-    "indices": 5394,
-    "offset": 7678071
+    "vertices": 2741,
+    "indices": 16578,
+    "offset": 12676407
   },
   {
     "name": "Transverse head of adductor hallucis.l",
@@ -4985,7 +4985,7 @@
     "role": null,
     "vertices": 181,
     "indices": 1098,
-    "offset": 7696752
+    "offset": 12734232
   },
   {
     "name": "Transverse head of adductor hallucis.r",
@@ -4993,7 +4993,7 @@
     "role": null,
     "vertices": 181,
     "indices": 1098,
-    "offset": 7700577
+    "offset": 12738057
   },
   {
     "name": "Transverse head of adductor pollicis.l",
@@ -5001,7 +5001,7 @@
     "role": null,
     "vertices": 509,
     "indices": 3042,
-    "offset": 7704402
+    "offset": 12741882
   },
   {
     "name": "Transverse head of adductor pollicis.r",
@@ -5009,39 +5009,39 @@
     "role": null,
     "vertices": 509,
     "indices": 3042,
-    "offset": 7715067
+    "offset": 12752547
   },
   {
     "name": "Transverse part of trapezius muscle.l",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 7725732
+    "vertices": 1494,
+    "indices": 8976,
+    "offset": 12763212
   },
   {
     "name": "Transverse part of trapezius muscle.r",
     "kind": "muscle",
     "role": "traps",
-    "vertices": 898,
-    "indices": 5400,
-    "offset": 7744614
+    "vertices": 1494,
+    "indices": 8976,
+    "offset": 12794610
   },
   {
     "name": "Transversus abdominis muscle.l",
     "kind": "muscle",
     "role": "core",
-    "vertices": 2059,
-    "indices": 12354,
-    "offset": 7763496
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 12826008
   },
   {
     "name": "Transversus abdominis muscle.r",
     "kind": "muscle",
     "role": "core",
-    "vertices": 2059,
-    "indices": 12354,
-    "offset": 7806735
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 12889008
   },
   {
     "name": "Trapezium bone.l",
@@ -5049,7 +5049,7 @@
     "role": null,
     "vertices": 252,
     "indices": 1500,
-    "offset": 7849974
+    "offset": 12952008
   },
   {
     "name": "Trapezium bone.r",
@@ -5057,7 +5057,7 @@
     "role": null,
     "vertices": 252,
     "indices": 1500,
-    "offset": 7855242
+    "offset": 12957276
   },
   {
     "name": "Trapezoid bone.l",
@@ -5065,7 +5065,7 @@
     "role": null,
     "vertices": 184,
     "indices": 1092,
-    "offset": 7860510
+    "offset": 12962544
   },
   {
     "name": "Trapezoid bone.r",
@@ -5073,7 +5073,7 @@
     "role": null,
     "vertices": 184,
     "indices": 1092,
-    "offset": 7864350
+    "offset": 12966384
   },
   {
     "name": "Triquetrum bone.l",
@@ -5081,7 +5081,7 @@
     "role": null,
     "vertices": 90,
     "indices": 528,
-    "offset": 7868190
+    "offset": 12970224
   },
   {
     "name": "Triquetrum bone.r",
@@ -5089,7 +5089,7 @@
     "role": null,
     "vertices": 90,
     "indices": 528,
-    "offset": 7870056
+    "offset": 12972090
   },
   {
     "name": "Twelfth rib.l",
@@ -5097,7 +5097,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5412,
-    "offset": 7871922
+    "offset": 12973956
   },
   {
     "name": "Twelfth rib.r",
@@ -5105,7 +5105,7 @@
     "role": null,
     "vertices": 904,
     "indices": 5412,
-    "offset": 7890882
+    "offset": 12992916
   },
   {
     "name": "Ulna.l",
@@ -5113,7 +5113,7 @@
     "role": null,
     "vertices": 454,
     "indices": 2712,
-    "offset": 7909842
+    "offset": 13011876
   },
   {
     "name": "Ulna.r",
@@ -5121,7 +5121,7 @@
     "role": null,
     "vertices": 454,
     "indices": 2712,
-    "offset": 7919352
+    "offset": 13021386
   },
   {
     "name": "Ulnar head of extensor carpi ulnaris.l",
@@ -5129,7 +5129,7 @@
     "role": "forearms",
     "vertices": 292,
     "indices": 1746,
-    "offset": 7928862
+    "offset": 13030896
   },
   {
     "name": "Ulnar head of extensor carpi ulnaris.r",
@@ -5137,7 +5137,7 @@
     "role": "forearms",
     "vertices": 292,
     "indices": 1746,
-    "offset": 7934982
+    "offset": 13037016
   },
   {
     "name": "Ulnar head of flexor carpi ulnaris.l",
@@ -5145,7 +5145,7 @@
     "role": "forearms",
     "vertices": 725,
     "indices": 4398,
-    "offset": 7941102
+    "offset": 13043136
   },
   {
     "name": "Ulnar head of flexor carpi ulnaris.r",
@@ -5153,7 +5153,7 @@
     "role": "forearms",
     "vertices": 725,
     "indices": 4398,
-    "offset": 7956423
+    "offset": 13058457
   },
   {
     "name": "Upper canine.l",
@@ -5161,7 +5161,7 @@
     "role": null,
     "vertices": 737,
     "indices": 4410,
-    "offset": 7971744
+    "offset": 13073778
   },
   {
     "name": "Upper canine.r",
@@ -5169,7 +5169,7 @@
     "role": null,
     "vertices": 737,
     "indices": 4410,
-    "offset": 7987197
+    "offset": 13089231
   },
   {
     "name": "Upper first molar tooth.l",
@@ -5177,7 +5177,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 8002650
+    "offset": 13104684
   },
   {
     "name": "Upper first molar tooth.r",
@@ -5185,7 +5185,7 @@
     "role": null,
     "vertices": 905,
     "indices": 5418,
-    "offset": 8021631
+    "offset": 13123665
   },
   {
     "name": "Upper first premolar.l",
@@ -5193,7 +5193,7 @@
     "role": null,
     "vertices": 844,
     "indices": 5052,
-    "offset": 8040612
+    "offset": 13142646
   },
   {
     "name": "Upper first premolar.r",
@@ -5201,7 +5201,7 @@
     "role": null,
     "vertices": 844,
     "indices": 5052,
-    "offset": 8058312
+    "offset": 13160346
   },
   {
     "name": "Upper lateral incisor.l",
@@ -5209,7 +5209,7 @@
     "role": null,
     "vertices": 729,
     "indices": 4362,
-    "offset": 8076012
+    "offset": 13178046
   },
   {
     "name": "Upper lateral incisor.r",
@@ -5217,7 +5217,7 @@
     "role": null,
     "vertices": 729,
     "indices": 4362,
-    "offset": 8091297
+    "offset": 13193331
   },
   {
     "name": "Upper medial incisor.l",
@@ -5225,7 +5225,7 @@
     "role": null,
     "vertices": 686,
     "indices": 4104,
-    "offset": 8106582
+    "offset": 13208616
   },
   {
     "name": "Upper medial incisor.r",
@@ -5233,7 +5233,7 @@
     "role": null,
     "vertices": 686,
     "indices": 4104,
-    "offset": 8120964
+    "offset": 13222998
   },
   {
     "name": "Upper second molar tooth.l",
@@ -5241,7 +5241,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 8135346
+    "offset": 13237380
   },
   {
     "name": "Upper second molar tooth.r",
@@ -5249,7 +5249,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 8154264
+    "offset": 13256298
   },
   {
     "name": "Upper second premolar.l",
@@ -5257,7 +5257,7 @@
     "role": null,
     "vertices": 779,
     "indices": 4662,
-    "offset": 8173182
+    "offset": 13275216
   },
   {
     "name": "Upper second premolar.r",
@@ -5265,55 +5265,55 @@
     "role": null,
     "vertices": 779,
     "indices": 4662,
-    "offset": 8189517
+    "offset": 13291551
   },
   {
     "name": "Vastus intermedius muscle.l",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 8205852
+    "vertices": 2994,
+    "indices": 18000,
+    "offset": 13307886
   },
   {
     "name": "Vastus intermedius muscle.r",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 894,
-    "indices": 5400,
-    "offset": 8224698
+    "vertices": 2994,
+    "indices": 18000,
+    "offset": 13370832
   },
   {
     "name": "Vastus lateralis muscle.l",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 8243544
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 13433778
   },
   {
     "name": "Vastus lateralis muscle.r",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 900,
-    "indices": 5400,
-    "offset": 8262444
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 13496778
   },
   {
     "name": "Vastus medialis muscle.l",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 8281344
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 13559778
   },
   {
     "name": "Vastus medialis muscle.r",
     "kind": "muscle",
     "role": "quads",
-    "vertices": 902,
-    "indices": 5400,
-    "offset": 8300262
+    "vertices": 3002,
+    "indices": 18000,
+    "offset": 13622796
   },
   {
     "name": "Ventral parts of lateral intertransversarii lumborum muscles.l",
@@ -5321,7 +5321,7 @@
     "role": null,
     "vertices": 506,
     "indices": 2988,
-    "offset": 8319180
+    "offset": 13685814
   },
   {
     "name": "Ventral parts of lateral intertransversarii lumborum muscles.r",
@@ -5329,7 +5329,7 @@
     "role": null,
     "vertices": 506,
     "indices": 2988,
-    "offset": 8329710
+    "offset": 13696344
   },
   {
     "name": "Vertebra C3",
@@ -5337,7 +5337,7 @@
     "role": null,
     "vertices": 921,
     "indices": 5550,
-    "offset": 8340240
+    "offset": 13706874
   },
   {
     "name": "Vertebra C4",
@@ -5345,7 +5345,7 @@
     "role": null,
     "vertices": 902,
     "indices": 5400,
-    "offset": 8359629
+    "offset": 13726263
   },
   {
     "name": "Vertebra C5",
@@ -5353,7 +5353,7 @@
     "role": null,
     "vertices": 927,
     "indices": 5586,
-    "offset": 8378547
+    "offset": 13745181
   },
   {
     "name": "Vertebra C6",
@@ -5361,7 +5361,7 @@
     "role": null,
     "vertices": 928,
     "indices": 5592,
-    "offset": 8398062
+    "offset": 13764696
   },
   {
     "name": "Vertebra C7",
@@ -5369,7 +5369,7 @@
     "role": null,
     "vertices": 927,
     "indices": 5586,
-    "offset": 8417598
+    "offset": 13784232
   },
   {
     "name": "Vertebra L1",
@@ -5377,7 +5377,7 @@
     "role": null,
     "vertices": 931,
     "indices": 5586,
-    "offset": 8437113
+    "offset": 13803747
   },
   {
     "name": "Vertebra L2",
@@ -5385,7 +5385,7 @@
     "role": null,
     "vertices": 940,
     "indices": 5640,
-    "offset": 8456664
+    "offset": 13823298
   },
   {
     "name": "Vertebra L3",
@@ -5393,7 +5393,7 @@
     "role": null,
     "vertices": 949,
     "indices": 5574,
-    "offset": 8476404
+    "offset": 13843038
   },
   {
     "name": "Vertebra L4",
@@ -5401,7 +5401,7 @@
     "role": null,
     "vertices": 927,
     "indices": 5562,
-    "offset": 8496093
+    "offset": 13862727
   },
   {
     "name": "Vertebra L5",
@@ -5409,7 +5409,7 @@
     "role": null,
     "vertices": 925,
     "indices": 5550,
-    "offset": 8515560
+    "offset": 13882194
   },
   {
     "name": "Vertebra T1",
@@ -5417,7 +5417,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 8534985
+    "offset": 13901619
   },
   {
     "name": "Vertebra T10",
@@ -5425,7 +5425,7 @@
     "role": null,
     "vertices": 932,
     "indices": 5592,
-    "offset": 8553885
+    "offset": 13920519
   },
   {
     "name": "Vertebra T11",
@@ -5433,7 +5433,7 @@
     "role": null,
     "vertices": 899,
     "indices": 5394,
-    "offset": 8573457
+    "offset": 13940091
   },
   {
     "name": "Vertebra T12",
@@ -5441,7 +5441,7 @@
     "role": null,
     "vertices": 941,
     "indices": 5646,
-    "offset": 8592336
+    "offset": 13958970
   },
   {
     "name": "Vertebra T2",
@@ -5449,7 +5449,7 @@
     "role": null,
     "vertices": 921,
     "indices": 5526,
-    "offset": 8612097
+    "offset": 13978731
   },
   {
     "name": "Vertebra T3",
@@ -5457,7 +5457,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 8631438
+    "offset": 13998072
   },
   {
     "name": "Vertebra T4",
@@ -5465,7 +5465,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 8650338
+    "offset": 14016972
   },
   {
     "name": "Vertebra T5",
@@ -5473,7 +5473,7 @@
     "role": null,
     "vertices": 900,
     "indices": 5400,
-    "offset": 8669238
+    "offset": 14035872
   },
   {
     "name": "Vertebra T6",
@@ -5481,7 +5481,7 @@
     "role": null,
     "vertices": 890,
     "indices": 5340,
-    "offset": 8688138
+    "offset": 14054772
   },
   {
     "name": "Vertebra T7",
@@ -5489,7 +5489,7 @@
     "role": null,
     "vertices": 950,
     "indices": 5700,
-    "offset": 8706828
+    "offset": 14073462
   },
   {
     "name": "Vertebra T8",
@@ -5497,7 +5497,7 @@
     "role": null,
     "vertices": 868,
     "indices": 5199,
-    "offset": 8726778
+    "offset": 14093412
   },
   {
     "name": "Vertebra T9",
@@ -5505,7 +5505,7 @@
     "role": null,
     "vertices": 903,
     "indices": 5418,
-    "offset": 8744988
+    "offset": 14111622
   },
   {
     "name": "Vomer",
@@ -5513,7 +5513,7 @@
     "role": null,
     "vertices": 514,
     "indices": 3066,
-    "offset": 8763951
+    "offset": 14130585
   },
   {
     "name": "Xiphoid process",
@@ -5521,7 +5521,7 @@
     "role": null,
     "vertices": 459,
     "indices": 2742,
-    "offset": 8774709
+    "offset": 14141343
   },
   {
     "name": "Zygomatic bone.l",
@@ -5529,7 +5529,7 @@
     "role": null,
     "vertices": 666,
     "indices": 3984,
-    "offset": 8784324
+    "offset": 14150958
   },
   {
     "name": "Zygomatic bone.r",
@@ -5537,7 +5537,7 @@
     "role": null,
     "vertices": 666,
     "indices": 3984,
-    "offset": 8798286
+    "offset": 14164920
   },
   {
     "name": "Zygomaticus major muscle.l",
@@ -5545,7 +5545,7 @@
     "role": null,
     "vertices": 397,
     "indices": 2394,
-    "offset": 8812248
+    "offset": 14178882
   },
   {
     "name": "Zygomaticus major muscle.r",
@@ -5553,7 +5553,7 @@
     "role": null,
     "vertices": 397,
     "indices": 2394,
-    "offset": 8820609
+    "offset": 14187243
   },
   {
     "name": "Zygomaticus minor muscle.l",
@@ -5561,7 +5561,7 @@
     "role": null,
     "vertices": 218,
     "indices": 1296,
-    "offset": 8828970
+    "offset": 14195604
   },
   {
     "name": "Zygomaticus minor muscle.r",
@@ -5569,38 +5569,38 @@
     "role": null,
     "vertices": 218,
     "indices": 1296,
-    "offset": 8833524
+    "offset": 14200158
   },
   {
     "name": "External abdominal oblique muscle.l",
     "kind": "muscle",
     "role": "obliques",
-    "vertices": 1777,
-    "indices": 10662,
-    "offset": 8838078
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 14204712
   },
   {
     "name": "External abdominal oblique muscle.r",
     "kind": "muscle",
     "role": "obliques",
-    "vertices": 1777,
-    "indices": 10662,
-    "offset": 8875395
+    "vertices": 3000,
+    "indices": 18000,
+    "offset": 14267712
   },
   {
     "name": "Internal abdominal oblique muscle.l",
     "kind": "muscle",
     "role": "obliques",
-    "vertices": 1708,
-    "indices": 10392,
-    "offset": 8912712
+    "vertices": 2976,
+    "indices": 18000,
+    "offset": 14330712
   },
   {
     "name": "Internal abdominal oblique muscle.r",
     "kind": "muscle",
     "role": "obliques",
-    "vertices": 1708,
-    "indices": 10392,
-    "offset": 8948868
+    "vertices": 2976,
+    "indices": 18000,
+    "offset": 14393496
   }
 ]

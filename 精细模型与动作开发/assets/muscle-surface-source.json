@@ -1,0 +1,2656 @@
+{
+  "source": "https://github.com/Z-Anatomy/Models-of-human-anatomy",
+  "sourceFile": "Z-Anatomy/Startup.blend",
+  "sourceSha256": "9f08a17ea0115fed80b2a73ecdf0a1bc2ab2f6956f37c593ce23d513ea35afcd",
+  "license": "CC-BY-SA-4.0",
+  "triangleBudgetPerMuscle": 6000,
+  "preservedBoneSha256": "6cef9a41bf865fde42f739a96f20774553d907db42f098877555e5eeff413f1f",
+  "structures": [
+    {
+      "name": "(Abdominal part of pectoralis major muscle).l",
+      "sourceTriangles": 1508,
+      "triangles": 1508,
+      "preservedModifiers": []
+    },
+    {
+      "name": "(Abdominal part of pectoralis major muscle).r",
+      "sourceTriangles": 1508,
+      "triangles": 1508,
+      "preservedModifiers": []
+    },
+    {
+      "name": "(Adductor minimus).l",
+      "sourceTriangles": 948,
+      "triangles": 948,
+      "preservedModifiers": []
+    },
+    {
+      "name": "(Adductor minimus).r",
+      "sourceTriangles": 948,
+      "triangles": 948,
+      "preservedModifiers": []
+    },
+    {
+      "name": "(Opponens digiti minimi muscle of foot).l",
+      "sourceTriangles": 236,
+      "triangles": 236,
+      "preservedModifiers": []
+    },
+    {
+      "name": "(Opponens digiti minimi muscle of foot).r",
+      "sourceTriangles": 236,
+      "triangles": 236,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor digiti minimi of foot.l",
+      "sourceTriangles": 1280,
+      "triangles": 1280,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor digiti minimi of foot.r",
+      "sourceTriangles": 1280,
+      "triangles": 1280,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor digiti minimi of hand.l",
+      "sourceTriangles": 672,
+      "triangles": 672,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor digiti minimi of hand.r",
+      "sourceTriangles": 672,
+      "triangles": 672,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor hallucis.l",
+      "sourceTriangles": 1688,
+      "triangles": 1688,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor hallucis.r",
+      "sourceTriangles": 1688,
+      "triangles": 1688,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor pollicis brevis.l",
+      "sourceTriangles": 624,
+      "triangles": 624,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor pollicis brevis.r",
+      "sourceTriangles": 624,
+      "triangles": 624,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor pollicis longus.l",
+      "sourceTriangles": 2462,
+      "triangles": 2462,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Abductor pollicis longus.r",
+      "sourceTriangles": 2462,
+      "triangles": 2462,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Acromial part of deltoid muscle.l",
+      "sourceTriangles": 2964,
+      "triangles": 2964,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Acromial part of deltoid muscle.r",
+      "sourceTriangles": 2964,
+      "triangles": 2964,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor brevis.l",
+      "sourceTriangles": 2132,
+      "triangles": 2132,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor brevis.r",
+      "sourceTriangles": 2132,
+      "triangles": 2132,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor longus.l",
+      "sourceTriangles": 3714,
+      "triangles": 3714,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor longus.r",
+      "sourceTriangles": 3714,
+      "triangles": 3714,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor magnus.l",
+      "sourceTriangles": 8192,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Adductor magnus.r",
+      "sourceTriangles": 8192,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Anconeus muscle.l",
+      "sourceTriangles": 1442,
+      "triangles": 1442,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Anconeus muscle.r",
+      "sourceTriangles": 1442,
+      "triangles": 1442,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Anterior belly of digastric muscle.l",
+      "sourceTriangles": 392,
+      "triangles": 392,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Anterior belly of digastric muscle.r",
+      "sourceTriangles": 392,
+      "triangles": 392,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Descending part of trapezius muscle.l",
+      "sourceTriangles": 4596,
+      "triangles": 4596,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Descending part of trapezius muscle.r",
+      "sourceTriangles": 4596,
+      "triangles": 4596,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Brachialis muscle.l",
+      "sourceTriangles": 3478,
+      "triangles": 3478,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Brachialis muscle.r",
+      "sourceTriangles": 3478,
+      "triangles": 3478,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Brachioradialis muscle.l",
+      "sourceTriangles": 7312,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Brachioradialis muscle.r",
+      "sourceTriangles": 7312,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Bucinator.l",
+      "sourceTriangles": 884,
+      "triangles": 884,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Bucinator.r",
+      "sourceTriangles": 884,
+      "triangles": 884,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Calcaneal tendon.l",
+      "sourceTriangles": 4377,
+      "triangles": 4377,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Calcaneal tendon.r",
+      "sourceTriangles": 4377,
+      "triangles": 4377,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Clavicular head of pectoralis major muscle.l",
+      "sourceTriangles": 850,
+      "triangles": 850,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Clavicular head of pectoralis major muscle.r",
+      "sourceTriangles": 850,
+      "triangles": 850,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Clavicular part of deltoid muscle.l",
+      "sourceTriangles": 2902,
+      "triangles": 2902,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Clavicular part of deltoid muscle.r",
+      "sourceTriangles": 2902,
+      "triangles": 2902,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Coracobrachialis muscle.l",
+      "sourceTriangles": 1160,
+      "triangles": 1160,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Coracobrachialis muscle.r",
+      "sourceTriangles": 1160,
+      "triangles": 1160,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Corrugator supercilii.l",
+      "sourceTriangles": 278,
+      "triangles": 278,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Corrugator supercilii.r",
+      "sourceTriangles": 278,
+      "triangles": 278,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep head of flexor pollicis brevis.l",
+      "sourceTriangles": 746,
+      "triangles": 746,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep head of flexor pollicis brevis.r",
+      "sourceTriangles": 746,
+      "triangles": 746,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep head of pronator teres.l",
+      "sourceTriangles": 1114,
+      "triangles": 1114,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep head of pronator teres.r",
+      "sourceTriangles": 1114,
+      "triangles": 1114,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep part of masseter.l",
+      "sourceTriangles": 994,
+      "triangles": 994,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Deep part of masseter.r",
+      "sourceTriangles": 994,
+      "triangles": 994,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor anguli oris.l",
+      "sourceTriangles": 594,
+      "triangles": 594,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor anguli oris.r",
+      "sourceTriangles": 594,
+      "triangles": 594,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor labii inferioris.l",
+      "sourceTriangles": 832,
+      "triangles": 832,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor labii inferioris.r",
+      "sourceTriangles": 832,
+      "triangles": 832,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor septi nasi.l",
+      "sourceTriangles": 276,
+      "triangles": 276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Depressor septi nasi.r",
+      "sourceTriangles": 276,
+      "triangles": 276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ascending part of trapezius muscle.l",
+      "sourceTriangles": 6760,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ascending part of trapezius muscle.r",
+      "sourceTriangles": 6760,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal interossei muscles of foot.l",
+      "sourceTriangles": 1946,
+      "triangles": 1946,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal interossei muscles of foot.r",
+      "sourceTriangles": 1946,
+      "triangles": 1946,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal interossei muscles of hand.l",
+      "sourceTriangles": 1364,
+      "triangles": 1364,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal interossei muscles of hand.r",
+      "sourceTriangles": 1364,
+      "triangles": 1364,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal parts of lateral intertransversarii lumborum muscles.l",
+      "sourceTriangles": 720,
+      "triangles": 720,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Dorsal parts of lateral intertransversarii lumborum muscles.r",
+      "sourceTriangles": 720,
+      "triangles": 720,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Epicranial aponeurosis.l",
+      "sourceTriangles": 20118,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Epicranial aponeurosis.r",
+      "sourceTriangles": 20118,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor carpi radialis brevis.l",
+      "sourceTriangles": 3142,
+      "triangles": 3142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor carpi radialis brevis.r",
+      "sourceTriangles": 3142,
+      "triangles": 3142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor carpi radialis longus.l",
+      "sourceTriangles": 3706,
+      "triangles": 3706,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor carpi radialis longus.r",
+      "sourceTriangles": 3706,
+      "triangles": 3706,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digiti minimi.l",
+      "sourceTriangles": 2152,
+      "triangles": 2152,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digiti minimi.r",
+      "sourceTriangles": 2152,
+      "triangles": 2152,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum brevis.l",
+      "sourceTriangles": 3184,
+      "triangles": 3184,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum brevis.r",
+      "sourceTriangles": 3184,
+      "triangles": 3184,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum longus.l",
+      "sourceTriangles": 3176,
+      "triangles": 3176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum longus.r",
+      "sourceTriangles": 3176,
+      "triangles": 3176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum.l",
+      "sourceTriangles": 6410,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor digitorum.r",
+      "sourceTriangles": 6410,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor hallucis brevis.l",
+      "sourceTriangles": 1118,
+      "triangles": 1118,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor hallucis brevis.r",
+      "sourceTriangles": 1118,
+      "triangles": 1118,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor hallucis longus.l",
+      "sourceTriangles": 2362,
+      "triangles": 2362,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor hallucis longus.r",
+      "sourceTriangles": 2362,
+      "triangles": 2362,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor indicis.l",
+      "sourceTriangles": 1142,
+      "triangles": 1142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor indicis.r",
+      "sourceTriangles": 1142,
+      "triangles": 1142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor pollicis brevis.l",
+      "sourceTriangles": 1176,
+      "triangles": 1176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor pollicis brevis.r",
+      "sourceTriangles": 1176,
+      "triangles": 1176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor pollicis longus.l",
+      "sourceTriangles": 1602,
+      "triangles": 1602,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor pollicis longus.r",
+      "sourceTriangles": 1602,
+      "triangles": 1602,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Extensor retinaculum of wrist.l",
+      "sourceTriangles": 368,
+      "triangles": 368,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Extensor retinaculum of wrist.r",
+      "sourceTriangles": 368,
+      "triangles": 368,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Fibularis brevis muscle.l",
+      "sourceTriangles": 3446,
+      "triangles": 3446,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Fibularis brevis muscle.r",
+      "sourceTriangles": 3446,
+      "triangles": 3446,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Fibularis longus muscle.l",
+      "sourceTriangles": 5522,
+      "triangles": 5522,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Fibularis longus muscle.r",
+      "sourceTriangles": 5522,
+      "triangles": 5522,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Fibularis tertius muscle.l",
+      "sourceTriangles": 586,
+      "triangles": 586,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Fibularis tertius muscle.r",
+      "sourceTriangles": 586,
+      "triangles": 586,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor carpi radialis.l",
+      "sourceTriangles": 1666,
+      "triangles": 1666,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor carpi radialis.r",
+      "sourceTriangles": 1666,
+      "triangles": 1666,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digiti minimi of foot.l",
+      "sourceTriangles": 464,
+      "triangles": 464,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digiti minimi of foot.r",
+      "sourceTriangles": 464,
+      "triangles": 464,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digiti minimi of hand.l",
+      "sourceTriangles": 308,
+      "triangles": 308,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digiti minimi of hand.r",
+      "sourceTriangles": 308,
+      "triangles": 308,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum brevis.l",
+      "sourceTriangles": 3224,
+      "triangles": 3224,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum brevis.r",
+      "sourceTriangles": 3224,
+      "triangles": 3224,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum longus.l",
+      "sourceTriangles": 6836,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum longus.r",
+      "sourceTriangles": 6836,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum profundus.l",
+      "sourceTriangles": 7110,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor digitorum profundus.r",
+      "sourceTriangles": 7110,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor hallucis longus.l",
+      "sourceTriangles": 5878,
+      "triangles": 5878,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor hallucis longus.r",
+      "sourceTriangles": 5878,
+      "triangles": 5878,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor pollicis longus.l",
+      "sourceTriangles": 1666,
+      "triangles": 1666,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor pollicis longus.r",
+      "sourceTriangles": 1666,
+      "triangles": 1666,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Flexor retinaculum of ankle.l",
+      "sourceTriangles": 696,
+      "triangles": 696,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Flexor retinaculum of ankle.r",
+      "sourceTriangles": 696,
+      "triangles": 696,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Flexor retinaculum of wrist.l",
+      "sourceTriangles": 524,
+      "triangles": 524,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Flexor retinaculum of wrist.r",
+      "sourceTriangles": 524,
+      "triangles": 524,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Frontalis muscle.l",
+      "sourceTriangles": 5874,
+      "triangles": 5874,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Frontalis muscle.r",
+      "sourceTriangles": 5874,
+      "triangles": 5874,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Geniohyoid muscle.l",
+      "sourceTriangles": 530,
+      "triangles": 530,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Geniohyoid muscle.r",
+      "sourceTriangles": 530,
+      "triangles": 530,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus maximus muscle.l",
+      "sourceTriangles": 3326,
+      "triangles": 3326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus maximus muscle.r",
+      "sourceTriangles": 3326,
+      "triangles": 3326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus medius muscle.l",
+      "sourceTriangles": 5176,
+      "triangles": 5176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus medius muscle.r",
+      "sourceTriangles": 5176,
+      "triangles": 5176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus minimus muscle.l",
+      "sourceTriangles": 6250,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gluteus minimus muscle.r",
+      "sourceTriangles": 6250,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gracilis muscle.l",
+      "sourceTriangles": 4812,
+      "triangles": 4812,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Gracilis muscle.r",
+      "sourceTriangles": 4812,
+      "triangles": 4812,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humeral head of extensor carpi ulnaris.l",
+      "sourceTriangles": 830,
+      "triangles": 830,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humeral head of extensor carpi ulnaris.r",
+      "sourceTriangles": 830,
+      "triangles": 830,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humeral head of flexor carpi ulnaris.l",
+      "sourceTriangles": 3912,
+      "triangles": 3912,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humeral head of flexor carpi ulnaris.r",
+      "sourceTriangles": 3912,
+      "triangles": 3912,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humero-ulnar head of flexor digitorum superficialis.l",
+      "sourceTriangles": 12798,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Humero-ulnar head of flexor digitorum superficialis.r",
+      "sourceTriangles": 12798,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliacus muscle.l",
+      "sourceTriangles": 4354,
+      "triangles": 4354,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliacus muscle.r",
+      "sourceTriangles": 4354,
+      "triangles": 4354,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis colli muscle",
+      "sourceTriangles": 2050,
+      "triangles": 2050,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis colli muscle.r",
+      "sourceTriangles": 2050,
+      "triangles": 2050,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis lumborum muscle.l",
+      "sourceTriangles": 10038,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis lumborum muscle.r",
+      "sourceTriangles": 10038,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis thoracis muscle.l",
+      "sourceTriangles": 5772,
+      "triangles": 5772,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliocostalis thoracis muscle.r",
+      "sourceTriangles": 5772,
+      "triangles": 5772,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliotibial tract.l",
+      "sourceTriangles": 48612,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Iliotibial tract.r",
+      "sourceTriangles": 48612,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior extensor retinaculum of ankle.l",
+      "sourceTriangles": 316,
+      "triangles": 316,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Inferior extensor retinaculum of ankle.r",
+      "sourceTriangles": 316,
+      "triangles": 316,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Inferior fibular retinaculum.l",
+      "sourceTriangles": 35,
+      "triangles": 35,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior fibular retinaculum.r",
+      "sourceTriangles": 35,
+      "triangles": 35,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior gemellus muscle.l",
+      "sourceTriangles": 976,
+      "triangles": 976,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior gemellus muscle.r",
+      "sourceTriangles": 976,
+      "triangles": 976,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior head of lateral pterygoid muscle.l",
+      "sourceTriangles": 326,
+      "triangles": 326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inferior head of lateral pterygoid muscle.r",
+      "sourceTriangles": 326,
+      "triangles": 326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Infraspinatus muscle.l",
+      "sourceTriangles": 3166,
+      "triangles": 3166,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Infraspinatus muscle.r",
+      "sourceTriangles": 3166,
+      "triangles": 3166,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inguinal ligament.l",
+      "sourceTriangles": 1056,
+      "triangles": 1056,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Inguinal ligament.r",
+      "sourceTriangles": 1056,
+      "triangles": 1056,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Intermediate tendon of digastric muscle.l",
+      "sourceTriangles": 228,
+      "triangles": 228,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Intermediate tendon of digastric muscle.r",
+      "sourceTriangles": 228,
+      "triangles": 228,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales colli muscles.l",
+      "sourceTriangles": 444,
+      "triangles": 444,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales colli muscles.r",
+      "sourceTriangles": 444,
+      "triangles": 444,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales lumborum muscles.l",
+      "sourceTriangles": 562,
+      "triangles": 562,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales lumborum muscles.r",
+      "sourceTriangles": 562,
+      "triangles": 562,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales thoracis muscles.l",
+      "sourceTriangles": 198,
+      "triangles": 198,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Interspinales thoracis muscles.r",
+      "sourceTriangles": 198,
+      "triangles": 198,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of flexor hallucis brevis.l",
+      "sourceTriangles": 966,
+      "triangles": 966,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of flexor hallucis brevis.r",
+      "sourceTriangles": 966,
+      "triangles": 966,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of gastrocnemius.l",
+      "sourceTriangles": 4908,
+      "triangles": 4908,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of gastrocnemius.r",
+      "sourceTriangles": 4908,
+      "triangles": 4908,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of triceps brachii.l",
+      "sourceTriangles": 3628,
+      "triangles": 3628,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral head of triceps brachii.r",
+      "sourceTriangles": 3628,
+      "triangles": 3628,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lateral patellar retinaculum.l",
+      "sourceTriangles": 148,
+      "triangles": 148,
+      "preservedModifiers": [
+        "SOLIDIFY",
+        "SUBSURF"
+      ]
+    },
+    {
+      "name": "Lateral patellar retinaculum.r",
+      "sourceTriangles": 148,
+      "triangles": 148,
+      "preservedModifiers": [
+        "SOLIDIFY",
+        "SUBSURF"
+      ]
+    },
+    {
+      "name": "Latissimus dorsi muscle.l",
+      "sourceTriangles": 21580,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Latissimus dorsi muscle.r",
+      "sourceTriangles": 21580,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator anguli oris.l",
+      "sourceTriangles": 330,
+      "triangles": 330,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator anguli oris.r",
+      "sourceTriangles": 330,
+      "triangles": 330,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator labii superioris.l",
+      "sourceTriangles": 540,
+      "triangles": 540,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator labii superioris.r",
+      "sourceTriangles": 540,
+      "triangles": 540,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator nasolabialis.l",
+      "sourceTriangles": 172,
+      "triangles": 172,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator nasolabialis.r",
+      "sourceTriangles": 172,
+      "triangles": 172,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator scapulae.l",
+      "sourceTriangles": 3082,
+      "triangles": 3082,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levator scapulae.r",
+      "sourceTriangles": 3082,
+      "triangles": 3082,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levatores breves costarum.l",
+      "sourceTriangles": 2690,
+      "triangles": 2690,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levatores breves costarum.r",
+      "sourceTriangles": 2690,
+      "triangles": 2690,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levatores longi costarum.l",
+      "sourceTriangles": 5930,
+      "triangles": 5930,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Levatores longi costarum.r",
+      "sourceTriangles": 5930,
+      "triangles": 5930,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Linea alba",
+      "sourceTriangles": 338,
+      "triangles": 338,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of biceps brachii.l",
+      "sourceTriangles": 3218,
+      "triangles": 3218,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of biceps brachii.r",
+      "sourceTriangles": 3218,
+      "triangles": 3218,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of biceps femoris.l",
+      "sourceTriangles": 7258,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of biceps femoris.r",
+      "sourceTriangles": 7258,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of triceps brachii.l",
+      "sourceTriangles": 3950,
+      "triangles": 3950,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Long head of triceps brachii.r",
+      "sourceTriangles": 3950,
+      "triangles": 3950,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus capitis muscle.l",
+      "sourceTriangles": 1574,
+      "triangles": 1574,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus capitis muscle.r",
+      "sourceTriangles": 1574,
+      "triangles": 1574,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus colli muscle.l",
+      "sourceTriangles": 1826,
+      "triangles": 1826,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus colli muscle.r",
+      "sourceTriangles": 1826,
+      "triangles": 1826,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus thoracis muscle.l",
+      "sourceTriangles": 9652,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longissimus thoracis muscle.r",
+      "sourceTriangles": 9652,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longus capitis muscle.l",
+      "sourceTriangles": 1980,
+      "triangles": 1980,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longus capitis muscle.r",
+      "sourceTriangles": 1980,
+      "triangles": 1980,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longus colli muscle.l",
+      "sourceTriangles": 6294,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Longus colli muscle.r",
+      "sourceTriangles": 6294,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lumbrical muscles of foot.l",
+      "sourceTriangles": 418,
+      "triangles": 418,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lumbrical muscles of foot.r",
+      "sourceTriangles": 418,
+      "triangles": 418,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lumbrical muscles of hand.l",
+      "sourceTriangles": 1368,
+      "triangles": 1368,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Lumbrical muscles of hand.r",
+      "sourceTriangles": 1368,
+      "triangles": 1368,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of flexor hallucis brevis.l",
+      "sourceTriangles": 514,
+      "triangles": 514,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of flexor hallucis brevis.r",
+      "sourceTriangles": 514,
+      "triangles": 514,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of gastrocnemius.l",
+      "sourceTriangles": 6462,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of gastrocnemius.r",
+      "sourceTriangles": 6462,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of triceps brachii.l",
+      "sourceTriangles": 2686,
+      "triangles": 2686,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial head of triceps brachii.r",
+      "sourceTriangles": 2686,
+      "triangles": 2686,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial patellar retinaculum.l",
+      "sourceTriangles": 184,
+      "triangles": 184,
+      "preservedModifiers": [
+        "SOLIDIFY",
+        "SUBSURF"
+      ]
+    },
+    {
+      "name": "Medial patellar retinaculum.r",
+      "sourceTriangles": 184,
+      "triangles": 184,
+      "preservedModifiers": [
+        "SOLIDIFY",
+        "SUBSURF"
+      ]
+    },
+    {
+      "name": "Medial pterygoid muscle.l",
+      "sourceTriangles": 496,
+      "triangles": 496,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Medial pterygoid muscle.r",
+      "sourceTriangles": 496,
+      "triangles": 496,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Mentalis muscle.l",
+      "sourceTriangles": 166,
+      "triangles": 166,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Mentalis muscle.r",
+      "sourceTriangles": 166,
+      "triangles": 166,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus colli muscle.l",
+      "sourceTriangles": 1390,
+      "triangles": 1390,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus colli muscle.r",
+      "sourceTriangles": 1390,
+      "triangles": 1390,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus lumborum muscle.l",
+      "sourceTriangles": 2820,
+      "triangles": 2820,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus lumborum muscle.r",
+      "sourceTriangles": 2820,
+      "triangles": 2820,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus thoracis muscle.l",
+      "sourceTriangles": 3902,
+      "triangles": 3902,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Multifidus thoracis muscle.r",
+      "sourceTriangles": 3902,
+      "triangles": 3902,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Mylohyoid muscle.l",
+      "sourceTriangles": 1122,
+      "triangles": 1122,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Mylohyoid muscle.r",
+      "sourceTriangles": 1122,
+      "triangles": 1122,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Nasalis muscle.l",
+      "sourceTriangles": 704,
+      "triangles": 704,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Nasalis muscle.r",
+      "sourceTriangles": 704,
+      "triangles": 704,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Oblique head of adductor hallucis.l",
+      "sourceTriangles": 904,
+      "triangles": 904,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Oblique head of adductor hallucis.r",
+      "sourceTriangles": 904,
+      "triangles": 904,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Oblique head of adductor pollicis.l",
+      "sourceTriangles": 450,
+      "triangles": 450,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Oblique head of adductor pollicis.r",
+      "sourceTriangles": 450,
+      "triangles": 450,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obliquus inferior capitis muscle.l",
+      "sourceTriangles": 540,
+      "triangles": 540,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obliquus inferior capitis muscle.r",
+      "sourceTriangles": 540,
+      "triangles": 540,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obliquus superior capitis muscle.l",
+      "sourceTriangles": 654,
+      "triangles": 654,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obliquus superior capitis muscle.r",
+      "sourceTriangles": 654,
+      "triangles": 654,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obturator externus.l",
+      "sourceTriangles": 1156,
+      "triangles": 1156,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obturator externus.r",
+      "sourceTriangles": 1156,
+      "triangles": 1156,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obturator internus.l",
+      "sourceTriangles": 3760,
+      "triangles": 3760,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Obturator internus.r",
+      "sourceTriangles": 3760,
+      "triangles": 3760,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Occipitalis muscle.l",
+      "sourceTriangles": 2602,
+      "triangles": 2602,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Occipitalis muscle.r",
+      "sourceTriangles": 2602,
+      "triangles": 2602,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Omohyoid muscle.l",
+      "sourceTriangles": 2706,
+      "triangles": 2706,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Omohyoid muscle.r",
+      "sourceTriangles": 2706,
+      "triangles": 2706,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Opponens digiti minimi muscle of hand.l",
+      "sourceTriangles": 420,
+      "triangles": 420,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Opponens digiti minimi muscle of hand.r",
+      "sourceTriangles": 420,
+      "triangles": 420,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Opponens pollicis muscle.l",
+      "sourceTriangles": 384,
+      "triangles": 384,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Opponens pollicis muscle.r",
+      "sourceTriangles": 384,
+      "triangles": 384,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Orbicularis oris muscle.l",
+      "sourceTriangles": 1880,
+      "triangles": 1880,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Orbicularis oris muscle.r",
+      "sourceTriangles": 1880,
+      "triangles": 1880,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palmar interossei muscles.l",
+      "sourceTriangles": 174,
+      "triangles": 174,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palmar interossei muscles.r",
+      "sourceTriangles": 174,
+      "triangles": 174,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palmaris longus muscle.l",
+      "sourceTriangles": 4374,
+      "triangles": 4374,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palmaris longus muscle.r",
+      "sourceTriangles": 4374,
+      "triangles": 4374,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pectineus muscle.l",
+      "sourceTriangles": 1952,
+      "triangles": 1952,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pectineus muscle.r",
+      "sourceTriangles": 1952,
+      "triangles": 1952,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pectoralis minor muscle.l",
+      "sourceTriangles": 4142,
+      "triangles": 4142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pectoralis minor muscle.r",
+      "sourceTriangles": 4142,
+      "triangles": 4142,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Piriformis muscle.l",
+      "sourceTriangles": 1500,
+      "triangles": 1500,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Piriformis muscle.r",
+      "sourceTriangles": 1500,
+      "triangles": 1500,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Plantar aponeurosis.l",
+      "sourceTriangles": 406,
+      "triangles": 406,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Plantar aponeurosis.r",
+      "sourceTriangles": 406,
+      "triangles": 406,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Plantar interossei muscles.l",
+      "sourceTriangles": 1242,
+      "triangles": 1242,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Plantar interossei muscles.r",
+      "sourceTriangles": 1242,
+      "triangles": 1242,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Plantaris muscle.l",
+      "sourceTriangles": 4698,
+      "triangles": 4698,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Plantaris muscle.r",
+      "sourceTriangles": 4698,
+      "triangles": 4698,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Popliteus muscle.l",
+      "sourceTriangles": 1132,
+      "triangles": 1132,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Popliteus muscle.r",
+      "sourceTriangles": 1132,
+      "triangles": 1132,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Procerus muscle.l",
+      "sourceTriangles": 546,
+      "triangles": 546,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Procerus muscle.r",
+      "sourceTriangles": 546,
+      "triangles": 546,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pronator quadratus.l",
+      "sourceTriangles": 1020,
+      "triangles": 1020,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pronator quadratus.r",
+      "sourceTriangles": 1020,
+      "triangles": 1020,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Psoas major.l",
+      "sourceTriangles": 5474,
+      "triangles": 5474,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Psoas major.r",
+      "sourceTriangles": 5474,
+      "triangles": 5474,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pyramidalis muscle.l",
+      "sourceTriangles": 1112,
+      "triangles": 1112,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Pyramidalis muscle.r",
+      "sourceTriangles": 1112,
+      "triangles": 1112,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus femoris muscle.l",
+      "sourceTriangles": 1646,
+      "triangles": 1646,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus femoris muscle.r",
+      "sourceTriangles": 1646,
+      "triangles": 1646,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus lumborum muscle.l",
+      "sourceTriangles": 2832,
+      "triangles": 2832,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus lumborum muscle.r",
+      "sourceTriangles": 2832,
+      "triangles": 2832,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus plantae muscle.l",
+      "sourceTriangles": 1176,
+      "triangles": 1176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Quadratus plantae muscle.r",
+      "sourceTriangles": 1176,
+      "triangles": 1176,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Radial head of flexor digitorum superficialis.l",
+      "sourceTriangles": 1276,
+      "triangles": 1276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Radial head of flexor digitorum superficialis.r",
+      "sourceTriangles": 1276,
+      "triangles": 1276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus abdominis muscle.l",
+      "sourceTriangles": 20604,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus abdominis muscle.r",
+      "sourceTriangles": 20604,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus femoris muscle.l",
+      "sourceTriangles": 8276,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus femoris muscle.r",
+      "sourceTriangles": 8276,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus posterior major capitis muscle.l",
+      "sourceTriangles": 788,
+      "triangles": 788,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus posterior major capitis muscle.r",
+      "sourceTriangles": 788,
+      "triangles": 788,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus posterior minor capitis muscle.l",
+      "sourceTriangles": 432,
+      "triangles": 432,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus posterior minor capitis muscle.r",
+      "sourceTriangles": 432,
+      "triangles": 432,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rhomboid major muscle.l",
+      "sourceTriangles": 4800,
+      "triangles": 4800,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rhomboid major muscle.r",
+      "sourceTriangles": 4800,
+      "triangles": 4800,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rhomboid minor muscle.l",
+      "sourceTriangles": 1494,
+      "triangles": 1494,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rhomboid minor muscle.r",
+      "sourceTriangles": 1494,
+      "triangles": 1494,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Risorius muscle.l",
+      "sourceTriangles": 592,
+      "triangles": 592,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Risorius muscle.r",
+      "sourceTriangles": 592,
+      "triangles": 592,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rotatores.l",
+      "sourceTriangles": 6518,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rotatores.r",
+      "sourceTriangles": 6518,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sartorius muscle.l",
+      "sourceTriangles": 4966,
+      "triangles": 4966,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sartorius muscle.r",
+      "sourceTriangles": 4966,
+      "triangles": 4966,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus anterior muscle.l",
+      "sourceTriangles": 1386,
+      "triangles": 1386,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus anterior muscle.r",
+      "sourceTriangles": 1386,
+      "triangles": 1386,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus medius muscle.l",
+      "sourceTriangles": 2078,
+      "triangles": 2078,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus medius muscle.r",
+      "sourceTriangles": 2078,
+      "triangles": 2078,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus posterior muscle.l",
+      "sourceTriangles": 1326,
+      "triangles": 1326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scalenus posterior muscle.r",
+      "sourceTriangles": 1326,
+      "triangles": 1326,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semimembranosus muscle.l",
+      "sourceTriangles": 7442,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semimembranosus muscle.r",
+      "sourceTriangles": 7442,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semispinalis colli muscle.l",
+      "sourceTriangles": 2584,
+      "triangles": 2584,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semispinalis colli muscle.r",
+      "sourceTriangles": 2584,
+      "triangles": 2584,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semispinalis thoracis muscle.r",
+      "sourceTriangles": 4972,
+      "triangles": 4972,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semitendinosus muscle.l",
+      "sourceTriangles": 4316,
+      "triangles": 4316,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semitendinosus muscle.r",
+      "sourceTriangles": 4316,
+      "triangles": 4316,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus anterior muscle.l",
+      "sourceTriangles": 25240,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus anterior muscle.r",
+      "sourceTriangles": 25240,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus posterior inferior muscle.l",
+      "sourceTriangles": 8958,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus posterior inferior muscle.r",
+      "sourceTriangles": 8958,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus posterior superior muscle.l",
+      "sourceTriangles": 5518,
+      "triangles": 5518,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Serratus posterior superior muscle.r",
+      "sourceTriangles": 5518,
+      "triangles": 5518,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Short head of biceps brachii.l",
+      "sourceTriangles": 2696,
+      "triangles": 2696,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Short head of biceps brachii.r",
+      "sourceTriangles": 2696,
+      "triangles": 2696,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Short head of biceps femoris.l",
+      "sourceTriangles": 2476,
+      "triangles": 2476,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Short head of biceps femoris.r",
+      "sourceTriangles": 2476,
+      "triangles": 2476,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Soleus muscle.l",
+      "sourceTriangles": 6774,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Soleus muscle.r",
+      "sourceTriangles": 6774,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Orbital part of orbicularis oculi.l",
+      "sourceTriangles": 2390,
+      "triangles": 2390,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Orbital part of orbicularis oculi.r",
+      "sourceTriangles": 2390,
+      "triangles": 2390,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palpebral part of orbicularis oculi.l",
+      "sourceTriangles": 830,
+      "triangles": 830,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Palpebral part of orbicularis oculi.r",
+      "sourceTriangles": 830,
+      "triangles": 830,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Platysma.l",
+      "sourceTriangles": 6548,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Platysma.r",
+      "sourceTriangles": 6548,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Posterior belly of digastric muscle.l",
+      "sourceTriangles": 1276,
+      "triangles": 1276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Posterior belly of digastric muscle.r",
+      "sourceTriangles": 1276,
+      "triangles": 1276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus anterior capitis muscle.l",
+      "sourceTriangles": 396,
+      "triangles": 396,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus anterior capitis muscle.r",
+      "sourceTriangles": 396,
+      "triangles": 396,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus lateralis capitis muscle.l",
+      "sourceTriangles": 360,
+      "triangles": 360,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Rectus lateralis capitis muscle.r",
+      "sourceTriangles": 360,
+      "triangles": 360,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scapular spinal part of deltoid muscle.l",
+      "sourceTriangles": 4378,
+      "triangles": 4378,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Scapular spinal part of deltoid muscle.r",
+      "sourceTriangles": 4378,
+      "triangles": 4378,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Semispinalis thoracis muscle.l",
+      "sourceTriangles": 4972,
+      "triangles": 4972,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis capitis muscle.l",
+      "sourceTriangles": 2560,
+      "triangles": 2560,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis capitis muscle.r",
+      "sourceTriangles": 2560,
+      "triangles": 2560,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis colli muscle.l",
+      "sourceTriangles": 596,
+      "triangles": 596,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis colli muscle.r",
+      "sourceTriangles": 596,
+      "triangles": 596,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis thoracis muscle.l",
+      "sourceTriangles": 5532,
+      "triangles": 5532,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Spinalis thoracis muscle.r",
+      "sourceTriangles": 5532,
+      "triangles": 5532,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Splenius capitis muscle.l",
+      "sourceTriangles": 5262,
+      "triangles": 5262,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Splenius capitis muscle.r",
+      "sourceTriangles": 5262,
+      "triangles": 5262,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Splenius colli muscle.l",
+      "sourceTriangles": 4314,
+      "triangles": 4314,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Splenius colli muscle.r",
+      "sourceTriangles": 4314,
+      "triangles": 4314,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternocleidomastoid muscle.l",
+      "sourceTriangles": 4952,
+      "triangles": 4952,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternocleidomastoid muscle.r",
+      "sourceTriangles": 4952,
+      "triangles": 4952,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternocostal head of pectoralis major muscle.l",
+      "sourceTriangles": 3222,
+      "triangles": 3222,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternocostal head of pectoralis major muscle.r",
+      "sourceTriangles": 3222,
+      "triangles": 3222,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternohyoid muscle.l",
+      "sourceTriangles": 1394,
+      "triangles": 1394,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Sternohyoid muscle.r",
+      "sourceTriangles": 1394,
+      "triangles": 1394,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Stylohyoid muscle.l",
+      "sourceTriangles": 694,
+      "triangles": 694,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Stylohyoid muscle.r",
+      "sourceTriangles": 694,
+      "triangles": 694,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Subclavius muscle.l",
+      "sourceTriangles": 794,
+      "triangles": 794,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Subclavius muscle.r",
+      "sourceTriangles": 794,
+      "triangles": 794,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Subscapularis muscle.l",
+      "sourceTriangles": 2954,
+      "triangles": 2954,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Subscapularis muscle.r",
+      "sourceTriangles": 2954,
+      "triangles": 2954,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial head of flexor pollicis brevis.l",
+      "sourceTriangles": 276,
+      "triangles": 276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial head of flexor pollicis brevis.r",
+      "sourceTriangles": 276,
+      "triangles": 276,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial head of pronator teres.l",
+      "sourceTriangles": 2546,
+      "triangles": 2546,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial head of pronator teres.r",
+      "sourceTriangles": 2546,
+      "triangles": 2546,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial part of masseter.l",
+      "sourceTriangles": 1404,
+      "triangles": 1404,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial part of masseter.r",
+      "sourceTriangles": 1404,
+      "triangles": 1404,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superficial transverse metacarpal ligament.l",
+      "sourceTriangles": 192,
+      "triangles": 192,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superficial transverse metacarpal ligament.r",
+      "sourceTriangles": 192,
+      "triangles": 192,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superficial transverse metatarsal ligament.l",
+      "sourceTriangles": 99,
+      "triangles": 99,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superficial transverse metatarsal ligament.r",
+      "sourceTriangles": 99,
+      "triangles": 99,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superior extensor retinaculum of ankle.l",
+      "sourceTriangles": 260,
+      "triangles": 260,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superior extensor retinaculum of ankle.r",
+      "sourceTriangles": 260,
+      "triangles": 260,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superior fibular retinaculum.l",
+      "sourceTriangles": 652,
+      "triangles": 652,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superior fibular retinaculum.r",
+      "sourceTriangles": 652,
+      "triangles": 652,
+      "preservedModifiers": [
+        "SOLIDIFY"
+      ]
+    },
+    {
+      "name": "Superior gemellus muscle.l",
+      "sourceTriangles": 404,
+      "triangles": 404,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superior gemellus muscle.r",
+      "sourceTriangles": 404,
+      "triangles": 404,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superior head of lateral pterygoid muscle.l",
+      "sourceTriangles": 226,
+      "triangles": 226,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Superior head of lateral pterygoid muscle.r",
+      "sourceTriangles": 226,
+      "triangles": 226,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Supinator.l",
+      "sourceTriangles": 2754,
+      "triangles": 2754,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Supinator.r",
+      "sourceTriangles": 2754,
+      "triangles": 2754,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Supraspinatus muscle.l",
+      "sourceTriangles": 1430,
+      "triangles": 1430,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Supraspinatus muscle.r",
+      "sourceTriangles": 1430,
+      "triangles": 1430,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Temporalis muscle.l",
+      "sourceTriangles": 10260,
+      "triangles": 5998,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Temporalis muscle.r",
+      "sourceTriangles": 10260,
+      "triangles": 5998,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Temporoparietalis muscle.l",
+      "sourceTriangles": 11972,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Temporoparietalis muscle.r",
+      "sourceTriangles": 11972,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tendon of extensor digitorum longus.l",
+      "sourceTriangles": 5184,
+      "triangles": 5184,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tendon of extensor digitorum longus.r",
+      "sourceTriangles": 5184,
+      "triangles": 5184,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tensor fasciae latae.l",
+      "sourceTriangles": 1862,
+      "triangles": 1862,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tensor fasciae latae.r",
+      "sourceTriangles": 1862,
+      "triangles": 1862,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Teres major muscle.l",
+      "sourceTriangles": 1154,
+      "triangles": 1154,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Teres major muscle.r",
+      "sourceTriangles": 1154,
+      "triangles": 1154,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Teres minor muscle.l",
+      "sourceTriangles": 1522,
+      "triangles": 1522,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Teres minor muscle.r",
+      "sourceTriangles": 1522,
+      "triangles": 1522,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tibialis anterior muscle.l",
+      "sourceTriangles": 3526,
+      "triangles": 3526,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tibialis anterior muscle.r",
+      "sourceTriangles": 3526,
+      "triangles": 3526,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tibialis posterior muscle.l",
+      "sourceTriangles": 5526,
+      "triangles": 5526,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Tibialis posterior muscle.r",
+      "sourceTriangles": 5526,
+      "triangles": 5526,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse head of adductor hallucis.l",
+      "sourceTriangles": 366,
+      "triangles": 366,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse head of adductor hallucis.r",
+      "sourceTriangles": 366,
+      "triangles": 366,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse head of adductor pollicis.l",
+      "sourceTriangles": 1014,
+      "triangles": 1014,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse head of adductor pollicis.r",
+      "sourceTriangles": 1014,
+      "triangles": 1014,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse part of trapezius muscle.l",
+      "sourceTriangles": 2992,
+      "triangles": 2992,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transverse part of trapezius muscle.r",
+      "sourceTriangles": 2992,
+      "triangles": 2992,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transversus abdominis muscle.l",
+      "sourceTriangles": 34328,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Transversus abdominis muscle.r",
+      "sourceTriangles": 34328,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ulnar head of extensor carpi ulnaris.l",
+      "sourceTriangles": 582,
+      "triangles": 582,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ulnar head of extensor carpi ulnaris.r",
+      "sourceTriangles": 582,
+      "triangles": 582,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ulnar head of flexor carpi ulnaris.l",
+      "sourceTriangles": 1466,
+      "triangles": 1466,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ulnar head of flexor carpi ulnaris.r",
+      "sourceTriangles": 1466,
+      "triangles": 1466,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus intermedius muscle.l",
+      "sourceTriangles": 6164,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus intermedius muscle.r",
+      "sourceTriangles": 6164,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus lateralis muscle.l",
+      "sourceTriangles": 9356,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus lateralis muscle.r",
+      "sourceTriangles": 9356,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus medialis muscle.l",
+      "sourceTriangles": 6460,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Vastus medialis muscle.r",
+      "sourceTriangles": 6460,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ventral parts of lateral intertransversarii lumborum muscles.l",
+      "sourceTriangles": 996,
+      "triangles": 996,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Ventral parts of lateral intertransversarii lumborum muscles.r",
+      "sourceTriangles": 996,
+      "triangles": 996,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Zygomaticus major muscle.l",
+      "sourceTriangles": 798,
+      "triangles": 798,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Zygomaticus major muscle.r",
+      "sourceTriangles": 798,
+      "triangles": 798,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Zygomaticus minor muscle.l",
+      "sourceTriangles": 432,
+      "triangles": 432,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Zygomaticus minor muscle.r",
+      "sourceTriangles": 432,
+      "triangles": 432,
+      "preservedModifiers": []
+    },
+    {
+      "name": "External abdominal oblique muscle.l",
+      "sourceTriangles": 29622,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "External abdominal oblique muscle.r",
+      "sourceTriangles": 29622,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Internal abdominal oblique muscle.l",
+      "sourceTriangles": 28869,
+      "triangles": 6000,
+      "preservedModifiers": []
+    },
+    {
+      "name": "Internal abdominal oblique muscle.r",
+      "sourceTriangles": 28869,
+      "triangles": 6000,
+      "preservedModifiers": []
+    }
+  ]
+}

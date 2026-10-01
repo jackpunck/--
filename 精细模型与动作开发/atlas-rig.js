@@ -91,8 +91,9 @@ export function createAtlasRig(body,sources){
       if(n.includes('retinaculum of wrist'))return [['hand'+suffix,1]];
       if(y<1.46)return fingerWeights(p,side);
       if(y<1.66)return mix('hand'+suffix,'forearmRoll'+suffix,smooth(1.535,1.65,y));
-      if(y<1.82)return mix('forearmRoll'+suffix,'forearmMid'+suffix,smooth(1.66,1.82,y));
-      if(y<1.95)return mix('forearmMid'+suffix,'forearm'+suffix,smooth(1.82,1.95,y));
+      // One continuous roll field avoids a second waist where the former two
+      // independent smoothstep bands met in the middle of the muscle belly.
+      if(y<1.95)return mix('forearmRoll'+suffix,'forearm'+suffix,smooth(1.66,1.95,y));
       if(y<2.16)return mix('forearm'+suffix,'upper'+suffix,smooth(1.95,2.10,y));
       return mix('chest','upper'+suffix,1-(1-smooth(.225,.39,x))*smooth(2.28,2.53,y));
     }
@@ -108,11 +109,32 @@ export function createAtlasRig(body,sources){
   function bindGeometry(geometry,item){
     geometry.computeBoundingBox();item={...item,rigCenterY:(geometry.boundingBox.min.y+geometry.boundingBox.max.y)*.5};
     const p=geometry.attributes.position,indices=new Uint16Array(p.count*4),weights=new Float32Array(p.count*4),v=V();
+    const gradients=Array.from({length:4},()=>new Float32Array(p.count*3)),epsilon=.0001;
     for(let i=0;i<p.count;i++){
-      v.fromBufferAttribute(p,i);const influences=skinWeights(v,item);
-      for(let k=0;k<influences.length;k++){indices[i*4+k]=map[influences[k][0]].userData.index;weights[i*4+k]=influences[k][1];}
+      v.fromBufferAttribute(p,i);const influences=skinWeights(v,item),fields=new Map(influences.map(([name,w])=>[name,{w,g:[0,0,0]}]));
+      // Weight derivatives are sampled at bind time, never every animation
+      // frame. They let lighting follow the actual deformed muscle surface.
+      // Finger nearest-chain assignment is discrete: retain its rigid normal.
+      if(item.kind==='muscle'&&!(regions[item.name]==='arm'&&v.y<1.46)){
+        for(let axis=0;axis<3;axis++){
+          const coordinate=v.getComponent(axis);
+          v.setComponent(axis,coordinate+epsilon);const hi=skinWeights(v,item);
+          v.setComponent(axis,coordinate-epsilon);const lo=skinWeights(v,item);
+          v.setComponent(axis,coordinate);
+          for(const [samples,sign]of [[hi,1],[lo,-1]])for(const [name,w]of samples){
+            if(!fields.has(name))fields.set(name,{w:0,g:[0,0,0]});
+            fields.get(name).g[axis]+=sign*w/(2*epsilon);
+          }
+        }
+      }
+      const values=[...fields].filter(([,f])=>f.w||f.g.some(x=>Math.abs(x)>1e-7));
+      if(values.length>4)throw new Error('Too many local skin influences: '+item.name);
+      for(let k=0;k<values.length;k++){
+        const [name,f]=values[k];indices[i*4+k]=map[name].userData.index;weights[i*4+k]=f.w;gradients[k].set(f.g,i*3);
+      }
     }
     geometry.setAttribute('skinIndex',new THREE.BufferAttribute(indices,4));geometry.setAttribute('skinWeight',new THREE.BufferAttribute(weights,4));
+    gradients.forEach((values,k)=>geometry.setAttribute('skinGradient'+k,new THREE.BufferAttribute(values,3)));
   }
   const weights=[];
   for(const side of ['r','l']){
