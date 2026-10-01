@@ -21,7 +21,8 @@ const screenshot=name=>page.screenshot({path:join(dataDir,name+'.png'),style:'#t
 let step='initial landing';
 try {
   await page.goto(base);await page.locator('.landing-hero').waitFor();
-  await page.waitForFunction(()=>document.querySelector('.landing-scene')?.dataset.sceneReady==='true');
+  await page.locator('#landing-heading').waitFor();
+  assert.equal(await page.locator('.landing canvas').count(),0);
   assert.equal(await page.locator('#auth-form').count(),1);
   assert.equal(await page.evaluate(()=>scrollY),0);
   await screenshot('desktop-hero');
@@ -68,13 +69,11 @@ try {
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.waitForFunction(()=>window.ScrollTrigger.getAll().length===0);
 
-  step='GSAP motion, scene interaction and pause cleanup';
+  step='GSAP motion and pause cleanup';
   await page.setViewportSize({width:1440,height:1000});
   await page.emulateMedia({reducedMotion:'no-preference'});
   await page.waitForFunction(()=>window.ScrollTrigger.getAll().length>0);
   await page.evaluate(()=>scrollTo(0,0));
-  await page.locator('.landing-scene').click();
-  assert.equal(await page.locator('.landing-scene').getAttribute('aria-pressed'),'true');
   await page.locator('.landing-motion').click();
   assert.equal(await page.evaluate(()=>window.ScrollTrigger.getAll().length),0);
   assert.equal(await page.locator('.landing-story-text span').first().evaluate(el=>getComputedStyle(el).opacity),'1');
@@ -127,10 +126,11 @@ try {
   }
   await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
   await context.setOffline(true);await page.reload();await page.locator('.landing-hero').waitFor();
-  await page.waitForFunction(()=>document.querySelector('.landing-scene')?.dataset.sceneReady==='true');
+  await page.locator('#landing-heading').waitFor();
+  assert.equal(await page.locator('.landing canvas').count(),0);
   await page.locator('.landing-login').click();await page.locator('#auth-form').waitFor();
   assert.equal(errors.length,0,errors.join('\n'));
-  const result={passed:true,dataDir,widths:[1440,1024,768,390,360],checks:'hero asset, responsive story, menu keyboard navigation, live 3D, feature demos, GSAP cleanup, motion toggle, reduced motion, direct auth entry, email preservation, real register/login/error/logout, profile, animation cleanup, scroll reveal, offline landing',errors};
+  const result={passed:true,dataDir,widths:[1440,1024,768,390,360],checks:'text hero without canvas, responsive story, menu keyboard navigation, feature demos, GSAP cleanup, motion toggle, reduced motion, direct auth entry, email preservation, real register/login/error/logout, profile, animation cleanup, scroll reveal, offline landing',errors};
   await writeFile(join(dataDir,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }catch(error){console.error('FAILED STEP:',step,errors);await screenshot('failure').catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}

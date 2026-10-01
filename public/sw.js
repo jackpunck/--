@@ -1,8 +1,7 @@
-const CACHE = 'fitness-shell-v32';
+const CACHE = 'fitness-shell-v33';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
 SHELL.push('/energy.css', '/landing.css', '/landing.js');
 SHELL.push('/vendor/gsap.min.js', '/vendor/ScrollTrigger.min.js', '/assets/fonts/cabinet-grotesk-400.woff2', '/assets/fonts/cabinet-grotesk-700.woff2');
-SHELL.push('/landing-scene.js', '/vendor/three.module.js', '/vendor/three.core.js');
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL.map(path => new Request(path, {cache:'reload'})))).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('fitness-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {

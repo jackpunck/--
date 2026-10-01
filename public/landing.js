@@ -13,7 +13,6 @@ export function landingMarkup(auth, icon) {
     <main>
       <section class="landing-hero" aria-labelledby="landing-heading">
         <div class="landing-hero-copy"><h1 id="landing-heading"><span>把训练、饮食与 AI 连接，</span><span>让每一份努力，</span><span>成为看得见的改变。</span></h1></div>
-        <button type="button" class="landing-scene" aria-label="发光线网人物向前奔跑，点击切换加速跑" aria-pressed="false"><span class="scene-wordmark" aria-hidden="true">FORWARD.</span><div class="scene-fallback" aria-hidden="true"><svg viewBox="0 0 240 320"><defs><linearGradient id="runner-fallback-color" x2="1" y2="1"><stop stop-color="#61edff"/><stop offset=".55" stop-color="#899cff"/><stop offset="1" stop-color="#f38bff"/></linearGradient></defs><g fill="#5367ff18" stroke="url(#runner-fallback-color)" stroke-width="1.4" stroke-linejoin="round"><path d="m111 22 19-7 19 10 6 23-13 22-19 3-18-20ZM116 76l30-2 23 22-7 61-26 33-34-19-10-58ZM94 93 72 112l-13 43 35 20 8-13-25-18 23-32M160 92l21 19-7 51-18 15-9-12 13-16 4-29M109 174l28 11-8 48-26 40-18 25-15-7 20-38 16-29ZM138 186l19-23 11 48-27 29-4 49-17 1-2-64 28-23ZM104 33l45-8-26 48-12-51 44 26-32-4ZM94 93l68 64-60 14 44-97-37 100 60-78-67 75M72 112l5 32 17 31M109 174l20 59-39 20 47-68M138 186l3 54-23-14 50-15M70 291l15 7 18-25M120 290l17-1 4-49"/></g></svg></div><div class="scene-caption"><span>MOVE. EAT. EVOLVE.</span><span class="scene-instruction">向前奔跑 · 点击加速 ${arrow}</span></div></button>
         <div class="landing-cross-line"><span aria-hidden="true">＋</span><span aria-hidden="true">＋</span><a href="#landing-story">向下探索 <span>SCROLL TO EXPLORE</span></a><span aria-hidden="true">＋</span><span aria-hidden="true">＋</span></div>
       </section>
       <section class="landing-intro" id="landing-story" aria-labelledby="landing-intro-title">
@@ -54,23 +53,22 @@ export function mountLanding(root) {
   const media=matchMedia('(prefers-reduced-motion: reduce)');
   const motionButton=root.querySelector('.landing-motion');
   const menu=root.querySelector('.landing-menu');
-  const sceneHost=root.querySelector('.landing-scene');
   const progressBar=root.querySelector('.landing-scroll-progress');
   const {gsap,ScrollTrigger}=window;
   const nativeScroll=CSS.supports('animation-timeline: --project')&&CSS.supports('animation-range: entry 0% cover 43%');
   root.classList.toggle('native-scroll-motion',nativeScroll);
   const textTargets=root.querySelectorAll('.landing-hero h1>span,.landing-display>span,.landing-section-heading h2,.landing-journey h2,.landing-start-copy h2,.project-meta h3,.landing-story-text span');
   textTargets.forEach(el=>el.classList.add('landing-gradient-text'));
-  let paused=false,frame=0,scene=null,motionContext=null,mealIndex=0,questionIndex=0,exerciseIndex=0;
+  let paused=false,frame=0,motionContext=null,mealIndex=0,questionIndex=0,exerciseIndex=0;
   const isReduced=()=>paused||media.matches;
-  const paint=()=>{frame=0;const max=document.documentElement.scrollHeight-innerHeight;progressBar.style.transform=`scaleX(${max>0?Math.min(1,scrollY/max):0})`;root.classList.toggle('is-scrolled',scrollY>50);scene?.setScroll(isReduced()?0:Math.min(1,scrollY/innerHeight));};
+  const paint=()=>{frame=0;const max=document.documentElement.scrollHeight-innerHeight;progressBar.style.transform=`scaleX(${max>0?Math.min(1,scrollY/max):0})`;root.classList.toggle('is-scrolled',scrollY>50);};
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(paint);};
   const updateMotion=()=>{
     motionContext?.revert();motionContext=null;
     root.querySelectorAll('.landing-story-text span').forEach(el=>el.style.removeProperty('opacity'));
     root.classList.toggle('motion-paused',isReduced());
     motionButton.setAttribute('aria-pressed',String(isReduced()));motionButton.setAttribute('aria-label',media.matches?'已跟随系统减少动态效果':paused?'开启动态效果':'暂停动态效果');
-    motionButton.title=motionButton.getAttribute('aria-label');motionButton.textContent=isReduced()?'▷':'Ⅱ';motionButton.disabled=media.matches;scene?.setMotion(!isReduced());
+    motionButton.title=motionButton.getAttribute('aria-label');motionButton.textContent=isReduced()?'▷':'Ⅱ';motionButton.disabled=media.matches;
     if(!isReduced()&&gsap&&ScrollTrigger){
       gsap.registerPlugin(ScrollTrigger);motionContext=gsap.matchMedia();
       motionContext.add('(min-width: 0px)',()=>{
@@ -93,7 +91,6 @@ export function mountLanding(root) {
       },root);
     }schedule();
   };
-  import('./landing-scene.js?v=3').then(({createLandingScene})=>{if(signal.aborted)return;try{scene=createLandingScene(sceneHost);scene.setMotion(!isReduced());paint();}catch{sceneHost.dataset.sceneReady='false';sceneHost.querySelector('canvas')?.remove();}}).catch(()=>{sceneHost.dataset.sceneReady='false';});
   motionButton.addEventListener('click',()=>{paused=!paused;updateMotion();},{signal});media.addEventListener('change',updateMotion,{signal});
   window.addEventListener('scroll',schedule,{passive:true,signal});window.addEventListener('resize',schedule,{passive:true,signal});
   const resize=new ResizeObserver(schedule);resize.observe(root);
@@ -118,5 +115,5 @@ export function mountLanding(root) {
   const ambient=new IntersectionObserver(entries=>{for(const entry of entries)entry.target.classList.toggle('motion-in-view',entry.isIntersecting);},{rootMargin:'80px'});
   root.querySelectorAll('.landing-reel,.landing-journey,.project-visual').forEach(el=>ambient.observe(el));
   root.classList.add('motion-ready');updateMotion();paint();document.fonts.ready.then(()=>{if(!signal.aborted)ScrollTrigger?.refresh();});
-  return ()=>{controller.abort();if(menu.open)menu.close();scene?.dispose();motionContext?.revert();resize.disconnect();reveal.disconnect();ambient.disconnect();if(frame)cancelAnimationFrame(frame);};
+  return ()=>{controller.abort();if(menu.open)menu.close();motionContext?.revert();resize.disconnect();reveal.disconnect();ambient.disconnect();if(frame)cancelAnimationFrame(frame);};
 }

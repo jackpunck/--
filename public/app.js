@@ -1,4 +1,4 @@
-import {landingMarkup, mountLanding} from './landing.js?v=6';
+import {landingMarkup, mountLanding} from './landing.js?v=7';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
