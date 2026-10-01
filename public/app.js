@@ -1,3 +1,4 @@
+import {landingMarkup, mountLanding} from './landing.js?v=3';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
@@ -58,6 +59,7 @@ const state = {page:'chat',setting:'profile',date:today(),conversation:null,user
 try { state.sidebarCollapsed = localStorage.getItem('fitness:sidebar-collapsed') === 'true'; } catch { state.sidebarCollapsed = false; }
 const knowledgeDrafts = {};
 const modelViewer = new ModelViewer();
+let landingCleanup = null;
 const chatDrafts = new Map();
 const chatScroll = new Map();
 let chatRun = null;
@@ -116,14 +118,35 @@ async function enter(user,offline=false) {
   render(); if(!profile()) showProfile(true);
 }
 async function loadProviders() { try { const result=await api('/providers'); state.providers=result.providers; state.tasks=result.tasks;state.taskModels=result.taskModels||{}; } catch {} }
-function renderAuth() {
-  const register=state.authMode==='register';
-  $('#app').innerHTML=`<div class="auth-shell"><section class="auth-story"><div class="brand"><span class="brand-symbol">循</span><div>循序<small>YOUR EVERYDAY FITNESS</small></div></div><div><div class="eyebrow" style="color:#9db692">SMALL STEPS. REAL PROGRESS.</div><h1>让每一份努力，<br>都有迹可循。</h1><p>懂你的训练，记住你的饮食。<br>和 AI 一起，找到适合自己的健康节奏。</p></div><div class="auth-footer">训练 · 饮食 · 一点点进步</div><div class="orbit"></div></section><section class="auth-form-wrap"><div class="auth-form"><h2>${register?'开始你的新一程':'欢迎回来'}</h2><p>一个账号，连接电脑和手机上的每一次进步。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">数据保存在当前服务中。同一服务地址下，电脑与手机可登录同一账号同步记录。</p></div></section></div>`;
+// Decorative movement rings use CSS only, with reduced-motion support.
+function energyVisual() {
+ return `<div class="energy-visual" aria-hidden="true"><div class="energy-orbit orbit-one"></div><div class="energy-orbit orbit-two"></div><div class="energy-orbit orbit-three"></div><div class="energy-core">${icon('spark')}</div><span class="energy-satellite satellite-lime">${icon('dumbbell')}</span><span class="energy-satellite satellite-coral">${icon('food')}</span><span class="energy-satellite satellite-white">${icon('body')}</span><span class="energy-caption">FIND YOUR FLOW</span></div>`;
 }
+function authFormMarkup() {
+  const register=state.authMode==='register';
+  return `<div class="auth-form"><div class="auth-welcome"><span></span> YOUR NEXT CHAPTER</div><h2 id="landing-auth-heading" tabindex="-1">${register?'开始你的新一程':'欢迎回来'}</h2><p>一个账号，连接电脑和手机上的每一次进步。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">数据保存在当前服务中。同一服务地址下，电脑与手机可登录同一账号同步记录。</p></div>`;
+}
+function renderAuth() {
+  const panel=$('[data-auth-panel]');
+  if(panel){
+    const email=$('#email')?.value||'';
+    const tabFocused=document.activeElement?.matches('.auth-tabs button');
+    panel.innerHTML=authFormMarkup();
+    $('#email').value=email;
+    if(tabFocused)$(`.auth-tabs [data-mode="${state.authMode}"]`).focus({preventScroll:true});
+    return;
+  }
+  landingCleanup?.();
+  $('#app').innerHTML=landingMarkup(authFormMarkup(),icon);
+  landingCleanup=mountLanding($('.landing'));
+  window.scrollTo(0,0);
+}
+
 function render() {
+  if(landingCleanup){landingCleanup();landingCleanup=null;window.scrollTo(0,0);}
   captureChatDraft();
   const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',settings:'个人中心'};
-  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><strong>进步，发生在每一天。</strong>不必一下做到完美，<br>今天比昨天多一点就好。</div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
+  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">KEEP YOUR MOMENTUM ${icon("spark")}</span><strong>每一步，都算数。</strong>找到自己的节奏，<br>把坚持变成一种日常。<div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
   renderSidebarHistory(); updateSync(); renderPage();
 }
 function updateSync() {
@@ -146,7 +169,7 @@ function macros(current,target,compact=false) {
 }
 function contextCards() {
  const t=totals(today()),n=nutrition(today()),s=scheduled(today()),p=plan(),d=s?.daySnapshot||p?.days.find(x=>x.id===s?.dayId);
- return `<aside class="chat-aside"><section class="card"><div class="context-date">TODAY'S BALANCE</div><div class="today-title"><h3>今日营养</h3><span class="badge">${dayType(today())==='rest'?'休息日':'训练日'}</span></div><div class="ring" style="--percent:${Math.min(100,(t.kcal/n.kcal||0)*100)}"><div><strong>${numeric(t.kcal)}</strong><small>/ ${numeric(n.kcal)} kcal</small></div></div>${n.error?`<div class="error-box">${esc(n.error)}</div>`:macros(t,n)}</section><section class="card"><div class="card-head"><h3>今天怎么练</h3>${icon('dumbbell')}</div><div class="training-mini"><div class="mini-icon">${icon('dumbbell')}</div><div><strong>${esc(d?.name||'休息与恢复')}</strong><small>${s?.completed?'已完成今日训练':d?`${d.exercises.length} 个动作 · 按自己的节奏`:'当天没有训练安排'}</small></div></div><button class="link-button" data-action="nav" data-page="training">查看训练计划 ${icon('arrow')}</button></section><section class="tip-card"><strong>${icon('leaf')} 给今天的一点提醒</strong><p>先把动作做稳，再慢慢增加重量。每一组有质量的练习，都值得被记录。</p></section></aside>`;
+ return `<aside class="chat-aside"><section class="card"><div class="context-date"><span class="live-dot"></span> TODAY’S BALANCE</div><div class="today-title"><h3>今日营养</h3><span class="badge">${dayType(today())==='rest'?'休息日':'训练日'}</span></div><div class="ring" style="--percent:${Math.min(100,(t.kcal/n.kcal||0)*100)}"><div><strong>${numeric(t.kcal)}</strong><small>/ ${numeric(n.kcal)} kcal</small></div></div>${n.error?`<div class="error-box">${esc(n.error)}</div>`:macros(t,n)}</section><section class="card today-training"><div class="context-date">MAKE YOUR MOVE</div><div class="card-head"><h3>今天怎么练</h3>${icon('dumbbell')}</div><div class="training-mini"><div class="mini-icon">${icon('dumbbell')}</div><div><strong>${esc(d?.name||'休息与恢复')}</strong><small>${s?.completed?'已完成今日训练':d?`${d.exercises.length} 个动作 · 按自己的节奏`:'当天没有训练安排'}</small></div></div><button class="link-button" data-action="nav" data-page="training">查看训练计划 ${icon('arrow')}</button></section><section class="tip-card"><strong>${icon('leaf')} 给今天的一点提醒</strong><p>先把动作做稳，再慢慢增加重量。每一组有质量的练习，都值得被记录。</p></section></aside>`;
 }
 function captureChatDraft() {
  const input=$('#chat-input');if(!input)return;
@@ -176,12 +199,12 @@ function resizeComposer(input=$('#chat-input')) {
 let conversationCache;
 function chatConversation() { if(chatRun?.id===state.conversation)return chatRun.conv;const record=state.store.records.get(state.conversation);if(conversationCache?.record!==record)conversationCache={record,value:state.store.get(state.conversation)};return conversationCache?.value; }
 function chatGreeting() {
- return `<div class="greeting"><div class="greeting-icon">${icon('spark')}</div><div class="eyebrow">YOUR PERSONAL FITNESS COMPANION</div><h1>${esc(state.user.name||'你好')}，今天也为自己<br><span>做一点积极的改变。</span></h1><p>训练怎么安排，三餐怎么吃，动作怎么做？<br>直接告诉我你的想法，也可以让我调整日程中的训练，增删改今天的饮食记录。</p></div><div class="prompts">${[['dumbbell','帮我安排训练','从目标出发，找到适合的节奏','training'],['image','拍照记录这一餐','估算营养，让饮食心中有数','meal'],['body','看看动作怎么做','3D 拆解动作，找到正确发力','library'],['leaf','回顾最近的进步','结合体重、训练与饮食记录','review']].map(([i,t,s,a])=>`<button class="prompt-card" data-action="quick" data-target="${a}"><span>${icon(i)}</span><strong>${t}</strong><small>${s}</small><span class="arrow">↗</span></button>`).join('')}</div>`;
+ return `<div class="greeting"><div class="greeting-copy"><div class="eyebrow"><span class="live-dot"></span> YOUR EVERYDAY UPGRADE</div><p class="greeting-hello">${esc(state.user.name||'你好')}，很高兴见到你。</p><h1>今天的你，<br><span>再进步一点。</span></h1><p>训练有方向，饮食有答案。<br>你的 AI 健身搭子，陪你找到自己的节奏。</p><div class="greeting-tags"><span>${icon('spark')} AI 随行</span><span>训练 · 饮食 · 成长</span></div></div>${energyVisual()}</div><div class="quick-heading"><div><span class="eyebrow">LET’S MAKE IT HAPPEN</span><h2>从这一刻开始</h2></div><span>选择一件今天想做的事 ${icon('arrow')}</span></div><div class="prompts">${[['dumbbell','帮我安排训练','量身规划，练出自己的节奏','training','01'],['image','拍照记录这一餐','拍一下，了解这一餐的营养','meal','02'],['body','看看动作怎么做','3D 动作演示，找到正确发力','library','03'],['leaf','回顾最近的进步','每一次坚持，都有迹可循','review','04']].map(([i,t,s,a,n])=>`<button class="prompt-card" data-action="quick" data-target="${a}"><span class="prompt-icon">${icon(i)}</span><span class="prompt-number" aria-hidden="true">${n}</span><strong>${t}</strong><small>${s}</small><span class="arrow">↗</span></button>`).join('')}</div>`;
 }
 function updateChatScroll(body=$('.chat-body')) {
  if(!body)return;
  body.dataset.lastTop=String(body.scrollTop);
- const latest=$('[data-action="chat-latest"]');if(latest)latest.hidden=body.scrollHeight-body.scrollTop-body.clientHeight<=2;
+ const latest=$('[data-action="chat-latest"]');if(latest)latest.hidden=!$('.messages',body)||body.scrollHeight-body.scrollTop-body.clientHeight<=2;
  chatScroll.set(state.conversation||'',{top:body.scrollTop,follow:body.dataset.follow!=='false'});
 }
 function chatFollows(body) {
@@ -190,7 +213,7 @@ function chatFollows(body) {
  if(body.scrollTop<Number(body.dataset.lastTop??body.scrollTop)-2){body.dataset.follow='false';return false;}
  return true;
 }
-function followChat(body=$('.chat-body')) {if(body){body.dataset.follow='true';body.scrollTop=body.scrollHeight;updateChatScroll(body);}}
+function followChat(body=$('.chat-body')) {if(body&&$('.messages',body)){body.dataset.follow='true';body.scrollTop=body.scrollHeight;updateChatScroll(body);}}
 function renderChatBody() {
  const body=$('.chat-body');if(!body)return;
  const follow=chatFollows(body),oldScroll=body.scrollTop;
@@ -1355,6 +1378,12 @@ document.addEventListener('click',async event=>{
  try {
  switch(action){
  case 'auth-mode':state.authMode=target.dataset.mode;renderAuth();break;
+ case 'auth-jump':{
+   state.authMode=target.dataset.mode==='login'?'login':'register';renderAuth();
+   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches||$('.landing')?.classList.contains('motion-paused');
+   $('#auth-entry').scrollIntoView({behavior:reduced?'instant':'smooth'});
+   $('#landing-auth-heading').focus({preventScroll:true});break;
+ }
  case 'nav':await navigate(target.dataset.page);break;
  case 'toggle-sidebar': {
    state.sidebarCollapsed = !state.sidebarCollapsed;

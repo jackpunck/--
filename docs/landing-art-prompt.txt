@@ -1,0 +1,7 @@
+Asset: public/assets/landing-sanctuary.webp
+Generated with: built-in image_gen tool (imagegen skill), 2026-10-01
+Original size: 1536 x 1024; optimized to WebP quality 87 (182,198 bytes).
+The local asset is displayed with CSS parallax and light overlays, not a real-time 3D renderer.
+
+Final generation prompt:
+Use case: stylized-concept. Asset type: original full-bleed website hero background for a Chinese fitness companion named 循序. Create a premium cinematic architectural dreamscape, landscape 1536x1024. A serene surreal wellness sanctuary: monumental ivory and pale peach stone archways to the sides, broad shallow sculptural stairs ascending on the right, a calm reflective shallow pool filling the bottom third, pearlescent glass sphere resting on a low plinth to the right, distant soft blue sky visible through arches. Soft dawn sunlight, gentle caustics, tactile stone, realistic architectural 3D rendering, airy pastel lilac and warm cream with sky blue water. Refined editorial art direction, elegant and tranquil with extraordinary material detail. Wide central open space and subdued light central backdrop for large dark typography to be overlaid by code; place architectural detail mostly at edges. Entire composition fills frame with depth, no borders. No text, no typography, no logos, no UI, no people. This is an original scene inspired by immersive architectural web design, do not copy any existing website composition.
