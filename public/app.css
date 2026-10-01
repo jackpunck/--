@@ -179,6 +179,32 @@
 .meal-macro.protein,.balance-tile.protein{background:#edf3e8}.meal-macro.carbs,.balance-tile.carbs{background:#faf2e4}.meal-macro.fat,.balance-tile.fat{background:#edf1f4}
 .meal-macro small{display:block;font-size:10px;margin-bottom:5px}.meal-macro strong{font-size:18px;font-weight:600;white-space:nowrap}
 .meal-macro em{font-size:9px;font-style:normal;font-weight:400;margin-left:3px;color:var(--muted)}
+.meal-macro label{font-size:10px;font-weight:400;color:var(--muted);margin:0 0 5px}
+.meal-macro-control{display:flex;align-items:center;gap:2px}
+.meal-macro-control input{width:100%;min-width:0;border:0;border-radius:5px;background:transparent;padding:3px 0;font-size:18px;font-weight:600;appearance:textfield;-moz-appearance:textfield}
+.meal-macro-control input::-webkit-inner-spin-button,.meal-macro-control input::-webkit-outer-spin-button{appearance:none;margin:0}
+.meal-macro-steppers{display:flex;flex-direction:column;margin-left:3px;flex:none}
+.meal-macro-steppers button{display:grid;place-items:center;width:23px;height:21px;padding:0;line-height:1;border-radius:4px;color:#61775a}
+.meal-macro-steppers button:hover{background:#174d3c14}
+.meal-macro-steppers .icon{width:14px;height:14px;stroke-width:2}
+.meal-macro .meal-inline-calorie-hint{display:none;color:#986832;line-height:1.6;margin-top:7px}
+.meal-macro:has(input:focus) .meal-inline-calorie-hint{display:block}
+.meal-estimate-button{display:flex;align-items:center;gap:7px;width:100%;text-align:left;margin-top:16px;padding:16px 0 0;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.meal-names{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.meal-name-tag{display:inline-flex;align-items:center;flex-wrap:wrap;gap:7px}
+.food-category-tag{width:auto;max-width:90px;padding:4px 20px 4px 8px;font-size:10px;font-weight:500;border:1px solid #dbe5d1;border-radius:7px;color:#607a50;background:#eef3e7}
+.meal-confirm-category{display:block;margin-top:12px!important;max-width:180px}
+.meal-confirm-category select{margin-top:7px}
+.advice-habit-basis{display:flex;align-items:flex-start;gap:8px;padding:13px 15px;border-radius:12px;background:#f6f4eb;color:#7e8069;font-size:12px}
+.advice-habit-basis .icon{flex:none;margin-top:3px}
+.advice-daily-meals{display:grid;gap:16px}
+.advice-meal-plan{padding:18px;border:1px solid var(--line);border-radius:16px;background:#fafbf7}
+.advice-meal-plan.recorded{background:#f2f5ed}
+.advice-meal-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.advice-meal-heading h4{display:flex;align-items:center;gap:8px;margin:0!important}
+.advice-meal-plan>p{font-size:12px;color:var(--muted);line-height:1.8}
+.advice-meal-plan .advice-food-card{padding:12px;background:#fff}
+@media(max-width:700px){.advice-meal-plan{padding:12px}.food-category-tag{font-size:11px}}
 .meal-estimate-details{border-top:1px solid #e6ebdf;margin-top:15px;padding-top:12px;color:var(--muted);font-size:11px}
 .meal-estimate-details summary{cursor:pointer;line-height:1.8}.meal-estimate-details .icon{width:14px;height:14px;margin-right:5px}
 .meal-estimate-details p{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}
@@ -204,6 +230,8 @@
  .advice-food-card{padding:12px;gap:9px}.advice-food-card .food-symbol{width:34px;height:34px;font-size:22px}
 }
 
+[data-action="meal-camera"]{display:none}
+@media(pointer:coarse) and (hover:none){[data-action="meal-camera"]{display:inline-flex}}
 .nutrition-layout{align-items:stretch}
 .nutrition-date-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;margin-bottom:24px}
 .nutrition-date-meta{display:flex;align-items:center;gap:10px;min-width:0}
@@ -262,6 +290,24 @@
 .meal-original .meal-notes-layout{margin-top:12px}.meal-original .meal-note-item{padding:17px;gap:13px}
 .meal-revision-form{margin-top:26px;padding:22px;background:#f0f5e9;border:1px solid #dfe8d5;border-radius:15px}
 .meal-revision-form h3{margin:0 0 6px}.meal-revision-form .description{font-size:12px;margin:0;color:var(--muted)}
+.meal-revision-form>.row{margin-bottom:14px}.meal-revision-form>.row>label{margin:0}
+.meal-composer{border:1px solid #dce3d9;border-radius:14px;background:#fff;overflow:hidden}
+.meal-composer:focus-within{border-color:#789784;box-shadow:0 0 0 3px #174d3c0b}
+#meal-form .meal-composer #meal-notes{border:0;border-radius:0;box-shadow:none;margin:0;min-height:150px;max-height:280px;padding:16px 18px;resize:vertical;background:transparent}
+.meal-composer-tools{display:flex;align-items:center;gap:8px;padding:6px 12px 12px}
+.meal-composer-tools .icon-button{color:#71866a;display:inline-grid;place-items:center;width:38px;height:38px;border-radius:9px}
+.meal-composer-tools .icon-button:hover{background:#edf2e9}
+.meal-composer .meal-photo-preview{padding:12px 14px 0;margin:0}
+.meal-confirm-items{display:grid;gap:14px;margin:20px 0}
+.meal-confirm-item{padding:18px;border:1px solid var(--line);border-radius:14px;background:#f7f9f3}
+.meal-confirm-fields{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px}
+.meal-confirm-item label{margin:0}.meal-confirm-item input{margin-top:7px}
+.meal-calorie-field{position:relative}
+.meal-calorie-hint{display:none;position:absolute;top:100%;right:0;z-index:2;width:100%;min-width:160px;margin-top:6px;padding:8px 10px;border:1px solid #eadcc7;border-radius:8px;background:#fffcf6;box-shadow:0 3px 10px #233b3310;font-size:11px;line-height:1.6;font-weight:400;color:#986832;pointer-events:none}
+.meal-calorie-field input:focus + .meal-calorie-hint{display:block}
+#meal-confirm-totals{padding:16px;border-radius:12px;background:var(--soft);line-height:1.8}
+.meal-confirm-analysis{margin-top:18px}.meal-confirm-analysis summary{cursor:pointer;color:var(--muted);margin-bottom:12px}
+@media(max-width:700px){.meal-confirm-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.meal-confirm-item{padding:12px}}
 .meal-revision-form>label{margin-top:18px}.meal-revision-form #meal-notes{min-height:130px;max-height:260px;margin-top:4px;field-sizing:content;background:#fff}
 @media(max-width:700px){.meal-revision-form{padding:15px}.meal-original .meal-note-item{padding:13px}.meal-revision-form>.row>.row{margin-top:6px}}
 @media(max-width:700px){.advice-finding{padding:14px}.advice-finding dl>div{grid-template-columns:1fr;gap:4px}.advice-overview{padding:13px;gap:9px}}

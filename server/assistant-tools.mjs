@@ -15,10 +15,11 @@ const taskSchema = { type: 'object', additionalProperties: false, required: ['ti
   date: { type: 'string', description: 'YYYY-MM-DD，今天或未来日期；按日期安排，不指定时刻。' },
   notes: { type: 'string', maxLength: 2000 }, dayId: { type: 'string', description: '新增训练须指定固定计划中非休息训练日 ID。移动原训练且内容不变时可以保留原值。' }, completed: { type: 'boolean' },
 } };
-const mealSchema = { type: 'object', additionalProperties: false, required: ['type', 'items'], properties: {
-  type: { type: 'string', enum: ['早餐', '午餐', '晚餐', '加餐'] }, title: { type: 'string', maxLength: 80 }, notes: { type: 'string', maxLength: 2000, description: '估算依据、食物生熟状态和不确定性。' },
+const mealSchema = { type: 'object', additionalProperties: false, required: ['items'], properties: {
+  title: { type: 'string', maxLength: 80 }, notes: { type: 'string', maxLength: 2000, description: '估算依据、食物生熟状态和不确定性。' },
   items: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'object', additionalProperties: false, required: ['name', 'grams', 'kcal', 'protein', 'carbs', 'fat'], properties: {
     name: { type: 'string', minLength: 1, maxLength: 100 }, grams: { type: 'number', exclusiveMinimum: 0, maximum: 10000 },
+    category: { type: 'string', enum: ['正餐','加餐','零食'], description: '按用户描述与食用场景分类，同一正餐的米饭和菜都标正餐。' },
     kcal: { type: 'number', minimum: 0, maximum: 1000, description: '每 100 克热量，非整份总量。' }, protein: { type: 'number', minimum: 0, maximum: 100 }, carbs: { type: 'number', minimum: 0, maximum: 100 }, fat: { type: 'number', minimum: 0, maximum: 100 },
   } } },
 } };
@@ -32,7 +33,7 @@ export const assistantTools = [
   tool('delete_calendar_task', '用户明确要求删除一个今天或未来未完成训练时使用；保留历史及完成记录。', { id: idSchema, expectedVersion }, ['id', 'expectedVersion']),
   tool('get_today_meals', '读取当前账号今天已计入的饮食、记录版本与按份量计算的营养合计。今天以经服务器校验的客户端本地日期为准。'),
   tool('create_meal', '用户明确要求记录今天实际吃下的食物时直接保存，建议或未吃食谱不能入账。数量不明时先询问；估算必须在 notes 和回复说明不确定性。营养数值一律每 100 克。', { meal: mealSchema }, ['meal']),
-  tool('update_meal', '用户明确要求修订今天一餐时使用。先读 get_today_meals，提交完整餐次和食物；服务端保留照片与修订历史。不能改历史日期。', { id: idSchema, expectedVersion, meal: mealSchema }, ['id', 'expectedVersion', 'meal']),
+  tool('update_meal', '用户明确要求修订今天一餐时使用。先读 get_today_meals，提交完整食物记录；服务端保留照片与修订历史。不能改历史日期。', { id: idSchema, expectedVersion, meal: mealSchema }, ['id', 'expectedVersion', 'meal']),
   tool('delete_meal', '用户明确要求删除今天一餐时使用，先读取真实 id 与 version；不删除附件及其他日期餐食。', { id: idSchema, expectedVersion }, ['id', 'expectedVersion']),
 ];
 
@@ -77,11 +78,11 @@ function readMeals(db, userId, today) {
 }
 function checkedMeal(value, oldData, today) {
   assertObject(value);
-  if (!['早餐', '午餐', '晚餐', '加餐'].includes(value.type)) fail('INVALID_ARGUMENTS', '餐次须为早餐、午餐、晚餐或加餐。');
   const parsed = parseMealEstimate(JSON.stringify({ items: value.items }));
   for (const item of parsed.items) if (/[\x00-\x1f\x7f]/.test(item.name)) fail('INVALID_ARGUMENTS', '食物名称不能包含控制字符。');
   const notes = cleanText(value.notes, 2000, oldData?.notes || '');
-  return { ...(oldData || {}), date: today, type: value.type, title: cleanText(value.title, 80, oldData?.title || value.type), notes, items: parsed.items, confirmed: true,
+  const {type: _legacyType,...previous}=oldData||{};
+  return { ...previous, date: today, createdAt: oldData?.createdAt || new Date().toISOString(), title: cleanText(value.title, 80, oldData?.title || parsed.items.map(item=>item.name).join('、').slice(0,80)), notes, items: parsed.items, confirmed: true,
     attachments: oldData?.attachments || [], history: [...(Array.isArray(oldData?.history) ? oldData.history : []), { notes, result: '按用户明确要求通过 AI 对话保存；营养与份量如为估算，请结合标签或称重核对。', createdAt: new Date().toISOString() }].slice(-8), source: 'ai-chat' };
 }
 function checkedTask(db, userId, value, existing, today) {
@@ -129,7 +130,7 @@ export function executeAssistantTool({ db, userId, name, args = {}, requestId, l
     if (isMeal && creating) {
       assertObject(args.meal);
       const parsed = parseMealEstimate(JSON.stringify({ items: args.meal.items }));
-      hashArgs = { meal: { type: args.meal.type, title: cleanText(args.meal.title, 80, args.meal.type), notes: cleanText(args.meal.notes, 2000), items: parsed.items } };
+      hashArgs = { meal: { ...(args.meal.type ? { type: args.meal.type } : {}), title: cleanText(args.meal.title, 80, args.meal.type || ''), notes: cleanText(args.meal.notes, 2000), items: parsed.items } };
     }
     const hash = createHash('sha256').update(JSON.stringify(canonical({ name, args: hashArgs, today }))).digest('hex');
     ensureLedger(db); db.exec('BEGIN IMMEDIATE'); transaction = true;

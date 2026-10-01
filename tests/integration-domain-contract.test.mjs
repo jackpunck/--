@@ -10,6 +10,19 @@ import { sumFoods } from '../public/domain.js';
 
 const food = { name: '自定义杂粮饭（熟重）', grams: 200, kcal: 130, protein: 2.5, carbs: 29, fat: 0 };
 
+test('unrecognized food shows a helpful message without schema details', () => {
+  assert.throws(() => parseMealEstimate(JSON.stringify({items:[],note:'照片中没有食物'})), /无法识别出食物/);
+});
+
+test('meal parser preserves recognized meal types and leaves missing or invalid types for time fallback', () => {
+  for (const mealType of ['早餐', '午餐', '晚餐', '加餐']) {
+    assert.equal(parseMealEstimate(JSON.stringify({items:[food],mealType})).mealType,mealType);
+  }
+  for (const mealType of [undefined,null,'unknown',12]) {
+    assert.equal(parseMealEstimate(JSON.stringify({items:[food],mealType})).mealType,null);
+  }
+});
+
 test('client meal parser accepts fenced JSON and custom food names without losing zero values', () => {
   const result = parseMealEstimate('```json\n' + JSON.stringify({ items: [food], note: '按剩余份量估算' }) + '\n```');
   assert.equal(result.items[0].name, food.name);
