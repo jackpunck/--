@@ -95,7 +95,7 @@ test('reference sections remain available individually; malformed requests are r
     assert.equal(result.ok, true);
     assert.deepEqual(Object.keys(result.data), [section]);
   }
-  assert.match(read({ sections: ['visuals'] }).data.visuals, /持续等长支撑/);
+  assert.match(read({ sections: ['visuals'] }).data.visuals.guide, /持续等长支撑/);
   assert.ok(read({ sections: ['exercises'] }).data.exercises.some(e => e.id === 'squat'));
   for (const args of [null, [], {}, { sections: [] }, { sections: ['secret'] }, { sections: ['profile'], userId: 'bob' }, { sections: ['meals'], limit: 101 }, { sections: ['nutrition'], date: '2026-02-30' }, { sections: ['training'], startDate: '2026-10-03' }]) {
     assert.equal(read(args).code, 'INVALID_ARGUMENTS');

@@ -264,7 +264,7 @@ export async function streamChat({ provider, messages, tools = [], executeTool, 
     receipt = redactObject(receipt, provider.apiKey);
     for (const item of Array.isArray(receipt) ? receipt : [receipt]) { toolResults.push(item); await onEvent('tool_result', item); }
     history[0] = { ...history[0], content: `${history[0].content}\n当前请求已经完成的真实操作回执（无需再次变更）：${JSON.stringify(receipt)}。根据此回执回复用户，说明实际结果。` };
-    enabledTools = tools.filter(tool => ['get_training_plan', 'read_calendar', 'get_today_meals', 'read_chat_context','read_conversation_history','read_chat_attachment'].includes(tool.function.name));
+    enabledTools = tools.filter(tool => ['get_training_plan', 'read_calendar', 'get_today_meals', 'read_chat_context','read_conversation_history','read_chat_attachment','set_chat_visuals'].includes(tool.function.name));
   }
   // Allow eight context reads in addition to the existing five operation
   // rounds, so loading personal data does not consume the CRUD round budget.
@@ -292,7 +292,7 @@ export async function streamChat({ provider, messages, tools = [], executeTool, 
     await emitText('', true);
     if (!completion.toolCalls.length) return redactObject({ content, model: provider.model, provider: provider.name, ...(reasoning ? { reasoningContent: reasoning } : {}), toolResults }, provider.apiKey);
     signal.throwIfAborted();
-    const contextCalls = completion.toolCalls.filter(call => ['read_chat_context','read_conversation_history','read_chat_attachment'].includes(call.name)).length;
+    const contextCalls = completion.toolCalls.filter(call => ['read_chat_context','read_conversation_history','read_chat_attachment','set_chat_visuals'].includes(call.name)).length;
     contextCount += contextCalls;
     toolCount += completion.toolCalls.length - contextCalls;
     if (completion.toolCalls.length > contextCalls) operationRounds++;

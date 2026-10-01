@@ -7,6 +7,7 @@ import { parseMealEstimate } from '../public/meal-contract.js';
 import { sumFoods } from '../public/domain.js';
 import { recordFromRow } from './storage.mjs';
 import { chatContextTool, readChatContext } from './chat-context.mjs';
+import {chatVisualTool,setChatVisuals} from './chat-visuals.mjs';
 
 const initialized = new WeakSet();
 const expectedVersion = { type: 'integer', minimum: 1, description: '读取工具返回的记录 version。' };
@@ -29,6 +30,7 @@ const tool = (name, description, properties = {}, required = []) => ({ type: 'fu
 
 export const assistantTools = [
   chatContextTool,
+  chatVisualTool,
   ...planTools,
   tool('read_calendar', '读取真实训练日历及 calendarVersion。默认今天起 7 天，最长 31 天。只包含按日期安排的训练；dayTypes 按该日是否存在实际训练自动计算，有训练为 training，无训练为 rest。', { startDate: { type: 'string' }, endDate: { type: 'string' } }),
   tool('create_calendar_task', '用户明确要求在某日期新增训练时使用，同日可有多项训练。训练内容从固定计划取值，不设置时刻或日常任务。创建完整计划请用 create_training_plan 自动按日期排期。', { task: taskSchema, calendarVersion }, ['task', 'calendarVersion']),
@@ -109,6 +111,7 @@ function dateOnlyData(data) {
 }
 
 export function executeAssistantTool({ db, userId, name, args = {}, requestId, localToday }) {
+  if(name==='set_chat_visuals')return setChatVisuals(args);
   if (name === 'read_chat_context') return readChatContext({ db, userId, args, localToday: localToday || resolveLocalToday() });
   // executePlanTool is also independently used by legacy tests and callers.
   if (planTools.some(tool => tool.function.name === name) || name === 'read_training_plan') return executePlanTool({ db, userId, name, args, requestId, localToday });

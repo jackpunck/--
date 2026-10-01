@@ -188,7 +188,7 @@ test('published assistant task and plan schemas expose dates without daily tasks
   assert.equal('startTime' in properties.properties, false);
   assert.equal('endTime' in properties.properties, false);
   const schedule = assistantTools.find(tool => tool.function.name === 'create_training_plan').function.parameters.properties.schedule;
-  assert.deepEqual(Object.keys(schedule.properties), ['startDate', 'days']);
+  assert.deepEqual(Object.keys(schedule.properties), ['startDate', 'days', 'repeat', 'weekdays']);
 });
 
 test('today meal CRUD calculates actual portions, detects conflicts and retains photos and correction history', t => {

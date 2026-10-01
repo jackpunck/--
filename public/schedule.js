@@ -48,9 +48,17 @@ export function planCalendarTasks(plan, startDate) {
 
 /** Project any date window from the original start, including rest days. */
 export function recurringCalendarTasks(cycle, fromDate, toDate, busyDates = []) {
+  if(cycle.endDate){validateDate(cycle.endDate);if(toDate>cycle.endDate)toDate=cycle.endDate;}
+  if(fromDate>toDate)return [];
+  const tasks=projectRecurringTasks(cycle,fromDate,toDate,busyDates);
+  return tasks.filter(task=>!cycle.excludedDates?.includes(task.data.date));
+}
+
+function projectRecurringTasks(cycle, fromDate, toDate, busyDates = []) {
   validateDate(cycle.startDate);validateDate(fromDate);validateDate(toDate);
   const plan=cycle.plan;
   if(!cycle.id||!plan?.planVersion||!Array.isArray(plan.days)||!plan.days.length||!plan.days.some(day=>!day.rest))throw new Error('循环训练计划无效。');
+  if(cycle.weekdays)return weeklyTasks(cycle,fromDate,toDate,busyDates);
   const ordinal=date=>Date.parse(date+'T00:00:00Z')/86400000;
   if(!Array.isArray(busyDates))return recurringWithRules(cycle,fromDate,toDate,busyDates);
   const busy=normalizeBusyDates(busyDates);
@@ -70,6 +78,27 @@ export function recurringCalendarTasks(cycle, fromDate, toDate, busyDates = []) 
   return tasks;
 }
 
+// Weekdays are ISO weekdays (Monday=1, Sunday=7). Busy slots postpone the
+// next workout to the next selected weekday without shifting the weekly rule.
+function weeklyTasks(cycle,from,to,settings) {
+  if((Date.parse(to)-Date.parse(from))/86400000>366)throw new Error('一次最多补齐一年的训练。');
+  const days=cycle.plan.days.filter(day=>!day.rest),tasks=[];
+  for(const {date,offset}of weeklySlots(cycle,settings,to)){
+    if(date<from)continue;
+    const day=days[offset%days.length];
+    tasks.push({id:`task:cycle:${cycle.id}:${offset}`,kind:'calendar-task',data:{...validateCalendarTask({title:day.name,date}),dayId:day.id,daySnapshot:structuredClone(day),planVersion:cycle.plan.planVersion,cycleId:cycle.id,rest:false}});
+  }
+  return tasks;
+}
+function* weeklySlots(cycle,settings,to='2199-12-31') {
+  if(!Array.isArray(cycle.weekdays)||!cycle.weekdays.length||cycle.weekdays.some(day=>!Number.isInteger(day)||day<1||day>7))throw new Error('每周训练日须为周一至周日。');
+  const busy=busyPredicate(settings);let offset=0;
+  for(let time=Date.parse(cycle.startDate);time<=Date.parse(to);time+=86400000){
+    const date=new Date(time).toISOString().slice(0,10),weekday=new Date(time).getUTCDay()||7;
+    if(cycle.weekdays.includes(weekday)&&!busy(date))yield {date,offset:offset++};
+  }
+}
+
 function recurringWithRules(cycle,from,to,settings) {
   if((Date.parse(to)-Date.parse(from))/86400000>366)throw new Error('一次最多补齐一年的训练。');
   const busy=busyPredicate(settings),tasks=[];let offset=0;
@@ -86,6 +115,14 @@ function recurringWithRules(cycle,from,to,settings) {
 }
 
 function cycleDateLookup(cycle,settings) {
+  if(cycle.weekdays){
+    const slots=weeklySlots(cycle,settings),dates=[];
+    return offset=>{
+      if(!Number.isSafeInteger(offset)||offset<0)throw new Error('循环训练日期无效。');
+      while(dates.length<=offset){const next=slots.next();if(next.done)throw new Error('没有足够的空闲日期安排训练。');dates.push(next.value.date);}
+      return dates[offset];
+    };
+  }
   if(Array.isArray(settings))return offset=>cycleTaskDate(cycle,offset,settings);
   const busy=busyPredicate(settings),dates=[];let time=Date.parse(cycle.startDate),stalled=0;
   return offset=>{
@@ -111,6 +148,7 @@ export function normalizeBusyDates(dates = []) {
 
 /** Busy training slots pause the cycle; a planned rest slot still consumes a day. */
 export function cycleTaskDate(cycle, offset, busyDates = []) {
+  if(cycle.weekdays)return cycleDateLookup(cycle,busyDates)(offset);
   if(!Array.isArray(busyDates))return cycleDateLookup(cycle,busyDates)(offset);
   return validateDate(new Date(cycleTaskOrdinal(cycle,offset,busyDates)*86400000).toISOString().slice(0,10));
 }

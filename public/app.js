@@ -7,11 +7,11 @@ import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=1
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
-import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=11';
+import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=12';
 import {remainingMealSuggestions, foodCategory, mealWeekContext, mealCategoryInstruction, adjustMealNutrient, mealDishInstruction, parseMealEstimate, nutritionBalance, parseNutritionAdvice, formatMealNotes, mealAdviceTiming} from './meal-contract.js?v=9';
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {formulaCards, foodPortions, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion} from './knowledge-tools.js?v=9';
-import {muscleCatalog, findVisuals, modelUrl} from './visuals.js?v=9';
+import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
@@ -274,12 +274,7 @@ function renderAttachments(files,removable=false,scope='chat') {
  return files.map(f=>f.type?.startsWith('image/')&&f.url?`<div class="message-attachment-image"><button type="button" data-action="preview-image" data-url="${esc(f.url)}" data-name="${esc(f.name)}" aria-label="预览 ${esc(f.name)}"><img class="message-image" src="${esc(f.url)}" alt="${esc(f.name)}" loading="lazy"></button><div><small>${esc(f.name)}${f.size?' · '+formatFileSize(f.size):''}</small>${button('复制图片','copy-image',`data-url="${esc(f.url)}"`,'small')}</div></div>`:`<span class="attachment">${icon('clip')}${f.url?`<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a>`:esc(f.name)}${f.size?`<small>${formatFileSize(f.size)}</small>`:''}</span>`).join('');
 }
 function messageVisuals(message) {
- const messages=chatConversation()?.messages||[],index=messages.findIndex(item=>item.id===message.id);
- const question=index<0?null:messages.slice(0,index).reverse().find(item=>item.role==='user');
- const matches=findVisuals(question?.content||'',{limit:2});
- // The question fixes the cards for the whole stream; answer-only matches wait
- // until completion so changing partial text cannot replace a live 3D iframe.
- return matches.length?matches:message.streaming?[]:findVisuals(message.content||'',{limit:2});
+ return chatVisuals(message);
 }
 function renderVisualCard(visual,preview=true) {
  return `<article class="visual-card" data-visual-type="${esc(visual.type)}" data-visual-id="${esc(visual.id)}"><header><span>${icon('body')}${visual.type==='muscle'?'肌肉位置':'3D 动作'}</span><strong>${esc(visual.title)}</strong></header>${preview?`<iframe class="chat-model-frame" src="${esc(modelUrl(visual.type,visual.id,{compact:true}))}" title="${esc(visual.title)}3D 示意" loading="lazy" allow="fullscreen"></iframe>`:'<div class="visual-placeholder">'+icon('body')+'<span>打开 3D 查看位置与动作</span></div>'}<footer>${button('打开完整 3D ↗','open-visual',`data-type="${esc(visual.type)}" data-id="${esc(visual.id)}"`,'small')}</footer></article>`;
@@ -289,7 +284,7 @@ function messageBubble(m,skipText=false) {
  const visuals=assistant?messageVisuals(m):[],preview=assistant&&(chatConversation()?.messages||[]).filter(message=>message.role==='assistant').slice(-2).some(message=>message.id===m.id);
  const references=assistant&&!streaming?findKnowledge(text):[];
  const incomplete=assistant&&m.streaming&&!streaming,last=chatConversation()?.messages.at(-1)?.id===m.id;
- return `<div class="message-text ${assistant?'markdown-body':''}">${skipText?'':assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${esc(chatRun?.message===m&&chatRun.progress?chatRun.progress:text?'正在生成…':'正在思考你的问题…')}</div>`:''}</div><div class="message-attachments">${m.attachments?.length?renderAttachments(m.attachments):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.readOnly?(result.ok?'✓ 已读取':'读取未完成'):(result.ok?'✓ 已执行':'操作未完成')}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
+ return `<div class="message-text ${assistant?'markdown-body':''}">${skipText?'':assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${esc(chatRun?.message===m&&chatRun.progress?chatRun.progress:text?'正在生成…':'正在思考你的问题…')}</div>`:''}</div><div class="message-attachments">${m.attachments?.length?renderAttachments(m.attachments):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.presentation?(result.ok?'✓ 展示已更新':'展示未完成'):result.readOnly?(result.ok?'✓ 已读取':'读取未完成'):(result.ok?'✓ 已执行':'操作未完成')}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
 }
 function renderMessage(m) {return `<div class="message ${m.role==='user'?'user':'assistant'}" data-message-id="${esc(m.id)}"><div class="message-icon">${m.role==='user'?esc(state.user.name?.slice(0,1)||'我'):'✧'}</div><div class="bubble">${messageBubble(m)}</div></div>`;}
 function paintChatRun(run) {
@@ -332,7 +327,7 @@ async function sendChat(text,retryId=null) {
  if(!retryId){const userMessage={id:uid(),role:'user',content:text||'请帮我分析附件。',attachments,createdAt:new Date().toISOString()};if(state.chatScene==='meal')userMessage.mealIntent={createdAt:userMessage.createdAt};outgoing.push(userMessage);conv.messages.push(userMessage);}
  const requestId=message?.requestId||uid();
  message=message||{id:uid(),role:'assistant',content:'',createdAt:new Date().toISOString()};
- Object.assign(message,{content:'',requestId,streaming:true,error:null,stopped:false,toolResults:message.toolResults||[]});
+ Object.assign(message,{content:'',requestId,streaming:true,error:null,stopped:false,toolResults:(message.toolResults||[]).filter(result=>result.name!=='set_chat_visuals')});
  if(!retryId)conv.messages.push(message);
  const controller=new AbortController(),run={id,conv,message,store,userId:user.id,controller,discard:false};
  let finish;run.finished=new Promise(resolve=>{finish=resolve;});chatRun=run;state.busy=true;
@@ -341,10 +336,10 @@ async function sendChat(text,retryId=null) {
    await store.put('conversation',id,conv);if(state.store!==store||controller.signal.aborted)return;
    if(state.page==='chat'&&state.conversation===id){renderChat();followChat();}
    await store.sync();controller.signal.throwIfAborted();
-   const aiRelevant=record=>record&&(['plan','calendar-task','schedule','meal','phase'].includes(record.kind)||['active-plan','profile','preferences'].includes(record.id));
+   const aiRelevant=record=>record&&(['plan','calendar-task','schedule','training-cycle','calendar-settings','meal','phase'].includes(record.kind)||['active-plan','profile','preferences'].includes(record.id));
    if([...store.pending.values()].some(aiRelevant)||store.conflicts.some(c=>aiRelevant(store.records.get(c.id))||aiRelevant(c.server)||aiRelevant(c.local)))throw new Error('个人资料、日程、训练计划或饮食还有待同步或冲突的本机修改。请先在「个人中心 → 数据与同步」处理后重试。');
    if(store.status==='offline')throw new Error('当前离线，消息已保存在本机。联网后可以重试。');
-   const response=await streamChat({requestId,conversationId:id,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({id,role,content,attachments,reasoningContent,toolResults,mealIntent})=>({id,role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.some(r=>!r.readOnly)?'\n[已执行操作回执]\n'+toolResults.filter(r=>!r.readOnly).map(r=>r.message||r.name).join('\n'):''),attachments,reasoningContent})),context:{date:state.date,localToday:today(),timezoneOffset:new Date().getTimezoneOffset()}}, {
+   const response=await streamChat({requestId,conversationId:id,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({id,role,content,attachments,reasoningContent,toolResults,mealIntent})=>({id,role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.some(r=>r.name==='set_chat_visuals'&&r.ok)?'\n[本条回答的3D展示] '+JSON.stringify(chatVisuals({toolResults}).map(({type,id})=>({type,id}))):'')+(role==='assistant'&&toolResults?.some(r=>!r.readOnly)?'\n[已执行操作回执]\n'+toolResults.filter(r=>!r.readOnly).map(r=>r.message||r.name).join('\n'):''),attachments,reasoningContent})),context:{date:state.date,localToday:today(),timezoneOffset:new Date().getTimezoneOffset()}}, {
      userId:user.id,signal:controller.signal,onEvent:(type,data)=>{
        if(state.store!==store||run.discard||controller.signal.aborted)return;
        if(type==='meta'){message.model=data.model;message.provider=data.provider;}
@@ -352,7 +347,7 @@ async function sendChat(text,retryId=null) {
        if(type==='tool_start')run.progress=data.message||'正在处理…';
        if(type==='tool_result'){
          run.progress='正在整理回答…';
-         if(!message.toolResults.some(r=>JSON.stringify(r)===JSON.stringify(data)))message.toolResults.push(data);
+         if(data.presentation||!message.toolResults.some(r=>JSON.stringify(r)===JSON.stringify(data)))message.toolResults.push(data);
          if(!data.readOnly)run.toolSync=(run.toolSync||Promise.resolve()).then(()=>store.sync()).then(()=>{
            if(state.store!==store)return;
            if(state.page==='training'&&!$('#modal').open)renderTraining();

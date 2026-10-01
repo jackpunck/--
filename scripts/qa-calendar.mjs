@@ -22,7 +22,7 @@ async function until(predicate,message){for(let i=0;i<750;i++){if(await predicat
 const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(_url,options)=>{
  modelRequests++;const body=JSON.parse(options.body),last=body.messages.at(-1);
  if(last?.role==='tool'){const call=body.messages.findLast(m=>m.tool_calls)?.tool_calls.find(call=>call.id===last.tool_call_id),name=call?.function?.name||last.name,result=JSON.parse(last.content);assert.equal(result.ok,true,`Fixture tool ${name} failed: ${JSON.stringify(result)}`);resultByName.set(name,result);}
- const next=queue.shift();if(!next){finished.add(scenario);return streamed([{choices:[{index:0,delta:{content:`**${scenario}已完成**。`},finish_reason:'stop'}]}]);}
+ const next=queue.shift();if(!next){finished.add(scenario);return streamed([{choices:[{index:0,delta:{content:`**${scenario}已完成**。${scenario==='QA 每周一三五持续循环'?'胸日包含胸肌、肱三头肌，背日包含肱二头肌。':''}`},finish_reason:'stop'}]}]);}
  const name=next.name,args=typeof next.args==='function'?next.args(resultByName):next.args;
  assert(body.tools.some(t=>t.function.name===name),`Missing AI tool ${name}`);toolCalls.push({scenario,name,args});
  if(gate&&!gate.entered&&/^(create|update|delete)_/.test(name)){gate.entered=true;await gate.promise;}
@@ -120,6 +120,17 @@ try{
  await chatTools('QA 修改今日午餐份量',[{name:'get_today_meals',args:{}},{name:'update_meal',args:r=>({id:savedMeal.id,expectedVersion:r.get('get_today_meals').records.find(x=>x.id===savedMeal.id).version,meal:meal(100)})}],{during:()=>nutritionAt(today),after:async()=>{await page.waitForFunction(()=>document.querySelector('.meal-card [data-meal-nutrient="kcal"]')?.value==='116');await shot('desktop-ai-meal');}});
  await chatTools('QA 删除今日午餐',[{name:'get_today_meals',args:{}},{name:'delete_meal',args:r=>({id:savedMeal.id,expectedVersion:r.get('get_today_meals').records.find(x=>x.id===savedMeal.id).version})}],{during:()=>nutritionAt(today),after:()=>page.locator('.meal-card').filter({hasText:'米饭'}).waitFor({state:'hidden'})});
  assert.equal((await serverState()).records.find(r=>r.id===savedMeal.id).deleted,true);
+
+ step='AI weekly cycle persists beyond the initial week without unsolicited 3D cards';console.log(step);
+ await chatTools('QA 每周一三五持续循环',[calendarRead(),{name:'get_training_plan',args:{}},{name:'create_training_plan',args:{plan:samplePlan('QA 持续循环'),schedule:{weekdays:[1,3,5],days:7}}}]);
+ assert.equal(await page.locator('.message.assistant').last().locator('.visual-card').count(),0);
+ const weeklyCycle=(await activeRecords('training-cycle')).find(record=>record.id==='calendar-cycle');assert.deepEqual(weeklyCycle.data.weekdays,[1,3,5]);assert.equal(weeklyCycle.data.endDate,undefined);
+ const farFuture=plusDays(today,140);await nav('training');await selectDate(farFuture);
+ await until(async()=> (await activeRecords('calendar-task')).filter(record=>record.data.cycleId===weeklyCycle.data.id&&record.data.date>=farFuture).length>=12,'Future calendar did not extend the AI cycle');
+ const futureTasks=(await activeRecords('calendar-task')).filter(record=>record.data.cycleId===weeklyCycle.data.id&&record.data.date>=farFuture);
+ assert(futureTasks.every(record=>[1,3,5].includes(new Date(record.data.date+'T12:00:00').getDay())));
+ await chatTools('QA 删除持续循环',[{name:'get_training_plan',args:{}},{name:'delete_training_plan',args:r=>({expectedVersion:r.get('get_training_plan').currentVersion})}]);
+ assert.equal((await serverState()).records.find(record=>record.id==='calendar-cycle').deleted,true);
 
  step='390px training, date editor, nutrition and final error audit';console.log(step);
  await push([{id:'active-plan',kind:'plan',data:initialPlan}]);await flush();await nav('training');await selectDate(nextWeek);const mobileTask=await addTask({title:'QA 下一次全身训练',date:plusDays(nextWeek,2)});await addTask({title:'QA 核心与力量训练',date:plusDays(nextWeek,4)});await shot('desktop-final-training');await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Mobile page overflow');assert.equal(await page.locator('.timetable-cell').count(),7);await shot('mobile-date-training');

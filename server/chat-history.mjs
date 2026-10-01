@@ -1,4 +1,5 @@
 import {HttpError,buildMessages} from './providers.mjs';
+import {chatVisuals} from '../public/visuals.js';
 import {recordById} from './calendar-data.mjs';
 
 export const historyTools=[
@@ -23,7 +24,7 @@ export function prepareChatHistory({db,userId,body,maxCharacters=60000}){
     const end=last.id?saved.findIndex(m=>m.id===last.id):-1;
     if(end>=0){
       const supplied=new Map(body.messages.filter(m=>m.id).map(m=>[m.id,m]));
-      archive=saved.slice(0,end+1).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string'&&!m.error&&!m.stopped).map(m=>supplied.get(m.id)||{id:m.id,role:m.role,content:m.content,attachments:m.attachments});
+      archive=saved.slice(0,end+1).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string'&&!m.error&&!m.stopped).map(m=>supplied.get(m.id)||{id:m.id,role:m.role,content:m.content,attachments:m.attachments,toolResults:m.toolResults});
     }
   }
   const attachments=new Map();
@@ -60,7 +61,7 @@ export function prepareChatHistory({db,userId,body,maxCharacters=60000}){
     if(name!=='read_conversation_history')return error('不支持此读取工具。');
     const {offset=0,limit=6,query=''}=args;
     if(Object.keys(args).some(k=>!['offset','limit','query'].includes(k))||!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>12||typeof query!=='string'||query.length>100)return error('历史读取参数无效。');
-    const matches=archive.map((m,index)=>({index,role:m.role,content:m.content,attachments:(m.attachments||[]).map(ref=>attachments.get(ref.id))})).filter(m=>!query||m.content.normalize('NFKC').toLowerCase().includes(query.normalize('NFKC').toLowerCase()));
+    const matches=archive.map((m,index)=>({index,role:m.role,content:m.content,visuals:chatVisuals(m).map(({type,id})=>({type,id})),attachments:(m.attachments||[]).map(ref=>attachments.get(ref.id))})).filter(m=>!query||m.content.normalize('NFKC').toLowerCase().includes(query.normalize('NFKC').toLowerCase()));
     const records=[];let characters=0;
     for(const m of matches.slice(offset,offset+limit)){if(records.length&&characters+m.content.length>48000)break;characters+=m.content.length;records.push(m);}
     return {ok:true,readOnly:true,message:'已读取历史对话。',records,total:matches.length,nextOffset:offset+records.length<matches.length?offset+records.length:null};

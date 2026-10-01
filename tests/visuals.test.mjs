@@ -2,7 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {exercises} from '../public/domain.js';
-import {findVisuals, muscleCatalog, modelUrl} from '../public/visuals.js';
+import {findVisuals,chatVisuals,resolveVisualSelection, muscleCatalog, modelUrl} from '../public/visuals.js';
+
+test('chat cards follow only the latest valid model decision, independent of wording',()=>{
+  assert.deepEqual(chatVisuals({content:'胸肌在哪里，卧推怎么做，给我3D演示'}),[]);
+  const choice=(visuals,ok=true)=>({name:'set_chat_visuals',ok,visuals});
+  const chest={type:'muscle',id:'chest'},bench={type:'exercise',id:'bench'};
+  assert.equal(chatVisuals({content:'就是这个',toolResults:[choice([chest]) ]})[0].id,'chest');
+  assert.deepEqual(chatVisuals({toolResults:[choice([chest]),choice([])]}),[]);
+  assert.equal(chatVisuals({toolResults:[choice([chest]),choice([bench]),choice([chest]) ]})[0].id,'chest');
+  assert.equal(chatVisuals({toolResults:[choice([chest]),choice([{id:'fake'}],false)]})[0].id,'chest');
+  assert.throws(()=>resolveVisualSelection([{type:'exercise',id:'fake'}]),/未收录/);
+  assert.throws(()=>resolveVisualSelection([chest,chest,bench]),/最多/);
+  assert.throws(()=>resolveVisualSelection([{...chest,url:'https://example.test'}]),/type/);
+  assert.equal(resolveVisualSelection([chest,chest]).length,1);
+});
 
 test('questions resolve Chinese/English aliases to actual muscle and exercise URLs', () => {
   assert.equal(findVisuals('肱二头肌在哪里')[0].url,'/model/index.html?mode=atlas&muscle=biceps&embed=1&compact=1');

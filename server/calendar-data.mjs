@@ -1,5 +1,5 @@
 import {normalizeBusySettings} from '../public/busy-rules.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { recordFromRow } from './storage.mjs';
 import { addDays, calendarTasks, recurringCalendarTasks } from '../public/schedule.js';
 
@@ -57,37 +57,45 @@ export function writeRecord(db, userId, { id, kind, data, version = 0, deleted =
 export function validateSchedule(value, today) {
   const input = value ?? {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('排期参数必须是对象。');
-  const startDate = input.startDate ?? today, days = input.days ?? 7;
+  const startDate = input.startDate ?? today, days = input.days ?? 84, repeat=input.repeat??true;
   if (!validDate(startDate) || startDate < today || startDate > addDays(today, 365)) throw new Error('排期开始日期必须在今天至未来一年内。');
-  if (!Number.isSafeInteger(days) || days < 1 || days > 28) throw new Error('排期范围必须为 1–28 天。');
-  return { startDate, days };
+  if (!Number.isSafeInteger(days) || days < 1 || days > 366) throw new Error('排期范围必须为 1–366 天。');
+  if(typeof repeat!=='boolean')throw new Error('循环开关必须为布尔值。');
+  if(input.weekdays!==undefined&&(!Array.isArray(input.weekdays)||input.weekdays.length>7||input.weekdays.some(day=>!Number.isInteger(day)||day<1||day>7)||new Set(input.weekdays).size!==input.weekdays.length))throw new Error('每周训练日须为不重复的 1–7（周一至周日）。');
+  return { startDate, days,repeat,...(input.weekdays?{weekdays:[...input.weekdays].sort((a,b)=>a-b)}:{}) };
 }
 
 // Called inside the same transaction as the plan write. Training is distributed
 // by date in the plan's cycle; unrelated sessions and completed history remain.
 export function arrangePlan(db, userId, previousPlan, planRecord, schedule, today, updatedAt) {
   const current = calendarState(db, userId, previousPlan), records = [], unscheduled = [];
+  const previousCycle=recordById(db,userId,'calendar-cycle');
   const endDate = addDays(schedule.startDate, schedule.days - 1);
   const belongs = task => task.data?.taskType === 'training' && previousPlan && (Boolean(task.data.planVersion) || previousPlan.days?.some(day => day.id === task.data.dayId));
   const removedIds = new Set();
   for (const task of current.records) {
     const date = task.data.date;
     if (date < today || task.data.completed || task.data.daySnapshot?.rest || !belongs(task)) continue;
-    if (!planRecord.deleted && (date < schedule.startDate || date > endDate)) continue;
+    if (!planRecord.deleted && date < schedule.startDate) continue;
     const raw = current.raw.find(item => item.id === task.id);
     if (!raw) continue;
     records.push(writeRecord(db, userId, { ...raw, deleted: true }, updatedAt)); removedIds.add(task.id);
   }
-  if (planRecord.deleted) return { records, scheduled: [], unscheduled, startDate: today, endDate: null };
+  if (planRecord.deleted) {
+    if(previousCycle&&!previousCycle.deleted)writeRecord(db,userId,{...previousCycle,deleted:true},updatedAt);
+    return { records, scheduled: [], unscheduled, startDate: today, endDate: null,recurrence:null };
+  }
   const retained = current.records.filter(task => !removedIds.has(task.id));
   const plan = planRecord.data;
-  const rule={id:plan.planVersion,startDate:schedule.startDate,plan};
+  const weekdays=schedule.weekdays??(previousCycle&&!previousCycle.deleted&&previousCycle.data.plan?.planVersion===previousPlan?.planVersion?previousCycle.data.weekdays:undefined);
+  const rule={id:plan.planVersion,startDate:schedule.startDate,plan,...(weekdays?.length?{weekdays}:{}),...(!schedule.repeat?{endDate}:{}),excludedDates:[...new Set(retained.map(task=>task.data.date).filter(date=>date>=schedule.startDate))]};
+  writeRecord(db,userId,{id:'calendar-cycle',kind:'training-cycle',data:rule,version:previousCycle?.version||0},updatedAt);
   for (const occurrence of recurringCalendarTasks(rule,schedule.startDate,endDate,current.busySettings)) {
     const date=occurrence.data.date,day=occurrence.data.daySnapshot;
     if (retained.some(task => task.data.date === date)) continue;
-    const data = { taskType: 'training', title: day.name, date, notes: '', completed: false, dayId: day.id, daySnapshot: structuredClone(day), planVersion: plan.planVersion, source: 'ai-plan' };
-    const record = writeRecord(db, userId, { id: `task:${randomUUID()}`, kind: 'calendar-task', data }, updatedAt);
+    const data = {...occurrence.data,source:'ai-plan'};
+    const record = writeRecord(db, userId, { id: occurrence.id, kind: 'calendar-task', data }, updatedAt);
     records.push(record); retained.push(record);
   }
-  return { records, scheduled: records.filter(record => !record.deleted).map(record => ({ id: record.id, date: record.data.date, title: record.data.title })), unscheduled, startDate: schedule.startDate, endDate };
+  return { records, scheduled: records.filter(record => !record.deleted).map(record => ({ id: record.id, date: record.data.date, title: record.data.title })), unscheduled, startDate: schedule.startDate, endDate,recurrence:{repeat:schedule.repeat,startDate:rule.startDate,weekdays:weekdays||null,endDate:rule.endDate||null} };
 }

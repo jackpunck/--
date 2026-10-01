@@ -42,7 +42,9 @@ const planSchema = {
 const expectedVersionSchema = { type: 'integer', minimum: 1, description: '必须使用刚刚 get_training_plan 返回的 currentVersion；版本不符时重新读取并按用户要求调整。' };
 const scheduleSchema = { type: 'object', additionalProperties: false, properties: {
   startDate: { type: 'string', description: '排期开始日期 YYYY-MM-DD，默认今天，不能早于今天。' },
-  days: { type: 'integer', minimum: 1, maximum: 28, description: '安排未来天数，默认 7 天。' },
+  days: { type: 'integer', minimum: 1, maximum: 366, description: '首次生成的日期范围，默认 84 天；持续循环不以此为截止日。仅 repeat=false 时代表计划总天数。' },
+  repeat:{type:'boolean',description:'默认 true，保存与手动计划相同的持续循环。仅用户明确要求只排某个有限日期范围时设 false。'},
+  weekdays:{type:'array',minItems:0,maxItems:7,uniqueItems:true,items:{type:'integer',minimum:1,maximum:7},description:'固定每周训练日：1=周一，7=周日。例如每周一三五传 [1,3,5]，训练日按 plan.days 中非休息日的顺序轮换，不能以今天作为周一。省略时按计划训练/休息循环；更新时保留已有每周规则；传 [] 明确恢复按训练/休息顺序循环。'},
 } };
 
 export const planTools = [
@@ -54,7 +56,7 @@ export const planTools = [
   },
   {
     type: 'function', function: {
-      name: 'create_training_plan', description: '用户明确要求创建并保存训练计划时调用。先读取计划与训练日历。按计划循环自动安排未来 7 天各日期的训练，循环休息日不创建训练。schedule 可调整日期范围；不设置时刻或日常任务。已有计划时使用 update_training_plan。每次请求最多一次计划变更。',
+      name: 'create_training_plan', description: '用户明确要求创建并保存训练计划时调用。先读取计划与训练日历。默认保存持续循环，与手动计划一致，日历浏览未来日期时继续补齐。固定每周几使用 schedule.weekdays；仅有限排期使用 repeat=false。已有计划使用 update_training_plan。每次请求最多一次计划变更。',
       parameters: { type: 'object', additionalProperties: false, required: ['plan'], properties: { plan: planSchema, schedule: scheduleSchema } },
     },
   },
@@ -186,6 +188,7 @@ export function executePlanTool({ db, userId, name, args = {}, requestId, localT
     object(args, '工具参数');
     if (readNames.has(name)) return {
       name, ok: true, message: '已读取当前训练计划。', ...state(db, userId),
+      recurrence:(()=>{const cycle=recordById(db,userId,'calendar-cycle'),current=state(db,userId);return current.exists&&cycle&&!cycle.deleted&&cycle.data.plan?.planVersion===current.record.data.planVersion?{startDate:cycle.data.startDate,weekdays:cycle.data.weekdays||null,repeat:!cycle.data.endDate,endDate:cycle.data.endDate||null}:null;})(),
       availableExercises: exercises.map(({ id, name, equipment }) => ({ id, name, equipment })),
     };
     if (typeof requestId !== 'string' || !/^[A-Za-z0-9_.:-]{8,128}$/.test(requestId)) invalid('写入训练计划需要有效的请求 ID。');
@@ -229,9 +232,9 @@ export function executePlanTool({ db, userId, name, args = {}, requestId, localT
       if (schedule) {
         const arranged = arrangePlan(db, userId, current.exists ? current.record.data : null, record, schedule, localToday, updatedAt);
         Object.assign(result, arranged);
-        result.message += deleted ? '已移除未来未完成的关联训练，历史记录已保留。' : `已按日期安排 ${arranged.scheduled.length} 次训练。`;
+        result.message += deleted ? '已移除未来未完成的关联训练，历史记录已保留。' : `${arranged.recurrence.repeat?'已保存持续循环规则，后续日期会继续补齐。':'已保存限定日期范围。'}已生成 ${arranged.scheduled.length} 次训练。`;
       }
-      const receipt = { name, ok: true, message: result.message, originalVersion: record.version, ...(result.records ? { recordIds: result.records.map(item => item.id) } : {}) };
+      const receipt = { name, ok: true, message: result.message, originalVersion: record.version, ...(result.recurrence?{recurrence:result.recurrence}:{}), ...(result.records ? { recordIds: result.records.map(item => item.id) } : {}) };
       db.prepare('INSERT INTO ai_plan_operations(user_id,request_id,tool_name,argument_hash,result,created_at) VALUES(?,?,?,?,?,?)').run(userId, requestId, name, hash, JSON.stringify(receipt), updatedAt);
     }
     db.exec('COMMIT');

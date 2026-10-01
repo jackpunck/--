@@ -119,3 +119,22 @@ export function findVisuals(text, {limit = 2} = {}) {
   }
   return result;
 }
+
+// Validate a model decision; never infer a decision from conversation text.
+export function resolveVisualSelection(selection) {
+  if(!Array.isArray(selection)||selection.length>2)throw new Error('每条回答最多展示两个模型。');
+  const result=[],seen=new Set();
+  for(const item of selection){
+    if(!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).some(key=>!['type','id'].includes(key)))throw new Error('请只提供模型 type 和 id。');
+    const entry=entries.find(entry=>entry.type===item.type&&entry.id===item.id);
+    if(!entry)throw new Error('未收录此模型，请读取 visuals 目录选择真实 ID。');
+    const key=entry.type+':'+entry.id;if(seen.has(key))continue;seen.add(key);
+    result.push({type:entry.type,id:entry.id,title:entry.title,url:modelUrl(entry.type,entry.id,{compact:true})});
+  }
+  return result;
+}
+export function chatVisuals(message) {
+  const decision=message?.toolResults?.findLast(result=>result.name==='set_chat_visuals'&&result.ok);
+  if(!decision)return [];
+  try{return resolveVisualSelection(decision.visuals.map(({type,id})=>({type,id})));}catch{return [];}
+}

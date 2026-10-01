@@ -351,7 +351,7 @@ export function createServer(options = {}) {
           };
           try {
             const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools],
-              executeTool: async (name, args) => { const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
+              executeTool: async (name, args) => { const planStart=args?.schedule?.startDate||localToday,planDays=args?.schedule?.days??84;let planEnd;try{if(['create_training_plan','update_training_plan'].includes(name)&&Number.isInteger(planDays)&&planDays>=1&&planDays<=366)planEnd=addDays(planStart,planDays-1);}catch{}const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate,planEnd].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
               receipt: getAssistantToolReceipts({ db, userId: user.id, requestId: body.requestId }),
               executeHistoryTool:chatHistory.execute,
               fallbackMessages:()=>buildMessages(db,user.id,body).slice(1),

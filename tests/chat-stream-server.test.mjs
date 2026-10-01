@@ -9,6 +9,7 @@ import { readSse, streamChat } from '../server/chat-stream.mjs';
 import { createServer } from '../server.mjs';
 import { chatContextTool } from '../server/chat-context.mjs';
 import {historyTools} from '../server/chat-history.mjs';
+import {chatVisualTool,setChatVisuals} from '../server/chat-visuals.mjs';
 
 const provider = { name: 'Fixture', model: 'stream-model', baseUrl: 'http://127.0.0.1:9999/v1', protocol: 'openai', apiKey: 'private-test-key' };
 const messages = [{ role: 'system', content: 'System' }, { role: 'user', content: '你好' }];
@@ -26,6 +27,23 @@ async function run(options = {}) {
   const result = await streamChat({ provider, messages, tools: [], onEvent: (name, data) => events.push({ name, data }), ...options });
   return { result, events };
 }
+
+test('model controls visual selection, replacement and clearing even during receipt replay',async()=>{
+  for(const receipt of [undefined,[{name:'create_meal',ok:true,message:'已保存'}]]){
+    let count=0;
+    const selections=[[{type:'muscle',id:'chest'}],[{type:'exercise',id:'bench'}],[]];
+    const {result,events}=await run({tools:[chatVisualTool],receipt,executeTool:(name,args)=>{assert.equal(name,'set_chat_visuals');return setChatVisuals(args);},fetchImpl:async(_url,options)=>{
+      const body=JSON.parse(options.body);assert(body.tools.some(tool=>tool.function.name==='set_chat_visuals'));
+      if(count<selections.length)return sse(callFrame('set_chat_visuals',{visuals:selections[count++]},'visual-'+count));
+      return textReply('按上下文完成展示选择。');
+    }});
+    const decisions=result.toolResults.filter(result=>result.name==='set_chat_visuals');
+    assert.equal(decisions.length,3);assert(decisions.every(result=>result.ok&&result.readOnly&&result.presentation));
+    assert.equal(decisions[0].visuals[0].id,'chest');assert.equal(decisions[1].visuals[0].id,'bench');assert.deepEqual(decisions[2].visuals,[]);
+    assert.equal(events.filter(event=>event.name==='tool_result'&&event.data.name==='set_chat_visuals').length,3);
+  }
+  assert.equal(setChatVisuals({visuals:[{type:'exercise',id:'unknown'}]}).ok,false);
+});
 
 test('server SSE decoder handles split UTF-8, CRLF, comments and multiline data', async () => {
   const events = [];
