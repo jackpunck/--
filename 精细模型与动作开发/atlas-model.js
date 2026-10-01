@@ -1,24 +1,20 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { unzlibSync } from 'three/addons/libs/fflate.module.js';
+import {decodeAtlasData} from './atlas-decode.js';
 import asset from './assets/anatomy-atlas.json' with { type: 'json' };
 import {createAtlasRig} from './atlas-rig.js';
 import {muscleGroups,muscleRole,structureLabel} from './muscle-data.js';
 
 // Geometry is derived from Z-Anatomy / BodyParts3D, CC BY-SA 4.0.
 // Optional teaching rig preserves the imported geometry and adds GPU skinning.
-export function createAnatomyAtlas({rigged=false}={}){
-  const raw=unzlibSync(Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0)));
+export function createAnatomyAtlas({rigged=false,decoded=null}={}){
+  const meshes=decoded||decodeAtlasData(asset);
   const body=new THREE.Group();body.name='Z-Anatomy anatomical atlas';
   const batches=new Map(),anchors={},muscleMeshes=[],sources=[],structureMap=new Map(),pickableMeshes=[];
-  for(const item of asset.meshes){
-    const start=item.offset,n=item.vertices;
-    const packed=new Int16Array(raw.slice(start,start+n*6).buffer);
-    const pos=Float32Array.from(packed,v=>v*asset.positionScale*asset.scale);
-    const normals=new Int8Array(raw.slice(start+n*6,start+n*9).buffer);
-    const index=new Uint16Array(raw.slice(start+n*9,start+n*9+item.indices*2).buffer);
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    g.setAttribute('normal',new THREE.BufferAttribute(Float32Array.from(normals,v=>v/127),3));
+  for(const [meshIndex,item] of asset.meshes.entries()){
+    const {position,normal,index}=meshes[meshIndex];
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(position,3));
+    g.setAttribute('normal',new THREE.BufferAttribute(normal,3));
     g.setIndex(new THREE.BufferAttribute(index,1));
     sources.push({item,geometry:g});
   }

@@ -40,37 +40,56 @@ export class RecordStore extends EventTarget {
     super(); this.user = { ...user }; this.records = new Map(); this.pending = new Map();
     this.conflicts = []; this.status = 'idle'; this.serial = Promise.resolve();
     this.generation = 0; this.closed = false; this.again = false; this.blocked = new Map();
+    this.persistedRecords=new Map();this.cursor=null;
   }
   async open() {
     this.db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('fitness-assistant-v1', 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('accounts');
+      const request = indexedDB.open('fitness-assistant-v1', 2);
+      request.onupgradeneeded = event => {
+        if(event.oldVersion<1)request.result.createObjectStore('accounts');
+        if(event.oldVersion<2)request.result.createObjectStore('record-cache');
+      };
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
     const saved = await new Promise((resolve, reject) => { const r = this.db.transaction('accounts').objectStore('accounts').get(this.user.id); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
-    if (saved) { this.records = new Map(saved.records); this.pending = new Map(saved.pending); this.conflicts = saved.conflicts || []; }
+    if (saved) {
+      if(saved.recordIds){
+        const tx=this.db.transaction('record-cache');
+        const rows=await Promise.all(saved.recordIds.map(id=>new Promise((resolve,reject)=>{const r=tx.objectStore('record-cache').get([this.user.id,id]);r.onsuccess=()=>resolve([id,r.result]);r.onerror=()=>reject(r.error);})));
+        this.records=new Map(rows.filter(([,record])=>record));
+        this.persistedRecords=new Map(this.records);
+      }else this.records=new Map(saved.records||[]);
+      this.pending = new Map(saved.pending); this.conflicts = saved.conflicts || [];this.cursor=saved.cursor??null;
+      if(!saved.recordIds)await this.persist(); // Atomic v1 migration; no remote writes.
+    }
     return this;
   }
   persist() {
     const generation = this.generation;
-    const snapshot = structuredClone({ records: [...this.records], pending: [...this.pending], conflicts: this.conflicts });
+    const records=new Map(this.records);
+    const snapshot = structuredClone({ recordIds: [...records.keys()], pending: [...this.pending], conflicts: this.conflicts, cursor:this.cursor });
     this.serial = this.serial.catch(() => {}).then(() => {
       // A clear() invalidates queued snapshots before its own delete transaction.
       if (generation !== this.generation) return;
       return new Promise((resolve, reject) => {
-        const tx = this.db.transaction('accounts', 'readwrite'); tx.objectStore('accounts').put(snapshot, this.user.id);
-        tx.oncomplete = resolve; tx.onerror = tx.onabort = () => reject(tx.error || new Error('本地记录保存失败。'));
+        const tx = this.db.transaction(['accounts','record-cache'], 'readwrite');
+        const cache=tx.objectStore('record-cache');
+        for(const [id,record]of records)if(this.persistedRecords.get(id)!==record)cache.put(record,[this.user.id,id]);
+        for(const id of this.persistedRecords.keys())if(!records.has(id))cache.delete([this.user.id,id]);
+        tx.objectStore('accounts').put(snapshot, this.user.id);
+        tx.oncomplete = ()=>{this.persistedRecords=records;resolve();}; tx.onerror = tx.onabort = () => reject(tx.error || new Error('本地记录保存失败。'));
       });
     });
     return this.serial;
   }
   emit() { this.dispatchEvent(new Event('change')); }
   list(kind) { return structuredClone([...this.records.values()].filter(r => r.kind === kind && !r.deleted).sort((a,b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))); }
+  conversationHeaders() {return [...this.records.values()].filter(r=>r.kind==='conversation'&&!r.deleted).sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).map(r=>({id:r.id,data:{title:r.data.title}}));}
   get(id) { const record = this.records.get(id); return record && !record.deleted ? structuredClone(record.data) : null; }
-  async put(kind, id, data, deleted = false) {
-    await this.putMany([{kind,id,data,deleted}]); return id;
+  async put(kind, id, data, deleted = false, options = {}) {
+    await this.putMany([{kind,id,data,deleted}],options); return id;
   }
-  async putMany(entries) {
+  async putMany(entries,{sync=true}={}) {
     if (this.closed) throw new Error('当前账号已退出，请重新登录。');
     if (!entries.length) return [];
     const updatedAt = new Date().toISOString();
@@ -80,7 +99,7 @@ export class RecordStore extends EventTarget {
       return {record:{id,kind,data:value,deleted,version:previous?.version||0,updatedAt},change:{id,kind,data:value,deleted,baseVersion:queued?.baseVersion??previous?.version??0,token:createId()}};
     });
     for(const {record,change} of prepared){this.records.set(record.id,record);this.pending.set(record.id,change);this.blocked.delete(record.id);}
-    await this.persist(); this.emit(); this.sync().catch(() => {}); return prepared.map(({record})=>record.id);
+    await this.persist(); this.emit(); if(sync)this.sync().catch(() => {}); return prepared.map(({record})=>record.id);
   }
   remove(id) { const record = this.records.get(id); return record ? this.put(record.kind, id, record.data, true) : Promise.resolve(); }
   hasChanges() { return [...this.pending.keys()].some(id => !this.blocked.has(id) && !this.conflicts.some(x => x.id === id)); }
@@ -122,7 +141,7 @@ export class RecordStore extends EventTarget {
         batch.push(structuredClone(change)); bytes += size;
       }
       if (!batch.length && this.blocked.size) throw this.blocked.values().next().value;
-      const result = await api('/sync', {method:'POST', signal:controller.signal, body:{userId:this.user.id, changes:batch.map(({token,...c}) => c)}});
+      const result = await api('/sync', {method:'POST', signal:controller.signal, body:{userId:this.user.id, cursor:this.cursor, changes:batch.map(({token,...c}) => c)}});
       if (this.closed || generation !== this.generation) return false;
       if (result.userId !== undefined && result.userId !== this.user.id) {
         const error = new Error('登录账号已改变，请重新登录后同步。'); error.status = 401; throw error;
@@ -147,10 +166,14 @@ export class RecordStore extends EventTarget {
         else if (latest) {
           latest.baseVersion = server.version;
           const local = this.records.get(sent.id);
-          if (local) local.version = server.version;
+          if (local) this.records.set(sent.id,{...local,version:server.version});
         }
       }
-      for (const record of result.records) if (!this.pending.has(record.id)) this.records.set(record.id, structuredClone(record));
+      for (const record of result.records) if (!this.pending.has(record.id)) {
+        const old=this.records.get(record.id);
+        if(!old||old.version!==record.version||old.deleted!==record.deleted)this.records.set(record.id, structuredClone(record));
+      }
+      if(Number.isSafeInteger(result.cursor)&&result.cursor>=0)this.cursor=result.cursor;
       await this.persist();
       if (this.closed || generation !== this.generation) return false;
       this.lastError = this.blocked.values().next().value?.message || ''; this.status = this.conflicts.length ? 'conflict' : this.blocked.size ? 'error' : 'synced';
@@ -172,10 +195,12 @@ export class RecordStore extends EventTarget {
   }
   async clear() {
     this.generation++; this.again = false; this.abortController?.abort();
-    this.records.clear(); this.pending.clear(); this.conflicts = []; this.blocked.clear(); this.status = 'idle'; this.lastError = '';
+    const ids=new Set([...this.records.keys(),...this.persistedRecords.keys()]);
+    this.records.clear(); this.pending.clear(); this.conflicts = []; this.blocked.clear(); this.status = 'idle'; this.lastError = '';this.cursor=null;
     this.serial = this.serial.catch(() => {}).then(() => new Promise((resolve, reject) => {
-      const tx = this.db.transaction('accounts','readwrite'); tx.objectStore('accounts').delete(this.user.id);
-      tx.oncomplete = resolve; tx.onerror = tx.onabort = () => reject(tx.error || new Error('清除本地记录失败。'));
+      const tx = this.db.transaction(['accounts','record-cache'],'readwrite'); tx.objectStore('accounts').delete(this.user.id);
+      for(const id of ids)tx.objectStore('record-cache').delete([this.user.id,id]);
+      tx.oncomplete = ()=>{this.persistedRecords.clear();resolve();}; tx.onerror = tx.onabort = () => reject(tx.error || new Error('清除本地记录失败。'));
     }));
     await this.serial; this.emit();
   }

@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { readSse, streamChat } from '../server/chat-stream.mjs';
 import { createServer } from '../server.mjs';
+import { chatContextTool } from '../server/chat-context.mjs';
+import {historyTools} from '../server/chat-history.mjs';
 
 const provider = { name: 'Fixture', model: 'stream-model', baseUrl: 'http://127.0.0.1:9999/v1', protocol: 'openai', apiKey: 'private-test-key' };
 const messages = [{ role: 'system', content: 'System' }, { role: 'user', content: '你好' }];
@@ -30,6 +32,94 @@ test('server SSE decoder handles split UTF-8, CRLF, comments and multiline data'
   for await (const event of readSse(sse(': ping\r\nevent: delta\r\ndata: {"text":\r\ndata: "你好"}\r\n\r\n', 1).body)) events.push(event);
   assert.deepEqual(events, [{ event: 'delta', data: '{"text":\n"你好"}' }]);
   await assert.rejects(async () => { for await (const ignored of readSse(sse('data: {"x":1}').body)) void ignored; }, /中途断开/);
+});
+
+test('context data enters only the current model tool result, including receipt replays', async () => {
+  for (const receipt of [undefined, [{ name: 'create_meal', ok: true, message: '已新增今日餐食。' }]]) {
+    const requests = [];
+    const { result, events } = await run({ tools: [chatContextTool], receipt,
+      executeTool: () => ({ name: 'read_chat_context', readOnly: true, ok: true, sections: ['profile'], message: '已读取所需资料。', data: { profile: { marker: 'CONTEXT_DATA' } } }),
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body); requests.push(body);
+        if (requests.length === 1) {
+          assert.equal(body.tools[0].function.name, 'read_chat_context');
+          assert.doesNotMatch(JSON.stringify(body.messages), /CONTEXT_DATA/);
+          return sse(callFrame('read_chat_context', { sections: ['profile'] }));
+        }
+        assert.match(body.messages.at(-1).content, /CONTEXT_DATA/);
+        return textReply('根据资料给出建议。');
+      },
+    });
+    assert.equal(requests.length, 2);
+    assert.doesNotMatch(JSON.stringify({ result, events }), /CONTEXT_DATA/);
+    assert.equal(result.toolResults.at(-1).readOnly, true);
+  }
+});
+
+test('compatibility context is loaded only when upstream explicitly rejects tools', async () => {
+  let loaded = 0, requests = 0;
+  const fallbackContext = () => { loaded++; return { profile: 'FALLBACK_DATA' }; };
+  await run({ tools: [chatContextTool], fallbackContext, fetchImpl: async () => textReply('你好') });
+  assert.equal(loaded, 0);
+  await run({ tools: [chatContextTool], fallbackContext, fetchImpl: async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (++requests === 1) return Response.json({ error: 'tools unsupported' }, { status: 400 });
+    assert.equal(body.tools, undefined);
+    assert.match(body.messages[0].content, /FALLBACK_DATA/);
+    return textReply('兼容建议');
+  } });
+  assert.equal(loaded, 1);
+});
+
+test('on-demand historical images reach all three native protocols without entering saved tool summaries',async()=>{
+  const data=Buffer.from('HISTORICAL_IMAGE_BYTES').toString('base64');
+  for(const protocol of ['openai','anthropic','gemini']){
+    let requests=0;
+    const {result,events}=await run({provider:{...provider,protocol},tools:historyTools,
+      executeHistoryTool:()=>({ok:true,readOnly:true,message:'已读取',modelMessages:[{role:'user',content:[{type:'text',text:'历史附件资料'},{type:'image_url',image_url:{url:`data:image/png;base64,${data}`}}]}]}),
+      fetchImpl:async(_url,options)=>{
+        const body=JSON.parse(options.body);
+        if(++requests===1){
+          if(protocol==='anthropic')return Response.json({content:[{type:'tool_use',id:'attachment-call',name:'read_chat_attachment',input:{id:'old'}}],stop_reason:'tool_use'});
+          if(protocol==='gemini')return Response.json({candidates:[{content:{parts:[{functionCall:{name:'read_chat_attachment',args:{id:'old'}}}]},finishReason:'STOP'}]});
+          return sse(callFrame('read_chat_attachment',{id:'old'}));
+        }
+        if(protocol==='anthropic'){
+          assert.deepEqual(body.messages.at(-1).content.at(-1),{type:'image',source:{type:'base64',media_type:'image/png',data}});
+          return Response.json({content:[{type:'text',text:'图片已查看'}],stop_reason:'end_turn'});
+        }
+        if(protocol==='gemini'){
+          assert.deepEqual(body.contents.at(-1).parts.at(-1),{inlineData:{mimeType:'image/png',data}});
+          return Response.json({candidates:[{content:{parts:[{text:'图片已查看'}]},finishReason:'STOP'}]});
+        }
+        assert.equal(body.messages.at(-1).content.at(-1).image_url.url,`data:image/png;base64,${data}`);
+        assert.doesNotMatch(body.messages.at(-2).content,/modelMessages|HISTORICAL_IMAGE_BYTES/);
+        return textReply('图片已查看');
+      }
+    });
+    assert.equal(requests,2);assert.equal(result.content,'图片已查看');
+    assert(!JSON.stringify({result,events}).includes(data));
+    assert(events.some(event=>event.name==='tool_start'));
+  }
+});
+
+test('context reads do not consume the existing operation round budget and remain bounded', async () => {
+  let requests = 0, executions = 0;
+  const options = { tools: [chatContextTool, ...tools], executeTool: () => { executions++; return { ok: true, message: '已读取' }; } };
+  const { result } = await run({ ...options, fetchImpl: async () => {
+    requests++;
+    if (requests === 1) return sse(callFrame('read_chat_context', { sections: ['profile'] }));
+    if (requests <= 6) return sse(callFrame('get_training_plan', {}));
+    return textReply('已完成');
+  } });
+  assert.equal(result.content, '已完成');
+  assert.equal(executions, 6);
+  executions = 0;
+  await assert.rejects(run({ ...options, fetchImpl: async () => sse(callFrame('read_chat_context', { sections: ['profile'] })) }), /调用工具次数过多/);
+  assert.equal(executions, 8);
+  executions = 0;
+  await assert.rejects(run({ ...options, fetchImpl: async () => sse(callFrame('get_training_plan', {})) }), /调用工具次数过多/);
+  assert.equal(executions, 5);
 });
 
 test('server emits text before upstream completion, redacts split keys, and accepts JSON compatibility', async () => {

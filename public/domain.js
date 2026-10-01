@@ -1,3 +1,4 @@
+import {modelCapabilities} from './model-capabilities.js';
 /** Browser/server shared, deterministic fitness calculations. Units: kg, cm, kcal, g. */
 export const sources = Object.freeze({
   workbook: '健身Excel超级套表（B站好人松松，2026年4月）：训练表20–23、营养表19、力量表24',
@@ -33,7 +34,7 @@ export function validateProfile(profile) {
   };
 }
 
-// These instructions are original concise coaching summaries. The demo field marks the three animated rigs; other entries have static 3D poses in the viewer.
+// These instructions are original concise coaching summaries. Demo availability is generated from the standalone viewer catalog.
 const exerciseRows = [
   ['squat', '徒手深蹲', '股四头肌、臀大肌', '徒手', '入门', '通过髋膝屈伸训练下肢，同时保持躯干稳定。', ['双脚约肩宽，脚尖自然外展', '膝盖沿脚尖方向移动，脚掌稳定贴地', '下降到可控制且无痛的深度，起身时髋与肩同步'], 'squat'],
   ['pushup', '俯卧撑', '胸大肌、肱三头肌、三角肌前束', '徒手', '入门', '手掌支撑地面，通过推起身体训练上肢推力。', ['头、躯干和腿保持一线', '屈肘让胸部接近地面，避免塌腰', '向上推时呼气，困难时改为高位支撑'], 'pushup'],
@@ -61,7 +62,7 @@ const exerciseRows = [
   ['crunch', '卷腹', '腹直肌', '徒手', '入门', '仰卧屈膝，轻轻卷起上背部。', ['下巴保持自然距离，手不拉头', '呼气时让肋骨靠近骨盆', '缓慢回落，不追求坐起'], null],
   ['calf-raise', '站姿提踵', '腓肠肌、比目鱼肌', '徒手或哑铃', '入门', '抬起脚跟训练小腿跖屈力量。', ['扶稳固支撑保持平衡', '垂直抬起脚跟，避免脚踝外翻', '缓慢下降，不弹跳'], null],
 ];
-export const exercises = Object.freeze(exerciseRows.map(([id, name, muscle, equipment, level, description, cues, demo]) => Object.freeze({ id, name, muscle, equipment, level, description, cues: Object.freeze(cues), demo, source: id === 'squat' ? 'https://www.acefitness.org/resources/everyone/exercise-library/135/bodyweight-squat/' : `${sources.workbook}；动作要领为应用整理，参考 ${sources.exercises}` })));
+export const exercises = Object.freeze(exerciseRows.map(([id, name, muscle, equipment, level, description, cues, demo]) => Object.freeze({ id, name, muscle, equipment, level, description, cues: Object.freeze(cues), demo: modelCapabilities[id]?.motion ? id : null, isometric: !!modelCapabilities[id]?.isometric, source: id === 'squat' ? 'https://www.acefitness.org/resources/everyone/exercise-library/135/bodyweight-squat/' : `${sources.workbook}；动作要领为应用整理，参考 ${sources.exercises}` })));
 
 // All nutrient values are explicitly approximate seed data, not a laboratory or branded-food database.
 const foodRows = [

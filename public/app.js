@@ -3,8 +3,8 @@ import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,i
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
 import {weeklyAchievement, earnedWeeklyAchievements} from './achievements.js?v=1';
-import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=9';
-import {renderMarkdown} from './chat-markdown.js?v=9';
+import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=10';
+import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
 import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=11';
@@ -15,7 +15,7 @@ import {muscleCatalog, findVisuals, modelUrl} from './visuals.js?v=9';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
-import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=11';
+import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=12';
 import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -133,7 +133,8 @@ function updateSync() {
 }
 function renderSidebarHistory() {
   const el=$('#history-list');if(!el)return;
-  el.innerHTML=records('conversation').slice(0,30).map(r=>`<div class="history-item ${r.id===state.conversation?'current':''}"><button data-action="open-chat" data-id="${esc(r.id)}">${esc(r.data.title)}</button><button class="delete" aria-label="删除对话 ${esc(r.data.title)}" data-action="delete-chat" data-id="${esc(r.id)}">×</button></div>`).join('') || '<div style="padding:5px 12px"><small>新的对话，从这里开始</small></div>';
+  const html=state.store.conversationHeaders().slice(0,30).map(r=>`<div class="history-item ${r.id===state.conversation?'current':''}"><button data-action="open-chat" data-id="${esc(r.id)}">${esc(r.data.title)}</button><button class="delete" aria-label="删除对话 ${esc(r.data.title)}" data-action="delete-chat" data-id="${esc(r.id)}">×</button></div>`).join('') || '<div style="padding:5px 12px"><small>新的对话，从这里开始</small></div>';
+  if(el._renderedMarkup!==html){el.innerHTML=html;el._renderedMarkup=html;}
 }
 function renderPage() {
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
@@ -172,7 +173,8 @@ function updateChatScene() {
 function resizeComposer(input=$('#chat-input')) {
  if(!input)return;input.style.height='auto';input.style.height=Math.min(168,Math.max(48,input.scrollHeight))+'px';input.style.overflowY=input.scrollHeight>168?'auto':'hidden';
 }
-function chatConversation() { return chatRun?.id===state.conversation?chatRun.conv:state.store.get(state.conversation); }
+let conversationCache;
+function chatConversation() { if(chatRun?.id===state.conversation)return chatRun.conv;const record=state.store.records.get(state.conversation);if(conversationCache?.record!==record)conversationCache={record,value:state.store.get(state.conversation)};return conversationCache?.value; }
 function chatGreeting() {
  return `<div class="greeting"><div class="greeting-icon">${icon('spark')}</div><div class="eyebrow">YOUR PERSONAL FITNESS COMPANION</div><h1>${esc(state.user.name||'你好')}，今天也为自己<br><span>做一点积极的改变。</span></h1><p>训练怎么安排，三餐怎么吃，动作怎么做？<br>直接告诉我你的想法，也可以让我调整日程中的训练，增删改今天的饮食记录。</p></div><div class="prompts">${[['dumbbell','帮我安排训练','从目标出发，找到适合的节奏','training'],['image','拍照记录这一餐','估算营养，让饮食心中有数','meal'],['body','看看动作怎么做','3D 拆解动作，找到正确发力','library'],['leaf','回顾最近的进步','结合体重、训练与饮食记录','review']].map(([i,t,s,a])=>`<button class="prompt-card" data-action="quick" data-target="${a}"><span>${icon(i)}</span><strong>${t}</strong><small>${s}</small><span class="arrow">↗</span></button>`).join('')}</div>`;
 }
@@ -197,10 +199,10 @@ function renderChatBody() {
  let list=$('.messages',body);
  if(!list){body.innerHTML=`<div class="row spread chat-history-head"><span class="muted chat-title"></span>${button('新对话','new-chat','','small')}</div><div class="messages" role="log" aria-live="off" aria-label="对话消息"></div>`;list=$('.messages',body);}
  $('.chat-title',body).textContent=conversation.title;
- const keep=new Set(messages.map(message=>message.id));
+ const keep=new Set(messages.map(message=>message.id)),nodes=new Map([...list.children].map(node=>[node.dataset.messageId,node]));
  for(const node of [...list.children])if(!keep.has(node.dataset.messageId))node.remove();
  for(const message of messages){
-   let node=[...list.children].find(node=>node.dataset.messageId===message.id);
+   let node=nodes.get(message.id);
    if(!node){list.insertAdjacentHTML('beforeend',renderMessage(message));}
    else patchHTML($('.bubble',node),messageBubble(message));
  }
@@ -282,19 +284,21 @@ function messageVisuals(message) {
 function renderVisualCard(visual,preview=true) {
  return `<article class="visual-card" data-visual-type="${esc(visual.type)}" data-visual-id="${esc(visual.id)}"><header><span>${icon('body')}${visual.type==='muscle'?'肌肉位置':'3D 动作'}</span><strong>${esc(visual.title)}</strong></header>${preview?`<iframe class="chat-model-frame" src="${esc(modelUrl(visual.type,visual.id,{compact:true}))}" title="${esc(visual.title)}3D 示意" loading="lazy" allow="fullscreen"></iframe>`:'<div class="visual-placeholder">'+icon('body')+'<span>打开 3D 查看位置与动作</span></div>'}<footer>${button('打开完整 3D ↗','open-visual',`data-type="${esc(visual.type)}" data-id="${esc(visual.id)}"`,'small')}</footer></article>`;
 }
-function messageBubble(m) {
+function messageBubble(m,skipText=false) {
  const text=String(m.content||''),assistant=m.role==='assistant',streaming=assistant&&m.streaming&&chatRun?.message.id===m.id;
  const visuals=assistant?messageVisuals(m):[],preview=assistant&&(chatConversation()?.messages||[]).filter(message=>message.role==='assistant').slice(-2).some(message=>message.id===m.id);
  const references=assistant&&!streaming?findKnowledge(text):[];
  const incomplete=assistant&&m.streaming&&!streaming,last=chatConversation()?.messages.at(-1)?.id===m.id;
- return `<div class="message-text ${assistant?'markdown-body':''}">${assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${text?'正在生成…':'正在思考你的问题…'}</div>`:''}</div><div class="message-attachments">${m.attachments?.length?renderAttachments(m.attachments):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.ok?'✓ 已执行':'操作未完成'}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
+ return `<div class="message-text ${assistant?'markdown-body':''}">${skipText?'':assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${esc(chatRun?.message===m&&chatRun.progress?chatRun.progress:text?'正在生成…':'正在思考你的问题…')}</div>`:''}</div><div class="message-attachments">${m.attachments?.length?renderAttachments(m.attachments):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.readOnly?(result.ok?'✓ 已读取':'读取未完成'):(result.ok?'✓ 已执行':'操作未完成')}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
 }
 function renderMessage(m) {return `<div class="message ${m.role==='user'?'user':'assistant'}" data-message-id="${esc(m.id)}"><div class="message-icon">${m.role==='user'?esc(state.user.name?.slice(0,1)||'我'):'✧'}</div><div class="bubble">${messageBubble(m)}</div></div>`;}
 function paintChatRun(run) {
  if(state.store!==run.store||state.page!=='chat'||state.conversation!==run.id)return;
  const body=$('.chat-body'),node=$(`[data-message-id="${run.message.id}"] .bubble`);if(!body||!node)return;
  const follow=chatFollows(body),oldScroll=body.scrollTop;
- patchHTML(node,messageBubble(run.message));body.scrollTop=follow?body.scrollHeight:oldScroll;updateChatScroll(body);
+ const template=document.createElement('template');template.innerHTML=messageBubble(run.message,true);
+ for(const incoming of template.content.children){if(incoming.classList.contains('message-text'))continue;const current=node.querySelector('.'+incoming.classList[0]);if(current)patchHTML(current,incoming.innerHTML);}
+ renderMarkdownInto(node.querySelector('.message-text'),run.message.content||'');body.scrollTop=follow?body.scrollHeight:oldScroll;updateChatScroll(body);
 }
 function scheduleChatPaint(run) {
  if(run.paint)return;run.paint=setTimeout(()=>{run.paint=null;paintChatRun(run);},60);
@@ -303,7 +307,7 @@ async function saveChatRun(run) {
  if(run.store.closed||run.discard)return;
  // A deleted conversation must never be resurrected by a late network event.
  if(!run.store.get(run.id))return;
- await run.store.put('conversation',run.id,run.conv);
+ await run.store.put('conversation',run.id,run.conv,false,{sync:!run.message.streaming});
 }
 function queueChatSave(run) {
  if(run.saveTimer)return;run.saveTimer=setTimeout(()=>{run.saveTimer=null;saveChatRun(run).catch(()=>{});},800);
@@ -337,17 +341,19 @@ async function sendChat(text,retryId=null) {
    await store.put('conversation',id,conv);if(state.store!==store||controller.signal.aborted)return;
    if(state.page==='chat'&&state.conversation===id){renderChat();followChat();}
    await store.sync();controller.signal.throwIfAborted();
-   const aiRelevant=record=>record&&(['plan','calendar-task','schedule','meal'].includes(record.kind)||record.id==='active-plan');
-   if([...store.pending.values()].some(aiRelevant)||store.conflicts.some(c=>aiRelevant(store.records.get(c.id))||aiRelevant(c.server)||aiRelevant(c.local)))throw new Error('日程、训练计划或饮食还有待同步或冲突的本机修改。请先在「个人中心 → 数据与同步」处理后重试。');
+   const aiRelevant=record=>record&&(['plan','calendar-task','schedule','meal','phase'].includes(record.kind)||['active-plan','profile','preferences'].includes(record.id));
+   if([...store.pending.values()].some(aiRelevant)||store.conflicts.some(c=>aiRelevant(store.records.get(c.id))||aiRelevant(c.server)||aiRelevant(c.local)))throw new Error('个人资料、日程、训练计划或饮食还有待同步或冲突的本机修改。请先在「个人中心 → 数据与同步」处理后重试。');
    if(store.status==='offline')throw new Error('当前离线，消息已保存在本机。联网后可以重试。');
-   const response=await streamChat({requestId,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({role,content,attachments,reasoningContent,toolResults,mealIntent})=>({role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.length?'\n[已执行操作回执]\n'+toolResults.map(r=>r.message||r.name).join('\n'):''),attachments,reasoningContent})),context:aiContext()}, {
+   const response=await streamChat({requestId,conversationId:id,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({id,role,content,attachments,reasoningContent,toolResults,mealIntent})=>({id,role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.some(r=>!r.readOnly)?'\n[已执行操作回执]\n'+toolResults.filter(r=>!r.readOnly).map(r=>r.message||r.name).join('\n'):''),attachments,reasoningContent})),context:{date:state.date,localToday:today(),timezoneOffset:new Date().getTimezoneOffset()}}, {
      userId:user.id,signal:controller.signal,onEvent:(type,data)=>{
        if(state.store!==store||run.discard||controller.signal.aborted)return;
        if(type==='meta'){message.model=data.model;message.provider=data.provider;}
-       if(type==='delta')message.content+=data.text||'';
+       if(type==='delta'){message.content+=data.text||'';run.progress='';}
+       if(type==='tool_start')run.progress=data.message||'正在处理…';
        if(type==='tool_result'){
+         run.progress='正在整理回答…';
          if(!message.toolResults.some(r=>JSON.stringify(r)===JSON.stringify(data)))message.toolResults.push(data);
-         run.toolSync=(run.toolSync||Promise.resolve()).then(()=>store.sync()).then(()=>{
+         if(!data.readOnly)run.toolSync=(run.toolSync||Promise.resolve()).then(()=>store.sync()).then(()=>{
            if(state.store!==store)return;
            if(state.page==='training'&&!$('#modal').open)renderTraining();
            if(state.page==='nutrition'&&!$('#modal').open)renderNutrition();
@@ -360,7 +366,7 @@ async function sendChat(text,retryId=null) {
    message.content=response.content??message.content;message.model=response.model||message.model;message.provider=response.provider||message.provider;
    if(response.reasoningContent)message.reasoningContent=response.reasoningContent;
    if(response.toolResults?.length)message.toolResults=response.toolResults;
-   if(message.toolResults.length)await store.sync().catch(error=>{run.syncError=error.message;});
+   if(message.toolResults.some(r=>!r.readOnly))await store.sync().catch(error=>{run.syncError=error.message;});
    await run.toolSync;
    if(run.syncError)message.error='回答已完成，但记录同步暂未完成：'+run.syncError+'。请点击顶部同步状态重试。';
  } catch(error) {
@@ -1187,7 +1193,7 @@ function renderExerciseLibrary() {
  const filtered=exercises.filter(x=>(x.name+x.muscle+x.equipment).includes(state.filter)&&(!state.muscle||x.muscle.includes(state.muscle))&&(!state.equipment||x.equipment.includes(state.equipment)));
  // 只要目录里任何一个动作收录了真人封面，整个网格就统一按 3:2 排布，否则同一行里封面卡和矢量卡高低不齐。
  const hasCovers=exercises.some(x=>coverUrl(x.id));
- $('#knowledge-panel').innerHTML=`<div class="search-row"><input id="exercise-search" type="search" placeholder="搜索动作、肌肉或器械…" aria-label="搜索动作" value="${esc(state.filter)}"><select id="muscle-filter" aria-label="按肌肉筛选">${options([['','全部肌群'],['胸','胸部'],['背','背部'],['三角','肩部'],['二头','肱二头肌'],['三头','肱三头肌'],['股','腿部'],['臀','臀部'],['腹','核心']],state.muscle)}</select><select id="equipment-filter" aria-label="按器械筛选">${options([['','全部器械'],['徒手','徒手'],['哑铃','哑铃'],['器','固定器械']],state.equipment)}</select></div><div class="row spread wrap" style="margin-bottom:18px"><small>${filtered.length} 个动作</small><span class="badge neutral">3D 姿态 · 目标肌群 · 动作要领</span></div><div class="exercise-grid"${hasCovers?' data-covers="1"':''}>${filtered.map((x,i)=>{const cover=coverUrl(x.id);return `<button class="exercise-card" data-action="exercise" data-id="${x.id}"><div class="exercise-visual"${cover?' data-cover="1"':''}>${icon('body')}${cover?`<img class="exercise-cover" src="${cover}" alt="" loading="${i<3?'eager':'lazy'}" decoding="async">`:''}<span class="letter">${String(i+1).padStart(2,'0')}</span><span class="badge">${x.demo?'◉ 3D 动作演示':'◉ 3D 姿态示意'}</span></div><div class="exercise-info"><h3>${esc(x.name)} <span style="float:right;color:#9eab93">↗</span></h3><p>${esc(x.muscle)}</p><p style="margin-top:9px">${esc(x.equipment)} · ${esc(x.level)}</p></div></button>`}).join('')}</div>${!filtered.length?empty('没有找到相关动作，试试其他关键词。','grid'):''}`;
+ $('#knowledge-panel').innerHTML=`<div class="search-row"><input id="exercise-search" type="search" placeholder="搜索动作、肌肉或器械…" aria-label="搜索动作" value="${esc(state.filter)}"><select id="muscle-filter" aria-label="按肌肉筛选">${options([['','全部肌群'],['胸','胸部'],['背','背部'],['三角','肩部'],['二头','肱二头肌'],['三头','肱三头肌'],['股','腿部'],['臀','臀部'],['腹','核心']],state.muscle)}</select><select id="equipment-filter" aria-label="按器械筛选">${options([['','全部器械'],['徒手','徒手'],['哑铃','哑铃'],['器','固定器械']],state.equipment)}</select></div><div class="row spread wrap" style="margin-bottom:18px"><small>${filtered.length} 个动作</small><span class="badge neutral">3D 姿态 · 目标肌群 · 动作要领</span></div><div class="exercise-grid"${hasCovers?' data-covers="1"':''}>${filtered.map((x,i)=>{const cover=coverUrl(x.id);return `<button class="exercise-card" data-action="exercise" data-id="${x.id}"><div class="exercise-visual"${cover?' data-cover="1"':''}>${icon('body')}${cover?`<img class="exercise-cover" src="${cover}" alt="" loading="${i<3?'eager':'lazy'}" decoding="async">`:''}<span class="letter">${String(i+1).padStart(2,'0')}</span><span class="badge">${x.isometric?'◉ 持续支撑演示':x.demo?'◉ 3D 动作演示':'◉ 3D 姿态示意'}</span></div><div class="exercise-info"><h3>${esc(x.name)} <span style="float:right;color:#9eab93">↗</span></h3><p>${esc(x.muscle)}</p><p style="margin-top:9px">${esc(x.equipment)} · ${esc(x.level)}</p></div></button>`}).join('')}</div>${!filtered.length?empty('没有找到相关动作，试试其他关键词。','grid'):''}`;
 }
 function renderMuscleLibrary() {
  $('#knowledge-panel').innerHTML=`<div class="atlas-intro"><div><span class="eyebrow">MUSCLE ATLAS</span><h2>找到你正在训练的肌肉。</h2><p>旋转模型查看位置。选择肌群，可以打开对应的高亮图谱。</p><div class="row wrap"><span class="badge">${muscleCatalog.length} 个肌群与肌肉</span><span class="badge neutral">可旋转 / 缩放</span></div></div><iframe class="knowledge-atlas-frame" src="${esc(modelUrl('muscle','chest',{compact:true}))}" title="胸部肌群3D图谱预览" loading="lazy" allow="fullscreen"></iframe></div><div class="muscle-grid">${muscleCatalog.map(muscle=>`<button class="muscle-card" type="button" data-action="muscle-model" data-id="${esc(muscle.id)}"><span class="muscle-icon">${icon('body')}</span><div><strong>${esc(muscle.name)}</strong><p>${esc(muscle.description)}</p><small>查看 3D 高亮 ↗</small></div></button>`).join('')}</div>`;

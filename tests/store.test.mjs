@@ -5,21 +5,22 @@ import { createId, RecordStore } from '../public/store.js';
 // Minimal asynchronous IndexedDB adapter: exercises the store's account keys,
 // serialized transactions and queue lifecycle without browser dependencies.
 function memoryIndexedDB() {
-  const accounts = new Map(); let created = false;
-  const database = {
-    createObjectStore() {}, close() {},
-    transaction() {
-      const tx = { error: null };
-      tx.objectStore = () => ({
-        get(key) { const request = {}; queueMicrotask(() => { request.result = structuredClone(accounts.get(key)); request.onsuccess?.(); }); return request; },
-        put(value, key) { const copy = structuredClone(value); queueMicrotask(() => { accounts.set(key, copy); tx.oncomplete?.(); }); },
-        delete(key) { queueMicrotask(() => { accounts.delete(key); tx.oncomplete?.(); }); },
-      });
-      return tx;
-    },
+  const tables=new Map();let version=0;
+  const database={
+    createObjectStore(name){tables.set(name,new Map());},close(){},
+    transaction(){
+      const tx={error:null};let scheduled=false;
+      const done=()=>{if(!scheduled){scheduled=true;queueMicrotask(()=>tx.oncomplete?.());}};
+      tx.objectStore=name=>({
+        get(key){const request={};queueMicrotask(()=>{request.result=structuredClone(tables.get(name)?.get(JSON.stringify(key)));request.onsuccess?.();});return request;},
+        put(value,key){tables.get(name).set(JSON.stringify(key),structuredClone(value));done();},
+        delete(key){tables.get(name).delete(JSON.stringify(key));done();}
+      });return tx;
+    }
   };
-  return { open() { const request = {}; queueMicrotask(() => { request.result = database; if (!created) { created = true; request.onupgradeneeded?.(); } request.onsuccess?.(); }); return request; } };
+  return {open(name,next){const request={};queueMicrotask(()=>{request.result=database;if(next>version){const oldVersion=version;version=next;request.onupgradeneeded?.({oldVersion});}request.onsuccess?.();});return request;}};
 }
+
 const originalFetch = globalThis.fetch;
 const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 const indexedDBDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
@@ -70,6 +71,22 @@ test('offline data and queues persist separately for each account, with immutabl
   await a.clear();
   assert.equal((await open()).get('same-id'), null);
   assert.deepEqual((await open('account-b')).get('same-id'), { count: 2 });
+});
+
+test('version-one account snapshots migrate atomically without syncing or losing offline changes',async()=>{
+  const old=await new Promise(resolve=>{const r=indexedDB.open('fitness-assistant-v1',1);r.onupgradeneeded=()=>r.result.createObjectStore('accounts');r.onsuccess=()=>resolve(r.result);});
+  const value=record('old',{text:'保留原文'},3);
+  await new Promise(resolve=>{const tx=old.transaction('accounts','readwrite');tx.objectStore('accounts').put({records:[['old',value]],pending:[['old',{id:'old',kind:'note',data:value.data,baseVersion:2,token:'old'}]],conflicts:[]},'account-a');tx.oncomplete=resolve;});
+  const migrated=await open();assert.equal(migrated.get('old').text,'保留原文');assert.equal(migrated.pending.get('old').baseVersion,2);
+  await migrated.close();const reopened=await open();assert.deepEqual(reopened.get('old'),value.data);assert.equal(reopened.records.get('old').version,3);
+});
+
+test('streaming drafts persist locally without automatically uploading each partial response',async()=>{
+  const store=await open();online=true;const server=fakeServer();globalThis.fetch=server.fetch;
+  await store.put('conversation','draft',{messages:[{content:'部分回复'}]},false,{sync:false});
+  await Promise.resolve();assert.equal(server.calls.length,0);
+  assert.equal((await open()).get('draft').messages[0].content,'部分回复');
+  await store.sync();assert.equal(server.calls.length,1);
 });
 
 test('one sync promise drains edits made to the same record while its prior request is in flight', async () => {

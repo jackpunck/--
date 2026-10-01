@@ -1,5 +1,6 @@
 import {Marked} from './vendor/marked.esm.js?v=9';
 import DOMPurify from './vendor/purify.es.js?v=9';
+import {patchHTML} from './chat-view.js?v=10';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const markdown = new Marked({gfm:true, breaks:true, renderer:{
@@ -19,6 +20,10 @@ const allowedAttributes = ['href','title','class','type','disabled','checked','s
 
 export function renderMarkdown(source) {
   const parsed = markdown.parse(String(source ?? ''));
+  return sanitizeMarkdown(parsed);
+}
+
+function sanitizeMarkdown(parsed) {
   const fragment = DOMPurify.sanitize(parsed, {
     ALLOWED_TAGS:allowedTags, ALLOWED_ATTR:allowedAttributes,
     ALLOW_DATA_ATTR:false, RETURN_DOM_FRAGMENT:true,
@@ -36,4 +41,31 @@ export function renderMarkdown(source) {
     const wrap=document.createElement('div'); wrap.className='markdown-table'; table.replaceWith(wrap); wrap.append(table);
   }
   const holder=document.createElement('div'); holder.append(fragment); return holder.innerHTML;
+}
+
+const renderedBlocks=new WeakMap();
+// Lex the complete source so late reference definitions, unfinished fences,
+// setext headings and tables retain exactly the same Markdown semantics.
+// Only changed top-level blocks are parsed, sanitized and patched into the DOM.
+export function renderMarkdownInto(element,source) {
+  source=String(source??'');
+  let previous=renderedBlocks.get(element);
+  if(previous&&(element.childElementCount!==previous.blocks.length||previous.blocks.some(block=>block.node.parentNode!==element)))previous=null;
+  if(previous?.source===source)return;
+  const tokens=markdown.lexer(source),links=JSON.stringify(tokens.links),blocks=[];
+  if(!previous)element.replaceChildren();
+  let index=0;
+  for(const token of tokens){
+    if(token.type==='space')continue;
+    const old=previous?.blocks[index];
+    const node=old?.node||document.createElement('div');
+    if(!old){node.className='markdown-block';element.append(node);}
+    if(!old||old.raw!==token.raw||previous.links!==links){
+      const list=[token];list.links=tokens.links;
+      patchHTML(node,sanitizeMarkdown(markdown.parser(list)));
+    }
+    blocks.push({raw:token.raw,node});index++;
+  }
+  for(const old of previous?.blocks.slice(index)||[])old.node.remove();
+  renderedBlocks.set(element,{source,links,blocks});
 }

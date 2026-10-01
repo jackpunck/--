@@ -148,7 +148,7 @@ try{
   const resumeCheckpoint=await renderCheckpoint();await page.locator('#qa-animation-trigger').evaluate(el=>el.click());await ready({exercise:'squat'},resumeCheckpoint);const resumed=await frame.locator('html').evaluate(()=>qaDrawCalls);await waitForDraw(frame,resumed,'Retained animation did not resume');await close();
 
   step='ordinary meal modal survives opening and closing the dedicated viewer';console.log(step);
-  await nav('nutrition');await page.locator('[data-action="new-meal"]').first().click();await page.locator('#modal[open]').waitFor();const fields=page.locator('#meal-title');await fields.fill('QA 保留餐食草稿');const draft=await fields.inputValue();
+  await nav('nutrition');await page.locator('[data-action="new-meal"]').first().click();await page.locator('#modal[open]').waitFor();const fields=page.locator('#meal-notes');await fields.fill('QA 保留餐食草稿');const draft=await fields.inputValue();
   // The dedicated dialog is opened by the same application action, while the ordinary form is open.
   const formViewerCheckpoint=await renderCheckpoint();await page.evaluate(()=>{const trigger=document.createElement('button');trigger.type='button';trigger.dataset.action='open-visual';trigger.dataset.type='muscle';trigger.dataset.id='chest';trigger.id='qa-form-viewer-trigger';document.querySelector('#modal').append(trigger);trigger.click();});await ready(targets[0],formViewerCheckpoint);await close();assert.equal(await fields.first().inputValue(),draft);assert(await page.locator('#modal').evaluate(el=>el.open));await page.locator('#qa-form-viewer-trigger').evaluate(el=>el.remove());await page.locator('#modal [data-action="close-modal"]').first().click();
 

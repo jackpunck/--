@@ -58,6 +58,15 @@ const server = await startServer({ host: '127.0.0.1', port: 0, dataDir, fetchImp
   const lastUser = body.messages.findLast(m => m.role === 'user');
   const text = typeof lastUser?.content === 'string' ? lastUser.content : JSON.stringify(lastUser?.content);
   const last = body.messages.at(-1);
+  if (last.role !== 'tool') assert.doesNotMatch(body.messages[0].content, /支持的动作：|知识大全的计算公式：|常见食物份量：|"weight":70/);
+  if (text?.includes('QA按需资料')) {
+    if (last.role !== 'tool') return toolResponse('read_chat_context', { sections: ['profile', 'nutrition'] }, options.signal);
+    const result = JSON.parse(last.content);
+    assert.equal(result.data.profile.profile.weight, 70);
+    assert.ok(result.data.nutrition.target.kcal > 0);
+    assert.deepEqual(Object.keys(result.data).sort(), ['nutrition', 'profile']);
+    return streamed([delta('已结合当前档案和营养目标给出建议。')], options.signal);
+  }
   if (/QA计划(创建|修改|删除)/.test(text)) {
     if (last.role !== 'tool') return toolResponse('get_training_plan', {}, options.signal);
     const result = JSON.parse(last.content);
@@ -104,6 +113,21 @@ try {
   await context.request.post(base + '/api/sync', { data: { userId: user.id, changes: [{ id: 'profile', kind: 'profile', data: { age: 28, sex: 'male', height: 175, weight: 70, goal: 'maintain', activity: 1.375 }, baseVersion: 0 }] } });
   await context.request.put(base + '/api/providers', { data: { providers: [{ id: 'qa', name: '本地测试模型', baseUrl: 'http://127.0.0.1:9987/v1', model: 'qa-model' }], tasks: { chat: 'qa', meal: 'qa', planning: 'qa' } } });
   await page.goto(base); await page.locator('#chat-input').waitFor();
+
+  step = 'on-demand context, minimal request, read status and compact conversation history'; console.log(step);
+  const contextRequest = page.waitForRequest(request => request.url() === base + '/api/ai');
+  await send('QA按需资料：按我的档案分析营养目标'); await idle();
+  assert.deepEqual(Object.keys((await contextRequest).postDataJSON().context).sort(), ['date', 'localToday', 'timezoneOffset']);
+  await page.getByText('已结合当前档案和营养目标给出建议。', { exact: true }).waitFor();
+  assert.match(await page.locator('.message.assistant').last().locator('.tool-results').textContent(), /已读取/);
+  const followup = page.waitForRequest(request => request.url() === base + '/api/ai');
+  await send('谢谢'); await idle();
+  const followupBody = (await followup).postDataJSON();
+  assert.doesNotMatch(JSON.stringify(followupBody), /"weight":70|已读取所需资料|"foodPortions":/);
+  const conversations = (await serverState()).records.filter(r => r.kind === 'conversation');
+  const contextResults = conversations.flatMap(r => r.data.messages || []).flatMap(m => m.toolResults || []).filter(r => r.name === 'read_chat_context');
+  assert(contextResults.length > 0);
+  assert(contextResults.every(r => r.readOnly && !r.data));
 
   step = 'incremental Markdown, XSS containment, stable editable composer'; console.log(step);
   await send('QA渲染：请提供训练建议');
@@ -161,11 +185,11 @@ try {
   await context.request.post(base + '/api/sync', { data: { userId: user.id, changes: [{ id: 'schedule:2026-09-20', kind: 'schedule', data: historical, baseVersion: 0 }] } });
   await send('QA计划修改：请把计划名称改为对话修改计划'); await idle();
   saved = await activePlan(); assert.equal(saved?.data?.name, 'QA 对话修改计划'); assert.equal(saved.version, firstVersion + 1);
-  await nav('training'); await page.getByText('QA 对话修改计划', { exact: true }).waitFor(); await shot('desktop-chat-plan-updated');
+  await nav('training'); await page.locator('.calendar-task').filter({ hasText: '全身训练' }).first().waitFor(); await shot('desktop-chat-plan-updated');
   await nav('chat'); await send('QA计划删除：请删除当前训练计划'); await idle();
   saved = await activePlan(); assert.equal(saved.deleted, true);
   assert.deepEqual((await serverState()).records.find(r => r.id === 'schedule:2026-09-20').data, historical);
-  await nav('training'); await page.locator('#training-date').fill('2026-09-20'); await page.locator('#training-date').dispatchEvent('change');
+  await nav('training'); await page.locator('.calendar-date-picker summary').click(); await page.locator('#training-date').fill('2026-09-20'); await page.locator('#training-date').dispatchEvent('change');
   assert.equal(await page.locator('.timetable-cell').count(), 7);
   assert.equal(await page.locator('[data-period]').count(), 0);
   await page.locator('.calendar-task[data-task-id="schedule:2026-09-20"] [data-action="calendar-detail"]').first().click();
@@ -187,7 +211,7 @@ try {
   await page.locator('#history-list [data-action="open-chat"]').first().click();
   await page.locator('.message.assistant table').waitFor();
   assert.equal(errors.length, 0, errors.join('\n'));
-  const result = { passed: true, dataDir, upstreamAborts, checks: 'incremental Markdown, XSS, cancellation, create/update/delete persisted, historical workout survives deletion, IME, 390px layout, offline shell', errors };
+  const result = { passed: true, dataDir, upstreamAborts, checks: 'on-demand context, compact history, incremental Markdown, XSS, cancellation, create/update/delete persisted, historical workout survives deletion, IME, 390px layout, offline shell', errors };
   await writeFile(join(dataDir, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } catch (error) {
   console.error('FAILED STEP:', step);

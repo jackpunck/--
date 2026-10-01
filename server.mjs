@@ -6,12 +6,16 @@ import { resolve, dirname, join, extname, relative, isAbsolute } from 'node:path
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { openStore, getRecords, recordFromRow, getProviders, providerFromRow } from './server/storage.mjs';
+import {createGzip} from 'node:zlib';
+import { openStore, getRecords, getRecordChanges, recordFromRow, getProviders, providerFromRow } from './server/storage.mjs';
 import { HttpError, validateProvider, selectProviderModel, discoverModels, buildMessages, complete } from './server/providers.mjs';
 import { streamChat } from './server/chat-stream.mjs';
 import { assistantTools, executeAssistantTool, getAssistantToolReceipts } from './server/assistant-tools.mjs';
 import { resolveLocalToday, resolveLocalTime } from './server/calendar-data.mjs';
 import { completeNutritionAdvice } from './server/nutrition-advice.mjs';
+import { contextSections, readChatContext } from './server/chat-context.mjs';
+import { addDays } from './public/schedule.js';
+import {prepareChatHistory,historyTools} from './server/chat-history.mjs';
 
 const scrypt = promisify(scryptCallback);
 const root = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +24,7 @@ const MAX_FILE = 8 * 1024 * 1024;
 const ID = /^[\w:-]{1,100}$/;
 const FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
 const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
-const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
+const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'demo.offline.js', 'atlas.worker.js', 'assets/anatomy-data.bin', 'model-loader.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
 
 async function passwordHash(password) {
   const salt = randomBytes(16).toString('hex');
@@ -96,11 +100,13 @@ async function serveStatic(req, res, pathname, publicDir, modelDir) {
   res.setHeader('Content-Type', CONTENT_TYPES[extname(target)] ?? 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('ETag', etag);
+  res.setHeader('Vary','Accept-Encoding');
   if (req.headers['if-none-match'] === etag) { res.writeHead(304); res.end(); return; }
-  res.setHeader('Content-Length', info.size);
+  const gzip=info.size>1024&&/\.(js|css|html|json|svg)$/.test(target)&&String(req.headers['accept-encoding']||'').split(',').some(value=>/^\s*gzip\s*(?:;|$)/i.test(value)&&!/(?:;\s*q=0(?:\.0*)?\s*$)/i.test(value));
+  if(gzip)res.setHeader('Content-Encoding','gzip');else res.setHeader('Content-Length', info.size);
   res.writeHead(200);
   if (req.method === 'HEAD') res.end();
-  else createReadStream(target).on('error', () => res.destroy()).pipe(res);
+  else {const input=createReadStream(target).on('error',()=>res.destroy());if(gzip)input.pipe(createGzip({level:1})).on('error',()=>res.destroy()).pipe(res);else input.pipe(res);}
 }
 
 /** Create an isolated application server. The caller owns listen()/close(). */
@@ -235,7 +241,7 @@ export function createServer(options = {}) {
           send(res, 200, { userId: user.id, records: getRecords(db, user.id) }); return;
         }
         if (pathname === '/api/sync' && method === 'POST') {
-          const { changes, userId } = await readBody(req, 8 * 1024 * 1024);
+          const { changes, userId, cursor } = await readBody(req, 8 * 1024 * 1024);
           if (userId !== undefined && userId !== user.id) throw new HttpError(409, '当前登录账号已变更，请重新登录后同步。');
           if (!Array.isArray(changes) || changes.length > 500) throw new HttpError(400, '每次最多同步 500 条记录。');
           const seen = new Set();
@@ -264,7 +270,7 @@ export function createServer(options = {}) {
             }
             db.exec('COMMIT');
           } catch (error) { db.exec('ROLLBACK'); throw error; }
-          send(res, 200, { userId: user.id, records: getRecords(db, user.id), conflicts }); return;
+          send(res, 200, { userId: user.id, ...getRecordChanges(db,user.id,cursor), conflicts }); return;
         }
         if (pathname === '/api/providers' && method === 'GET') { send(res, 200, getProviders(db, user.id)); return; }
         if (pathname === '/api/providers' && method === 'PUT') {
@@ -318,8 +324,11 @@ export function createServer(options = {}) {
           if (body.stream) {
             try { localToday = resolveLocalToday(body.context?.localToday); localTime = resolveLocalTime(localToday, body.context?.timezoneOffset); }
             catch (error) { throw new HttpError(400, error.message); }
+            body.context = { ...body.context, localToday };
           }
-          const messages = buildMessages(db, user.id, body);
+          const chatHistory=body.stream?prepareChatHistory({db,userId:user.id,body}):null;
+          const messages = buildMessages(db, user.id, chatHistory?.body||body);
+          if(chatHistory)messages[0].content+='\n'+chatHistory.notice;
           const settings = getProviders(db, user.id);
           const id = settings.tasks[body.task];
           if (!id) throw new HttpError(400, '尚未为此任务配置 AI 模型，请前往个人设置添加供应商并选择任务模型。');
@@ -341,9 +350,16 @@ export function createServer(options = {}) {
             });
           };
           try {
-            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: assistantTools,
+            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools],
               executeTool: async (name, args) => { const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
               receipt: getAssistantToolReceipts({ db, userId: user.id, requestId: body.requestId }),
+              executeHistoryTool:chatHistory.execute,
+              fallbackMessages:()=>buildMessages(db,user.id,body).slice(1),
+              fallbackContext: () => ({
+                ...readChatContext({ db, userId: user.id, localToday, args: { sections: contextSections } }).data,
+                plan: executeAssistantTool({ db, userId: user.id, name: 'get_training_plan', localToday }),
+                calendar: executeAssistantTool({ db, userId: user.id, name: 'read_calendar', args: { startDate: localToday, endDate: addDays(localToday, 28) }, localToday }),
+              }),
               fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal, onEvent: event }));
             if (!controller.signal.aborted) await event('done', result);
           } catch (error) {

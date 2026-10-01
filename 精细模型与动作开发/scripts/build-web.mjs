@@ -1,0 +1,15 @@
+import {build} from 'esbuild';
+import {readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const asset=JSON.parse(await readFile(resolve(root,'assets/anatomy-atlas.json'),'utf8'));
+const {data,...metadata}=asset,bytes=Buffer.from(data,'base64');
+metadata.dataHash=createHash('sha256').update(bytes).digest('hex').slice(0,16);
+await writeFile(resolve(root,'assets/anatomy-data.bin'),bytes);
+const base={absWorkingDir:root,bundle:true,minify:true,format:'iife'};
+await build({...base,entryPoints:['src.js'],outfile:'demo.offline.js'});
+await build({...base,entryPoints:['src.js'],outfile:'demo.bundle.js',plugins:[{name:'external-atlas',setup(b){b.onLoad({filter:/anatomy-atlas\.json$/},()=>({contents:JSON.stringify(metadata),loader:'json'}));}}]});
+await build({...base,entryPoints:['atlas-worker.js'],outfile:'atlas.worker.js'});
+console.log(`Lossless atlas: ${bytes.length} bytes; ${asset.meshes.length} structures`);

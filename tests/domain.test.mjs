@@ -1,9 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-// Import via data URL so this isolated suite also works before package.json exists.
-const code = await readFile(new URL('../public/domain.js', import.meta.url), 'utf8');
-const { exercises, foods, calculateNutrition, generatePlan, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, planVariants } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+import { exercises, foods, calculateNutrition, generatePlan, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, planVariants } from '../public/domain.js';
 const profile = { age: 30, sex: 'male', height: 175, weight: 70, goal: 'maintain', activity: 1.4 };
 
 test('nutrition formula matches an independently calculated example and energy accounting', () => {
@@ -64,7 +61,8 @@ test('all allowed plans have complete exercise references, rest days, and indepe
 test('catalog has unique IDs, truthful demo availability, and usable cues', () => {
   assert.ok(exercises.length >= 15);
   assert.equal(new Set(exercises.map(e => e.id)).size, exercises.length);
-  assert.deepEqual(exercises.filter(e => e.demo).map(e => e.demo).sort(), ['curl', 'pushup', 'squat']);
+  assert.equal(exercises.filter(e => e.demo).length,25);
+  assert.deepEqual(exercises.filter(e=>e.isometric).map(e=>e.id),['plank']);
   assert.ok(exercises.every(e => e.description && e.cues.length >= 3 && e.source));
   assert.equal(new Set(foods.map(e => e.id)).size, foods.length);
   assert.ok(foods.every(f => f.state && f.source.includes('估值')));

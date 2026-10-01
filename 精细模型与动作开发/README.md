@@ -35,7 +35,9 @@
 
 ## 直接查看
 
-双击 `index.html`，即可使用已打包的演示。请保留 `embed-bootstrap.js`、`style.css`、`demo.bundle.js` 和署名许可文件。
+双击 `index.html`，即可使用已打包的演示。请保留 `embed-bootstrap.js`、`model-loader.js`、`style.css`、`demo.offline.js` 和署名许可文件。
+
+通过 HTTP 打开时加载 `demo.bundle.js`、`atlas.worker.js` 和 `assets/anatomy-data.bin`，在 Worker 中解码完整网格，再把缓冲区转交主线程；浏览器限制 Worker 时自动回退。二进制与原始 JSON 中压缩资产逐字节相同，坐标、法线和索引保持不变。`file://` 使用内嵌全部资产的离线包，两种方式均由 `npm run build` 生成。
 
 ## 修改和运行
 
@@ -64,7 +66,9 @@ npm start
 | `exercise-catalog.js`、`motion-poses.js` | 25 动作目录与新增 22 个动作的轨迹配置 |
 | `src.js` | 动作资料、播放阶段、动作要领和页面交互 |
 | `index.html`、`embed-bootstrap.js`、`style.css` | 动作入口、页面结构和桌面／手机布局 |
-| `demo.bundle.js` | 已构建的网页运行文件，内嵌模型与 Three.js |
+| `demo.bundle.js`、`atlas.worker.js`、`assets/anatomy-data.bin` | 网页运行文件、后台解码器与独立压缩网格 |
+| `model-loader.js`、`demo.offline.js` | 按访问方式选择入口，以及内嵌全部资产的离线包 |
+| `atlas-decode.js`、`scripts/verify-decode.mjs` | 共享无损解码及全部结构坐标、法线、索引一致性检查 |
 | `scripts/verify-atlas.mjs` | 网格、法线朝向、尺寸和高亮检查 |
 | `scripts/verify-rig.mjs` | 蒙皮、动作姿态、支撑点检查及离线预览导出 |
 | `scripts/verify-static.mjs`、`scripts/verify-embed.mjs` | 新增连续轨迹、地面边界、URL 契约和父窗口消息校验 |
@@ -85,6 +89,6 @@ npm start
 
 ## 检查与许可
 
-本目录模型有 854,514 个三角面，采用人工动作轨迹与近似蒙皮。检查覆盖三个动画共 303 个姿态点、22 个独立静态姿态、13 组高亮以及 700 个原结构的拾取边界。静态器械是用于理解方向的轮廓；完整组织碰撞、专业动作审核和手机真机性能仍需后续验证。多个嵌入图谱应懒加载，离开可见区域后查看器停止绘制和推进动画。
+本目录模型有 854,514 个三角面，采用人工动作轨迹与近似蒙皮。检查覆盖原三个动画共 303 个姿态点、新增动作共 2,222 个姿态点、13 组高亮以及 700 个原结构的拾取边界。器械是用于理解方向的轮廓；完整组织碰撞、专业动作审核和手机真机性能仍需后续验证。多个嵌入图谱应懒加载，离开可见区域后查看器停止绘制和推进动画。
 
 模型来自 Z-Anatomy / BodyParts3D，改编模型和渲染图按 CC BY-SA 4.0 发布，详细署名、原始许可与修改说明见 `assets/ANATOMY-SOURCE.md`。这些许可文件应随模型一起保留。

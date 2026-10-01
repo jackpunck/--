@@ -20,6 +20,22 @@ export function openStore(dataDir) {
     CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, type TEXT NOT NULL, data BLOB NOT NULL, size INTEGER NOT NULL, created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS session_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS attachment_user ON attachments(user_id);`);
+  // A per-record latest revision captures every write, including AI tools.
+  // AUTOINCREMENT avoids timestamp ties and retains deletion tombstones.
+  db.exec(`CREATE TABLE IF NOT EXISTS record_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    record_id TEXT NOT NULL, UNIQUE(user_id,record_id));
+    INSERT OR IGNORE INTO record_changes(user_id,record_id) SELECT r.user_id,r.id FROM records r WHERE NOT EXISTS (SELECT 1 FROM record_changes c WHERE c.user_id=r.user_id AND c.record_id=r.id);
+    CREATE INDEX IF NOT EXISTS record_changes_user_seq ON record_changes(user_id,seq);
+    CREATE TRIGGER IF NOT EXISTS records_sync_insert AFTER INSERT ON records BEGIN
+      INSERT INTO record_changes(user_id,record_id) VALUES(new.user_id,new.id)
+      ON CONFLICT(user_id,record_id) DO UPDATE SET seq=excluded.seq;
+    END;
+    CREATE TRIGGER IF NOT EXISTS records_sync_update AFTER UPDATE ON records BEGIN
+      INSERT INTO record_changes(user_id,record_id) VALUES(new.user_id,new.id)
+      ON CONFLICT(user_id,record_id) DO UPDATE SET seq=excluded.seq;
+    END;`);
   // Keep existing encrypted keys and task assignments when upgrading older databases.
   const providerColumns = new Set(db.prepare('PRAGMA table_info(providers)').all().map(column => column.name));
   for (const [name, definition] of Object.entries({ preset_id: "TEXT NOT NULL DEFAULT 'custom'", protocol: "TEXT NOT NULL DEFAULT 'openai'", models: "TEXT NOT NULL DEFAULT '[]'" })) {
@@ -55,6 +71,13 @@ export function recordFromRow(row) {
 
 export function getRecords(db, userId) {
   return db.prepare('SELECT * FROM records WHERE user_id = ? ORDER BY updated_at, id').all(userId).map(recordFromRow);
+}
+
+export function getRecordChanges(db,userId,cursor) {
+  const current=db.prepare('SELECT COALESCE(MAX(seq),0) AS value FROM record_changes WHERE user_id = ?').get(userId).value;
+  const incremental=Number.isSafeInteger(cursor)&&cursor>=0&&cursor<=current;
+  const records=incremental?db.prepare(`SELECT r.* FROM records r JOIN record_changes c ON c.user_id=r.user_id AND c.record_id=r.id WHERE r.user_id=? AND c.seq>? ORDER BY c.seq`).all(userId,cursor).map(recordFromRow):getRecords(db,userId);
+  return {records,cursor:current};
 }
 
 export function getProviders(db, userId) {

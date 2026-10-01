@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {openStore,getRecordChanges} from '../server/storage.mjs';
+import {writeRecord} from '../server/calendar-data.mjs';
+test('incremental sync catches same-millisecond edits, AI writes, deletes, rollback and restart',t=>{
+  const path=mkdtempSync(join(tmpdir(),'fitness-delta-'));let {db}=openStore(path);
+  t.after(()=>{db.close();rmSync(path,{recursive:true,force:true});});
+  for(const id of ['a','b'])db.prepare('INSERT INTO users VALUES(?,?,?,?,?)').run(id,id+'@test.com',id,'fixture','2026-10-01');
+  const put=(id,data,userId='a',version=0,deleted=false)=>writeRecord(db,userId,{id,kind:'note',data,version,deleted},'2026-10-01T00:00:00.000Z');
+  put('one',{n:1});put('two',{n:2});put('secret',{private:true},'b');
+  const initial=getRecordChanges(db,'a',null);
+  assert.deepEqual(initial.records.map(r=>r.id),['one','two']);
+  assert.deepEqual(getRecordChanges(db,'a',initial.cursor).records,[]);
+  put('one',{n:3},'a',1);
+  const changed=getRecordChanges(db,'a',initial.cursor);
+  assert.equal(changed.records.length,1);assert.equal(changed.records[0].data.n,3);
+  put('two',null,'a',1,true);
+  assert.equal(getRecordChanges(db,'a',changed.cursor).records[0].deleted,true);
+  const beforeRollback=getRecordChanges(db,'a',null).cursor;
+  db.exec('BEGIN');put('rolled-back',{n:0});db.exec('ROLLBACK');
+  assert.equal(getRecordChanges(db,'a',null).cursor,beforeRollback);
+  db.close();({db}=openStore(path));
+  assert.deepEqual(getRecordChanges(db,'a',beforeRollback).records,[]);
+  assert.equal(getRecordChanges(db,'a',Number.MAX_SAFE_INTEGER).records.length,2);
+});

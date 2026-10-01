@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
 const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.txt':'text/plain; charset=utf-8'};
-const allowed = new Set(['index.html','style.css','demo.bundle.js','embed-bootstrap.js','THIRD_PARTY_LICENSES.txt']);
+const allowed = new Set(['index.html','style.css','demo.bundle.js','demo.offline.js','atlas.worker.js','assets/anatomy-data.bin','model-loader.js','embed-bootstrap.js','THIRD_PARTY_LICENSES.txt']);
 const port = Number(process.env.PORT || 4174);
 http.createServer((req,res) => {
   try {

@@ -541,3 +541,5 @@
 @media(prefers-reduced-motion:reduce){.grouped-draft .draft-chevron{transition:none}}
 @media(max-width:480px){.busy-default-weekdays{gap:4px}.busy-default-weekdays button{padding:9px 0;font-size:10px}.busy-defaults>summary{gap:8px}.busy-defaults-summary{max-width:43%;font-size:10px}.busy-defaults>summary>strong{font-size:11px}.busy-holiday-badge{top:2px;right:2px;min-width:12px;height:12px;font-size:8px}}
 @media(prefers-reduced-motion:reduce){.busy-defaults-chevron{transition:none}}
+
+.markdown-block:first-child>:first-child{margin-top:0}.markdown-block:last-child>:last-child{margin-bottom:0}

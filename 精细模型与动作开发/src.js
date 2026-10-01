@@ -1,3 +1,4 @@
+import {loadBrowserAtlas} from './atlas-loader.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createAnatomyAtlas } from './atlas-model.js';
@@ -163,7 +164,8 @@ function selectionMetadata(){return {mode:state.mode,muscle:state.selected,struc
 function selectedExercise(){return state.mode==='motion'&&!state.unsupported?state.exercise:null;}
 function reportReady(){bridge.ready(selectedExercise(),$('exercise-name').textContent,webglReady,selectionMetadata());}
 function reportRendered(){bridge.rendered(selectedExercise(),$('exercise-name').textContent,selectionMetadata());}
-try{
+(async()=>{try{
+  const decoded=await loadBrowserAtlas();
   const viewport=$('viewport'),scene=new THREE.Scene();scene.background=new THREE.Color('#eaf0e7');scene.fog=new THREE.Fog('#eaf0e7',10,24);
   camera=new THREE.PerspectiveCamera(34,1,.025,40);
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,options.compact?1.25:2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=!options.compact;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
@@ -174,7 +176,7 @@ try{
   scene.add(new THREE.HemisphereLight('#ffffff','#727d68',2.2));const key=new THREE.DirectionalLight('#fff5e7',3.4);key.position.set(-3,6,4);key.castShadow=!options.compact;key.shadow.mapSize.set(2048,2048);key.shadow.camera.left=-3;key.shadow.camera.right=3;key.shadow.camera.top=4;key.shadow.camera.bottom=-3;key.shadow.normalBias=.009;key.shadow.bias=-.00015;scene.add(key);
   const fill=new THREE.DirectionalLight('#ecfff3',2);fill.position.set(3,4,4);scene.add(fill);const rim=new THREE.DirectionalLight('#fff5e7',.8);rim.position.set(1,4,-4);scene.add(rim);
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#eaf0e7',roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
-  atlas=createAnatomyAtlas({rigged:true});scene.add(atlas.body);
+  atlas=createAnatomyAtlas({rigged:true,decoded});scene.add(atlas.body);
   if(state.unsupported){state.mode='atlas';applyPose();showDetails();datasets();}
   else if(state.mode==='motion')chooseExercise(state.exercise);
   else {lastPoseKey='atlas';setView('angle');}
@@ -203,3 +205,4 @@ try{
   requestRender();
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();pauseRendering();webglReady=false;state.playing=false;updatePlay();$('loading').hidden=false;$('loading').textContent='3D 显示已中断，请刷新页面恢复；文字内容仍可查看。';reportReady();});
 }catch(error){console.error('3D initialization failed',error);webglReady=false;state.playing=false;updatePlay();$('loading').hidden=false;$('loading').textContent='当前浏览器无法启动 3D，请使用支持 WebGL 的浏览器。文字说明仍可查看。';$('play').disabled=true;$('progress').disabled=true;reportReady();}
+})();
