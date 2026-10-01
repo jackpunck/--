@@ -20,36 +20,54 @@ page.on('request',request=>{if(request.url().includes('/api/')&&request.method()
 const screenshot=name=>page.screenshot({path:join(dataDir,name+'.png'),style:'#toasts{visibility:hidden}'});
 let step='initial landing';
 try {
-  await page.goto(base);await page.locator('.landing-hero').waitFor();
-  await page.locator('#landing-heading').waitFor();
+  await page.goto(base);await page.locator('.landing-journey').waitFor();
+  await page.locator('#journey-title').waitFor();
   assert.equal(await page.locator('.landing canvas').count(),0);
   assert.equal(await page.locator('#auth-form').count(),1);
   assert.equal(await page.evaluate(()=>scrollY),0);
+  assert(await page.locator('.landing main>section').first().evaluate(el=>el.classList.contains('landing-journey')));
+  assert.equal(await page.locator('#auth-form').isVisible(),false);
   await screenshot('desktop-hero');
-  for(const width of [1440,1024,768,390,360]){
+  for(const width of [1920,1440,1024,768,390,360]){
     await page.setViewportSize({width,height:width<700?844:1000});
+    await page.evaluate(()=>scrollTo(0,0));
+    const hero=await page.locator('.landing-journey').boundingBox();
+    assert.equal(hero.y,0);assert.equal(hero.x,0);assert.equal(hero.width,width);
+    assert.equal(hero.height,width<700?844:1000,`Hero must fill viewport at ${width}`);
+    assert(await page.locator('.landing-scroll-cue').isVisible());
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`Overflow at ${width}`);
-    for(const id of ['landing-story','landing-training','landing-nutrition','landing-companion','start']){
+    for(const id of ['landing-story','landing-training','landing-nutrition','landing-companion','landing-knowledge']){
       await page.locator('#'+id).scrollIntoViewIfNeeded();
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${id} overflow at ${width}`);
     }
   }
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>scrollTo(0,0));await screenshot('mobile-hero');
 
-  step='menu keyboard navigation and feature demos';
-  await page.locator('.landing-menu-toggle').click();
-  await page.locator('#landing-menu').waitFor({state:'visible'});
-  await page.keyboard.press('Escape');
-  assert.equal(await page.locator('#landing-menu').isVisible(),false);
-  await page.locator('.landing-menu-toggle').click();
-  await page.locator('#landing-menu a[href="#landing-features"]').click();
-  assert.equal(await page.evaluate(()=>document.activeElement.id),'landing-features-title');
+  step='full-screen introduction and secondary account route';
+  await page.locator('.landing-scroll-cue').click();
+  await page.waitForFunction(()=>document.activeElement.id==='landing-intro-title');
+  assert(await page.evaluate(()=>scrollY>0));
+  await page.locator('.landing-login').click();
+  await page.locator('#auth-form').waitFor();
+  assert.equal(new URL(page.url()).hash,'#auth-entry');
+  assert.equal(await page.locator('.landing-journey').isVisible(),false);
+  assert.equal(await page.locator('.landing-features').isVisible(),false);
+  await page.reload();await page.locator('#auth-form').waitFor();
+  assert.equal(await page.locator('#name').count(),0);
+  await page.goBack();await page.locator('.landing-journey').waitFor();
+  await page.goForward();await page.locator('#auth-form').waitFor();
+  await page.locator('.landing-back').click();await page.locator('.landing-journey').waitFor();
+  await page.locator('.landing-journey .landing-pill').click();await page.locator('#name').waitFor();
+  assert.equal(new URL(page.url()).hash,'#auth-register');
+  await page.locator('.landing-back').click();await page.locator('.landing-journey').waitFor();
+
+  step='feature demos';
   await page.locator('[data-demo=meal]').click();
   assert.equal(await page.locator('[data-meal-name]').innerText(),'轻盈早餐');
   await page.locator('[data-demo=chat]').click();
   assert.match(await page.locator('.demo-question').innerText(),/练腿/);
   await page.locator('[data-demo=exercise]').click();
-  assert.match(await page.locator('[data-exercise-name]').innerText(),/PUSH UP/);
+  assert.match(await page.locator('[data-exercise-name]').innerText(),/SQUAT/);
 
   step='demo completion does not write account data';
   for(const task of await page.locator('.landing-demo-task').all())await task.click();
@@ -60,11 +78,11 @@ try {
   await screenshot('mobile-training-demo');
 
   step='motion preferences and navigation';
-  assert.equal(await page.locator('.reel-orbits i').first().evaluate(el=>getComputedStyle(el).animationName),'none');
+  assert.equal(await page.locator('.journey-orbit i').first().evaluate(el=>getComputedStyle(el).animationName),'none');
   await page.emulateMedia({reducedMotion:'no-preference'});
-  assert.equal(await page.locator('.reel-orbits i').first().evaluate(el=>getComputedStyle(el).animationName),'reel-orbit');
+  assert.equal(await page.locator('.journey-orbit i').first().evaluate(el=>getComputedStyle(el).animationName),'journey-ring');
   await page.locator('.landing-motion').click();
-  assert.equal(await page.locator('.reel-orbits i').first().evaluate(el=>getComputedStyle(el).animationName),'none');
+  assert.equal(await page.locator('.journey-orbit i').first().evaluate(el=>getComputedStyle(el).animationName),'none');
   await page.locator('.landing-motion').click();
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.waitForFunction(()=>window.ScrollTrigger.getAll().length===0);
@@ -78,11 +96,32 @@ try {
   assert.equal(await page.evaluate(()=>window.ScrollTrigger.getAll().length),0);
   assert.equal(await page.locator('.landing-story-text span').first().evaluate(el=>getComputedStyle(el).opacity),'1');
   await page.locator('.landing-motion').click();
+
+  step='threshold starts a timed animation while scrolling is stopped';
+  assert(await page.evaluate(()=>window.ScrollTrigger.getAll().every(trigger=>!trigger.vars.scrub)));
+  await page.evaluate(()=>scrollTo({top:0,behavior:'instant'}));
+  await page.waitForTimeout(1500);
+  const readCard=()=>page.locator('#landing-training .project-visual').evaluate(el=>({y:scrollY,scale:new DOMMatrixReadOnly(getComputedStyle(el).transform).a}));
+  const before=await readCard();
+  assert(before.scale<.7,'Card should await its entry threshold');
+  await page.evaluate(()=>scrollTo({top:document.querySelector('#landing-training').getBoundingClientRect().top+scrollY-innerHeight*.82+25,behavior:'instant'}));
+  await page.waitForTimeout(250);
+  const playing=await readCard();
+  await page.waitForTimeout(1250);
+  const finished=await readCard();
+  assert.equal(playing.y,finished.y,'The page should remain still while the card animates');
+  assert(playing.scale>before.scale+.1&&playing.scale<.99,'Card should be in motion after crossing the threshold');
+  assert(Math.abs(finished.scale-1)<.005,'Card should finish without further scrolling');
+  await page.waitForTimeout(200);
+  assert(Math.abs((await readCard()).scale-finished.scale)<.001,'The completed card should settle');
+  await screenshot('desktop-triggered-cards');
   await page.setViewportSize({width:390,height:844});
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.locator('.landing-login').click();
+  await page.locator('#auth-form').waitFor();
   const formTop=await page.locator('#auth-entry').evaluate(el=>el.getBoundingClientRect().top);
-  assert(formTop>=70&&formTop<250,`Mobile auth entry should be visible, got ${formTop}`);
+  assert(formTop>=70&&formTop<450,`Mobile auth entry should be visible, got ${formTop}`);
+  assert(await page.locator('#auth-form button[type=submit]').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Login submit should fit on screen');
   assert.equal(await page.locator('#name').count(),0);
   assert.equal(await page.evaluate(()=>document.activeElement.id),'landing-auth-heading');
 
@@ -106,7 +145,7 @@ try {
   assert.equal(await page.evaluate(()=>window.ScrollTrigger.getAll().length),0);
   assert.equal(await page.evaluate(()=>scrollY),0);
   await page.setViewportSize({width:1440,height:1000});
-  await page.locator('[data-action=logout]').click();await page.locator('.landing-hero').waitFor();
+  await page.locator('[data-action=logout]').click();await page.locator('.landing-journey').waitFor();
   await page.locator('.landing-login').click();
   await page.locator('#email').fill(email);await page.locator('#password').fill('wrong-password-123');
   await page.locator('#auth-form button[type=submit]').click();
@@ -114,23 +153,26 @@ try {
   assert.equal(await page.locator('#email').inputValue(),email);
   await page.locator('#password').fill(password);await page.locator('#auth-form button[type=submit]').click();
   await page.locator('#chat-input').waitFor();
-  await page.locator('[data-action=logout]').click();await page.locator('.landing-hero').waitFor();
+  await page.locator('[data-action=logout]').click();await page.locator('.landing-journey').waitFor();
 
   step='scroll reveal and offline landing assets';
   await page.emulateMedia({reducedMotion:'no-preference'});
   await page.locator('#landing-training').scrollIntoViewIfNeeded();
   await page.waitForFunction(()=>document.querySelector('#landing-training .project-visual').classList.contains('is-visible'));
   await page.emulateMedia({reducedMotion:'reduce'});
-  for(const [name,selector] of [['desktop-training','#landing-training'],['desktop-nutrition','#landing-nutrition'],['desktop-companion','#landing-companion'],['desktop-auth','#start']]){
+  for(const [name,selector] of [['desktop-training','#landing-training'],['desktop-nutrition','#landing-nutrition'],['desktop-companion','#landing-companion'],['desktop-details','#landing-features']]){
     await page.locator(selector).scrollIntoViewIfNeeded();await screenshot(name);
   }
+  await page.locator('.landing-login').click();await page.locator('#auth-form').waitFor();
+  await screenshot('desktop-auth');
+  await page.locator('.landing-back').click();await page.locator('.landing-journey').waitFor();
   await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
-  await context.setOffline(true);await page.reload();await page.locator('.landing-hero').waitFor();
-  await page.locator('#landing-heading').waitFor();
+  await context.setOffline(true);await page.reload();await page.locator('.landing-journey').waitFor();
+  await page.locator('#journey-title').waitFor();
   assert.equal(await page.locator('.landing canvas').count(),0);
   await page.locator('.landing-login').click();await page.locator('#auth-form').waitFor();
   assert.equal(errors.length,0,errors.join('\n'));
-  const result={passed:true,dataDir,widths:[1440,1024,768,390,360],checks:'text hero without canvas, responsive story, menu keyboard navigation, feature demos, GSAP cleanup, motion toggle, reduced motion, direct auth entry, email preservation, real register/login/error/logout, profile, animation cleanup, scroll reveal, offline landing',errors};
+  const result={passed:true,dataDir,widths:[1920,1440,1024,768,390,360],checks:'full viewport ring hero, scroll cue, secondary login/register routes, refresh and browser history, timed threshold animation at fixed scroll position, text hero without canvas, responsive wide details, feature demos, GSAP cleanup, motion toggle, reduced motion, direct auth entry, email preservation, real register/login/error/logout, profile, animation cleanup, scroll reveal, offline landing',errors};
   await writeFile(join(dataDir,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }catch(error){console.error('FAILED STEP:',step,errors);await screenshot('failure').catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}

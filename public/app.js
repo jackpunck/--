@@ -1,4 +1,4 @@
-import {landingMarkup, mountLanding} from './landing.js?v=7';
+import {landingMarkup, mountLanding} from './landing.js?v=12';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
@@ -124,7 +124,7 @@ function energyVisual() {
 }
 function authFormMarkup() {
   const register=state.authMode==='register';
-  return `<div class="auth-form"><div class="auth-welcome"><span></span> YOUR NEXT CHAPTER</div><h2 id="landing-auth-heading" tabindex="-1">${register?'开始你的新一程':'欢迎回来'}</h2><p>一个账号，连接电脑和手机上的每一次进步。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">数据保存在当前服务中。同一服务地址下，电脑与手机可登录同一账号同步记录。</p></div>`;
+  return `<div class="auth-form"><div class="auth-welcome"><span></span> 你的循序空间</div><h2 id="landing-auth-heading" tabindex="-1">${register?'创建账号，开始记录':'欢迎回到循序'}</h2><p>保存你的训练计划、餐食记录和阶段变化。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">使用同一服务地址，可在电脑与手机间同步记录。</p></div>`;
 }
 function renderAuth() {
   const panel=$('[data-auth-panel]');
@@ -138,12 +138,11 @@ function renderAuth() {
   }
   landingCleanup?.();
   $('#app').innerHTML=landingMarkup(authFormMarkup(),icon);
-  landingCleanup=mountLanding($('.landing'));
-  window.scrollTo(0,0);
+  landingCleanup=mountLanding($('.landing'),{onAuthRoute:mode=>{state.authMode=mode;renderAuth();}});
 }
 
 function render() {
-  if(landingCleanup){landingCleanup();landingCleanup=null;window.scrollTo(0,0);}
+  if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
   const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',settings:'个人中心'};
   $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">KEEP YOUR MOMENTUM ${icon("spark")}</span><strong>每一步，都算数。</strong>找到自己的节奏，<br>把坚持变成一种日常。<div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
@@ -1377,12 +1376,12 @@ document.addEventListener('click',async event=>{
  const {action,id}=target.dataset;if(target.tagName==='A')event.preventDefault();
  try {
  switch(action){
- case 'auth-mode':state.authMode=target.dataset.mode;renderAuth();break;
+ case 'auth-mode':state.authMode=target.dataset.mode;history.replaceState(null,'',state.authMode==='login'?'#auth-entry':'#auth-register');renderAuth();break;
  case 'auth-jump':{
-   state.authMode=target.dataset.mode==='login'?'login':'register';renderAuth();
-   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches||$('.landing')?.classList.contains('motion-paused');
-   $('#auth-entry').scrollIntoView({behavior:reduced?'instant':'smooth'});
-   $('#landing-auth-heading').focus({preventScroll:true});break;
+   const hash=target.dataset.mode==='login'?'#auth-entry':'#auth-register';
+   if(location.hash!==hash)location.hash=hash;
+   else {$('#auth-entry').scrollIntoView({behavior:'instant'});$('#landing-auth-heading').focus({preventScroll:true});}
+   break;
  }
  case 'nav':await navigate(target.dataset.page);break;
  case 'toggle-sidebar': {
