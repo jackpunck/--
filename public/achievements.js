@@ -50,10 +50,12 @@ export function achievementWall(records,category='all') {
  const summary=records.find(record=>record.id==='achievement-summary'&&!record.deleted)?.data||{sessions:0,weeks:0};
  const cards=achievementDefinitions.flatMap(definition=>{
   if(category!=='all'&&category!==definition.category)return [];
-  if(definition.id==='weekly-training')return earnedWeeklyAchievements(records).map(record=>({...definition,id:record.id,type:definition.id,history:[record],latest:record.data.earnedDate,weekStart:record.data.weekStart,weekEnd:record.data.weekEnd}));
+  if(definition.id==='weekly-training')return earnedWeeklyAchievements(records).map(record=>({...definition,id:record.id,type:definition.id,earned:true,history:[record],latest:record.data.earnedDate,weekStart:record.data.weekStart,weekEnd:record.data.weekEnd}));
   const history=records.filter(record=>!record.deleted&&record.kind==='achievement'&&record.data?.ruleVersion===2&&record.data.type===definition.id).sort((a,b)=>b.data.earnedAt.localeCompare(a.data.earnedAt));
-  return history.length?[{...definition,type:definition.id,history,latest:history[0].data.earnedDate}]:[];
- }).sort((a,b)=>b.latest.localeCompare(a.latest)||achievementDefinitions.findIndex(d=>d.id===a.type)-achievementDefinitions.findIndex(d=>d.id===b.type));
+  return history.length||category==='milestone'?[{...definition,type:definition.id,earned:history.length>0,history,latest:history[0]?.data.earnedDate??null}]:[];
+ });
+ // Keep the milestone catalog in place as badges unlock; collected history stays chronological.
+ if(category!=='milestone')cards.sort((a,b)=>b.latest.localeCompare(a.latest)||achievementDefinitions.findIndex(d=>d.id===a.type)-achievementDefinitions.findIndex(d=>d.id===b.type));
  const goals=achievementDefinitions.filter(d=>d.target&&Number(summary[d.metric]||0)<d.target);
  goals.sort((a,b)=>(Number(summary[b.metric]||0)/b.target)-(Number(summary[a.metric]||0)/a.target));
  return {cards,summary,next:goals[0]?{...goals[0],value:Number(summary[goals[0].metric]||0)}:null};
