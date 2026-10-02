@@ -13,7 +13,7 @@ import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
 import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=12';
 import {remainingMealSuggestions, foodCategory, mealWeekContext, mealCategoryInstruction, adjustMealNutrient, mealDishInstruction, parseMealEstimate, nutritionBalance, parseNutritionAdvice, formatMealNotes, mealAdviceTiming} from './meal-contract.js?v=9';
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
-import {formulaCards, foodPortions, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion} from './knowledge-tools.js?v=9';
+import {formulaCards, foodPortions, rmPresets, rmConversionReference, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, calculateRMConversion} from './knowledge-tools.js?v=11';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
@@ -1192,9 +1192,9 @@ function strengthTool() {modal('最大力量估算',`<p class="description">用�
 function sourceLink(name,url) {return url?`<a class="knowledge-source" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name||'查看来源')} ↗</a>`:`<small class="knowledge-source">${esc(name||'')}</small>`;}
 function knowledgeSources() {return `<details class="knowledge-sources"><summary>知识来源与说明</summary><div class="source-grid">${knowledgeCards.map(card=>`<article><strong>${esc(card.title)}</strong><p>${esc(card.summary)}</p>${sourceLink(card.sourceName,card.sourceUrl)}</article>`).join('')}</div></details>`;}
 function renderLibrary() {
- const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
+ const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['weights','RM 换算','估算单次最大重量'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
  $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。')+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
- const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
+ const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,weights:renderWeightTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
  (renderPanel[state.knowledgeTab]||renderNutritionTools)();
 }
 function toolField(id,label,name,value,attributes='') {return `<div><label for="${id}">${label}</label><input id="${id}" name="${name}" type="number" value="${esc(value)}" ${attributes} required></div>`;}
@@ -1208,14 +1208,62 @@ function renderPortionTools() {
  $('#knowledge-panel').innerHTML=`<div class="portion-layout"><section class="card tool-card"><div class="card-head"><div><span class="eyebrow">EVERYDAY PORTIONS</span><h2>一份食物，含有多少营养？</h2></div>${icon('food')}</div><p class="tool-intro">盒、个、杯的大小各有不同。选择常见份量，也可以按实际可食重量调整。</p><form id="portion-form" novalidate><div class="form-grid"><div class="full"><label for="portion-food">选择食物份量</label><select id="portion-food" name="foodId">${options(foodPortions.map(item=>[item.id,item.label]),d.foodId)}</select></div>${toolField('portion-count','份数','count',d.count,'min="0.1" max="100" step="0.1"')}${toolField('portion-grams','每份可食重量（g）','grams',d.grams,'min="1" max="5000" step="1"')}</div><div id="portion-error" class="tool-error" role="alert"></div><div class="form-footer"><button class="button primary" type="submit">换算营养</button></div></form><div id="portion-result" class="tool-result-panel" aria-live="polite"></div></section><section class="portion-reference"><h3>常见份量参考</h3><div class="portion-grid">${foodPortions.map(item=>`<button class="portion-preset" type="button" data-action="portion-preset" data-id="${esc(item.id)}"><span>${icon('food')}</span><strong>${esc(item.label)}</strong><small>每份 ${item.grams} g 可食部分</small></button>`).join('')}</div><p>熟饭按熟重计算；鸡蛋按去壳后的重量计算。包装食品优先核对实际营养标签。</p></section></div>`;
  updateKnowledgeTool($('#portion-form'));
 }
+function rmPresetButtons(side,reps) {
+ return `<div class="weight-presets" role="group" aria-label="${side==='current'?'已完成次数':'目标 RM'}快捷选择">${rmPresets.map(count=>`<button type="button" data-action="rm-preset" data-side="${side}" data-reps="${count}" aria-pressed="${Number(reps)===count}">${side==='current'?`${count} 次`:`${count}RM`}</button>`).join('')}</div>`;
+}
+function renderWeightTools() {
+ const d=knowledgeDrafts.weights||{weight:'',currentReps:12,targetReps:1,method:'epley'};
+ $('#knowledge-panel').innerHTML=`<div class="weight-layout">
+  <section class="card tool-card">
+   <div class="card-head"><div><span class="eyebrow">ONE REP MAX</span><h2>估算你的单次最大重量</h2></div>${icon('dumbbell')}</div>
+   <p class="tool-intro">输入动作标准、接近力竭的一组重量与次数，估算 1RM。若平时练 4 × 12，填写单组重量与 12 次即可。</p>
+   <form id="weight-conversion-form" novalidate>
+    <input id="weight-method" type="hidden" name="method" value="${esc(d.method)}">
+    <div class="form-grid">${toolField('weight-known','已知重量（kg）','weight',d.weight,'min="0.1" max="1000" step="0.1" placeholder="例如 40"')}${toolField('weight-current-reps','已完成次数（次）','currentReps',d.currentReps,'min="1" max="15" step="1"')}</div>
+    ${rmPresetButtons('current',d.currentReps)}
+    <p class="tool-footnote">组数不参与 RM 估算；如果做完仍能轻松继续，结果会低估你的能力。</p>
+    <fieldset class="weight-scheme-fields"><legend>目标 RM 换算</legend><div class="form-grid">${toolField('weight-target-reps','目标 RM 次数','targetReps',d.targetReps,'min="1" max="15" step="1"')}</div>${rmPresetButtons('target',d.targetReps)}</fieldset>
+    <div id="weights-error" class="tool-error" role="alert"></div><div class="form-footer"><button class="button primary" type="submit">估算与换算</button></div>
+   </form>
+   <div id="rm-target-result" class="tool-result-panel rm-target-result" aria-live="polite" hidden></div>
+  </section>
+  <section class="card tool-card weight-table-card">
+   <div class="card-head"><div><span class="eyebrow">RM CONVERSION</span><h2>1RM 估算与重量换算表</h2></div><span class="badge neutral">1–15RM</span></div>
+   <div id="weights-result" aria-live="polite"><div class="weight-empty">${icon('dumbbell')}<strong>填写重量，查看你的 1RM</strong><p>1RM 是标准完成一次的最大重量。也可以查看 5RM、8RM、12RM 等次数对应的重量。</p></div></div>
+   <details class="weight-method"><summary>RM 是什么？如何估算？</summary><p class="formula-expression">${esc(rmConversionReference.formula)}</p><p>${esc(rmConversionReference.description)}</p><p>超过 10 次的估算误差可能更大。表内百分比由所选公式计算，这些预测值不能代替实测最大重量。</p>${sourceLink(rmConversionReference.sourceName,rmConversionReference.sourceUrl)}</details>
+  </section>
+ </div>`;
+ if(knowledgeDrafts.weights)updateKnowledgeTool($('#weight-conversion-form'));
+}
+function renderWeightResult(result) {
+ const target=result.target,method=result.method==='epley'?'Epley':'Brzycki';
+ return `<p class="weight-basis">根据已完成 ${result.weight} kg × ${result.currentReps} 次估算</p>
+  <div class="tool-result-panel rm-estimate"><div class="row spread wrap"><div class="tool-total"><small>估算 1RM · 单次最大重量</small><strong data-rm-max>${result.estimatedMax}<em> kg</em></strong></div><span class="badge neutral">${method}</span></div><p>${esc(result.note)}</p></div>
+  <div class="rm-formula-comparison" role="group" aria-label="选择估算公式">${[['epley','Epley'],['brzycki','Brzycki']].map(([key,name])=>`<button type="button" data-action="rm-method" data-method="${key}" aria-label="使用 ${name} 公式估算" aria-pressed="${key===result.method}"><small>${name} 估算</small><strong>${result.estimates[key]}<em> kg</em></strong></button>`).join('')}</div><small class="tool-footnote">点击对应公式切换估算结果。两种公式的差异不是你的最大重量上下限。</small>
+  <div class="weight-table-wrap"><table class="weight-conversion-table"><caption>${method} · 点击 RM 可设为目标</caption><thead><tr><th scope="col">RM 次数</th><th scope="col">估算重量</th><th scope="col">占 1RM</th></tr></thead><tbody>${result.rows.map(row=>`<tr ${row.reps===target.reps?'class="selected"':''}><th scope="row"><button type="button" data-action="rm-preset" data-side="target" data-reps="${row.reps}" aria-label="查看 ${row.label} 对应重量" aria-pressed="${row.reps===target.reps}">${row.label}${row.reps===1?' · 最大重量':''}</button></th><td>${row.weight} kg</td><td>${row.percent}%</td></tr>`).join('')}</tbody></table></div><small class="tool-footnote">同一动作、同一器械的单组重量参考。11–15RM 仅作粗略估算，多组训练还需考虑累积疲劳。</small>`;
+}
+function chooseRMMethod(method) {
+ if(!['epley','brzycki'].includes(method))return;
+ $('#weight-method').value=method;updateKnowledgeTool($('#weight-conversion-form'));
+}
+function chooseRMPreset(reps,side) {
+ const count=Number(reps);if(!Number.isInteger(count)||count<1||count>15||!['current','target'].includes(side))return;
+ $(`#weight-${side}-reps`).value=count;
+ updateKnowledgeTool($('#weight-conversion-form'));
+}
 function updateKnowledgeTool(form) {
  if(!form)return;
- const values=formData(form),id=form.id,kind=id==='metabolism-form'?'metabolism':id==='macro-energy-form'?'macro':'portion',prefix=kind==='macro'?'macro-energy':kind;
+ const values=formData(form),id=form.id,kind=id==='metabolism-form'?'metabolism':id==='macro-energy-form'?'macro':id==='weight-conversion-form'?'weights':'portion',prefix=kind==='macro'?'macro-energy':kind;
  knowledgeDrafts[kind]=values;
- const output=$('#'+prefix+'-result'),errorBox=$('#'+prefix+'-error');if(!output||!errorBox)return;
+ if(kind==='weights')form.querySelectorAll('[data-action="rm-preset"]').forEach(button=>button.setAttribute('aria-pressed',String(Number(values[button.dataset.side+'Reps'])===Number(button.dataset.reps))));
+ const output=$('#'+prefix+'-result'),errorBox=$('#'+prefix+'-error'),targetOutput=kind==='weights'?$('#rm-target-result'):null;if(!output||!errorBox)return;
  try {
    let html='';
-   if(kind==='metabolism'){
+   if(kind==='weights'){
+     const result=calculateRMConversion(values),method=result.method==='epley'?'Epley':'Brzycki';
+     html=renderWeightResult(result);
+     patchHTML(targetOutput,`<div class="row spread wrap"><div class="tool-total"><small>目标 ${result.target.label} · 估算重量</small><strong data-rm-target>${result.target.weight}<em> kg</em></strong></div><span class="badge neutral">${method}</span></div>`);targetOutput.hidden=false;
+   }else if(kind==='metabolism'){
      const result=calculateMetabolism(values);
      html=`<div class="tool-numbers"><div><small>静息能量消耗</small><strong>${numeric(result.ree)}<em> kcal / 天</em></strong></div><div><small>全天总消耗估算</small><strong>${numeric(result.tdee)}<em> kcal / 天</em></strong></div></div><p>${esc(result.note)}</p>`;
    }else if(kind==='macro'){
@@ -1226,7 +1274,7 @@ function updateKnowledgeTool(form) {
      html=`<div class="row spread wrap"><strong>${esc(result.label)}</strong><span class="badge">共 ${result.grams} g</span></div><div class="portion-totals">${[['kcal','热量','kcal'],['protein','蛋白质','g'],['carbs','碳水','g'],['fat','脂肪','g']].map(([key,label,unit])=>`<div><small>${label}</small><strong>${Math.round(result[key]*10)/10}<em> ${unit}</em></strong></div>`).join('')}</div><p>${esc(result.note)}</p>${sourceLink(result.source)}`;
    }
    errorBox.innerHTML='';patchHTML(output,html);output.hidden=false;
- }catch(error){output.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
+ }catch(error){output.hidden=true;if(targetOutput)targetOutput.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
 }
 function choosePortion(id) {
  const item=foodPortions.find(item=>item.id===id);if(!item)return;
@@ -1519,6 +1567,8 @@ document.addEventListener('click',async event=>{
  case 'exercise':showExercise(id);break;
  case 'knowledge-tab':state.knowledgeTab=target.dataset.tab;renderLibrary();break;
  case 'portion-preset':choosePortion(id);break;
+ case 'rm-preset':chooseRMPreset(target.dataset.reps,target.dataset.side);break;
+ case 'rm-method':chooseRMMethod(target.dataset.method);break;
  case 'muscle-model':showMuscle(id);break;
  case 'open-visual':target.dataset.type==='muscle'?showMuscle(id):showExercise(id);break;
  case 'knowledge':{const k=knowledgeCards.find(x=>x.id===id);if(k)modal(esc(k.title),`<span class="badge neutral">${esc(k.review.note)}</span><p class="description" style="margin-top:18px">${esc(k.summary)}</p><a class="link-button" href="${esc(k.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(k.sourceName)} ↗</a><p style="font-size:10px;color:#8b9981;margin-top:15px">来源核对日期：${esc(k.review.date)}</p>`);break;}
@@ -1563,7 +1613,7 @@ document.addEventListener('submit',async event=>{
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await estimateMeal();break;
  case 'meal-confirm-form':await confirmMeal();break;
- case 'metabolism-form':case 'macro-energy-form':case 'portion-form':updateKnowledgeTool(form);break;
+ case 'metabolism-form':case 'macro-energy-form':case 'portion-form':case 'weight-conversion-form':updateKnowledgeTool(form);break;
  case 'plan-form':{await ensurePlanLibrary();const draft=generateGroupedPlan({split:state.planSplit,groups:state.planGroups.slice(0,state.planSplit),variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;state.librarySelected=id;state.libraryEditing=structuredClone(state.store.records.get(id));viewDraft();break;}
  case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();libraryPlan({id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
  case 'plan-library-form':await importLibraryTemplate(values);break;
@@ -1640,13 +1690,13 @@ document.addEventListener('focusin',event=>{
 document.addEventListener('keydown',event=>{
  if(event.key==='Escape'){const menu=$('.task-card-menu[open],.calendar-popover[open]');if(menu){event.preventDefault();menu.open=false;$('summary',menu).focus();return;}}
  const tab=event.target.closest('.knowledge-tabs [role="tab"]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
- event.preventDefault();const tabs=['nutrition','portions','exercises','muscles'],index=tabs.indexOf(state.knowledgeTab);
+ event.preventDefault();const tabs=['nutrition','portions','weights','exercises','muscles'],index=tabs.indexOf(state.knowledgeTab);
  state.knowledgeTab=event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
  renderLibrary();$('#knowledge-tab-'+state.knowledgeTab)?.focus();
 });
 
 document.addEventListener('input',event=>{
- if(event.target.closest('#metabolism-form,#macro-energy-form,#portion-form'))updateKnowledgeTool(event.target.closest('form'));
+ if(event.target.closest('#metabolism-form,#macro-energy-form,#portion-form,#weight-conversion-form'))updateKnowledgeTool(event.target.closest('form'));
  if(event.target.id==='provider-model-search'&&state.providerDraft){state.providerDraft.search=event.target.value;renderProviderModels();}
  if(event.target.id==='exercise-search'){const start=event.target.selectionStart;state.filter=event.target.value;renderLibrary();$('#exercise-search').focus();$('#exercise-search').setSelectionRange(start,start);}
 });

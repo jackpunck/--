@@ -584,3 +584,45 @@
 .achievement-stamp.is-unearned>img,.achievement-detail-intro.is-unearned>img{filter:grayscale(1);opacity:.42}
 .achievement-stamp.is-unearned h3{color:#777b89}
 .achievement-pending-label{margin-top:auto;font-size:10px;line-height:1.8;color:var(--muted)}
+
+/* RM and maximum-strength estimates in the knowledge library. */
+.knowledge-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.weight-layout{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:22px;align-items:start}
+.weight-scheme-fields{min-width:0;margin:22px 0 0;padding:0;border:0}
+.weight-scheme-fields legend{padding:0;font-size:12px;font-weight:600;color:var(--ink)}
+.weight-presets{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 15px}
+.weight-presets button{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface,#fff);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.weight-presets button:hover,.weight-presets button[aria-pressed="true"]{background:var(--soft);border-color:var(--accent-line,var(--line));color:var(--ink)}
+.weight-presets button[aria-pressed="true"]{font-weight:600}
+.weight-table-card .card-head{flex-wrap:wrap;gap:12px}
+.weight-empty{display:flex;align-items:center;flex-direction:column;padding:44px 10px;text-align:center;background:var(--soft);border-radius:11px;margin:22px 0}
+.weight-empty>.icon{width:32px;height:32px;color:var(--muted);margin-bottom:20px}
+.weight-empty strong{font-size:14px;font-weight:500}
+.weight-empty p{max-width:280px;font-size:12px;line-height:1.9;color:var(--muted);margin:12px 0 0}
+.weight-basis{font-size:12px;line-height:1.8;color:var(--muted);margin:20px 0 12px}
+.rm-estimate{margin-top:0}
+.rm-estimate .tool-total>strong{font-size:52px}
+.rm-formula-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+.rm-formula-comparison>button{padding:14px;border:1px solid var(--line);border-radius:9px;text-align:left;background:var(--surface,#fff);transition:background .15s,border-color .15s}
+.rm-formula-comparison>button:hover{border-color:var(--accent-line,var(--line));background:var(--soft)}
+.rm-formula-comparison>button[aria-pressed="true"]{background:var(--soft);border-color:var(--green)}
+.rm-formula-comparison small{display:block;font-size:10px;color:var(--muted);margin-bottom:8px}
+.rm-formula-comparison strong{font-size:20px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.rm-formula-comparison em{font-size:10px;font-weight:400;font-style:normal;color:var(--muted)}
+.rm-target-result .tool-total>strong{font-size:34px}
+.weight-table-wrap{max-width:100%;overflow-x:auto;margin-top:22px}
+.weight-conversion-table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.7;font-variant-numeric:tabular-nums}
+.weight-conversion-table caption{text-align:left;font-size:11px;color:var(--muted);padding-bottom:12px}
+.weight-conversion-table th,.weight-conversion-table td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.weight-conversion-table thead th{font-size:10px;font-weight:500;color:var(--muted);background:var(--soft)}
+.weight-conversion-table th:first-child{text-align:left}
+.weight-conversion-table tbody th{font-weight:500}
+.weight-conversion-table tr.selected{background:var(--soft)}
+.weight-conversion-table button{font:inherit;line-height:inherit;color:var(--ink);border:0;padding:4px 0;background:transparent;min-width:52px;text-align:left}
+.weight-conversion-table button:hover{color:var(--green)}
+.weight-method{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}
+.weight-method summary{font-size:12px;color:var(--ink);cursor:pointer}
+.weight-method p{font-size:11px;line-height:1.9;color:var(--muted);margin:13px 0}
+.weight-method .formula-expression{padding:12px;border-radius:8px;background:var(--soft);color:var(--ink)}
+@media(max-width:1000px){.knowledge-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.weight-layout{grid-template-columns:1fr}.rm-target-result .tool-total>strong{font-size:30px}}
+@media(max-width:700px){.knowledge-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.weight-layout{gap:14px}.weight-empty{padding:32px 14px}.weight-presets{gap:6px}.weight-presets button{padding:8px 10px}.weight-conversion-table th,.weight-conversion-table td{padding:10px 6px}}

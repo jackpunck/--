@@ -1,4 +1,4 @@
-const CACHE = 'fitness-shell-v48';
+const CACHE = 'fitness-shell-v51';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
 SHELL.push('/achievement-view.js', ...['first','week','sprout','rhythm','tree','mountain','footprints','steps','summit','cycle','sunrise','seasons'].flatMap(name=>[`/assets/achievements/${name}.svg`,`/assets/achievements/${name}-pending.svg`]));
 SHELL.push('/energy.css', '/landing.css', '/workspace-theme.css', '/landing.js', '/daily-quotes.js');

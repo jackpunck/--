@@ -1,4 +1,4 @@
-import {foods, sumFoods, validateProfile} from './domain.js?v=9';
+import {foods, sumFoods, validateProfile, estimate1RM} from './domain.js?v=12';
 
 const metabolismSource = 'https://pubmed.ncbi.nlm.nih.gov/2305711/';
 const energySource = 'https://www.fda.gov/files/food/published/Food-Labeling-Guide-(PDF).pdf';
@@ -33,6 +33,48 @@ export function calculateMacroEnergy(input) {
   const fat = finite(input?.fat, '脂肪克数', 0, 1000);
   const p = protein * 4, c = carbs * 4, f = fat * 9, total = p + c + f;
   return {kcal:round(total), proteinKcal:round(p), carbsKcal:round(c), fatKcal:round(f), proteinShare:total ? round(p / total * 100) : 0, carbsShare:total ? round(c / total * 100) : 0, fatShare:total ? round(f / total * 100) : 0};
+}
+
+export const rmPresets = Object.freeze([1,5,8,10,12,15]);
+
+export const rmConversionReference = Object.freeze({
+  formula:'Epley：1RM ≈ 重量 × (1 + 次数 ÷ 30)；Brzycki：1RM ≈ 重量 ÷ (1.0278 − 0.0278 × 次数)',
+  description:'RM 表示某个重量最多能标准完成的次数。1RM 是单次最大重量，5RM 是最多完成 5 次的重量。使用同一动作、同一器械下接近力竭的一组估算；组数不参与计算。输入单次时，两种公式均按已完成重量显示。其他 RM 重量由所选公式反算。',
+  sourceName:'Reynolds 等，2006 · 次数与最大力量预测的适用限制',
+  sourceUrl:'https://pubmed.ncbi.nlm.nih.gov/16937972/',
+});
+
+function trainingCount(value,label,max) {
+  const n = finite(value,label,1,max);
+  if (!Number.isInteger(n)) throw new Error(`${label}须为整数`);
+  return n;
+}
+// Match estimate1RM factors, retaining precision until the inverse conversion.
+const repFactor = (reps,method) => reps === 1 ? 1 : method === 'epley' ? 1 + reps / 30 : 1 / (1.0278 - 0.0278 * reps);
+
+/** Estimate maximum strength from one near-failure set, then invert for 1–15RM. */
+export function calculateRMConversion(input = {}) {
+  const {currentReps:knownReps=12,targetReps:requestedReps=1,increment:equipmentIncrement=2.5,method='epley'} = input;
+  const weight = finite(input.weight,'已知重量（kg）',0.1,1000);
+  const currentReps = trainingCount(knownReps,'已完成次数',15);
+  const targetReps = trainingCount(requestedReps,'目标 RM 次数',15);
+  const increment = finite(equipmentIncrement,'器械重量步进（kg）',0.1,20);
+  if (!['epley','brzycki'].includes(method)) throw new Error('请选择 Epley 或 Brzycki 估算公式');
+  const estimates = estimate1RM(weight,currentReps);
+  const estimatedMax = weight * repFactor(currentReps,method);
+  const convert = reps => {
+    const factor = repFactor(reps,method),load = estimatedMax / factor;
+    // Round only after conversion; use the exact load for downward equipment steps.
+    const equipmentWeight = Math.round(Math.floor(load / increment + 1e-10) * increment * 1e8) / 1e8;
+    return {reps,label:`${reps}RM`,weight:round(load),percent:round(100 / factor),equipmentWeight:equipmentWeight > 0 ? equipmentWeight : null};
+  };
+  return {
+    weight,currentReps,increment,method,estimatedMax:estimates[method],
+    estimates:{epley:estimates.epley,brzycki:estimates.brzycki},
+    target:convert(targetReps),
+    rows:Array.from({length:15},(_,index)=>convert(index+1)),
+    note:`${currentReps > 10 || targetReps > 10 ? '超过 10 次时估算误差可能更大。' : ''}结果是最大力量的预测值，不是实测；不要据此直接尝试极限重量。`,
+  };
 }
 
 // Portion sizes are editable examples, not standardized container sizes.
