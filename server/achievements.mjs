@@ -1,3 +1,4 @@
+import {rememberAchievementCycle,achievementCycleMembership} from './achievement-cycles.mjs';
 import {newAchievementState,applyTrainingEvent,settleAchievementWeeks,achievementRecords} from './achievement-rules.mjs';
 import {trainingRecord} from '../public/achievements.js';
 import {weekDates,addDays,validateDate} from '../public/schedule.js';
@@ -13,13 +14,14 @@ export function initializeAchievements(db) {
  if(!db.prepare('PRAGMA table_info(achievement_events)').all().some(column=>column.name==='before_at')){
   db.exec('ALTER TABLE achievement_events ADD COLUMN before_at TEXT; DROP TRIGGER IF EXISTS achievement_training_insert; DROP TRIGGER IF EXISTS achievement_training_update;');
  }
- db.exec(`CREATE TRIGGER IF NOT EXISTS achievement_training_insert AFTER INSERT ON records
- WHEN new.kind IN ('calendar-task','schedule') BEGIN
+ db.exec(`DROP TRIGGER IF EXISTS achievement_training_insert; DROP TRIGGER IF EXISTS achievement_training_update;
+ CREATE TRIGGER achievement_training_insert AFTER INSERT ON records
+ WHEN new.kind IN ('calendar-task','schedule','training-cycle') BEGIN
   INSERT INTO achievement_events(user_id,record_id,kind,before_data,after_data,before_at,before_deleted,after_deleted,occurred_at)
   VALUES(new.user_id,new.id,new.kind,NULL,new.data,NULL,1,new.deleted,new.updated_at);
  END;
- CREATE TRIGGER IF NOT EXISTS achievement_training_update AFTER UPDATE ON records
- WHEN new.kind IN ('calendar-task','schedule') BEGIN
+ CREATE TRIGGER achievement_training_update AFTER UPDATE ON records
+ WHEN new.kind IN ('calendar-task','schedule','training-cycle') BEGIN
   INSERT INTO achievement_events(user_id,record_id,kind,before_data,after_data,before_at,before_deleted,after_deleted,occurred_at)
   VALUES(new.user_id,new.id,new.kind,old.data,new.data,old.updated_at,old.deleted,new.deleted,new.updated_at);
  END;`);
@@ -33,16 +35,27 @@ export function reconcileAchievements(db,userId,now=new Date().toISOString()) {
  try {
   const events=db.prepare('SELECT * FROM achievement_events WHERE user_id=? ORDER BY seq').all(userId);
   const stored=db.prepare('SELECT data FROM achievement_state WHERE user_id=?').get(userId);
-  const rows=db.prepare("SELECT * FROM records WHERE user_id=? AND kind IN ('calendar-task','schedule','achievement','achievement-summary')").all(userId);
+  const rows=db.prepare("SELECT * FROM records WHERE user_id=? AND kind IN ('calendar-task','schedule','training-cycle','achievement','achievement-summary')").all(userId);
   const records=rows.map(fromRow),state=stored?JSON.parse(stored.data):newAchievementState();
+  const firstEvents=new Map();for(const event of events)if(!firstEvents.has(event.record_id))firstEvents.set(event.record_id,event);
+  const migrated=!!stored&&state.version<3;
+  if(stored&&state.returnRuleVersion!==2&&Object.values(state.sessions).some(session=>!session.completedAt&&!session.lastConfirmedAt&&session.completedOnce!==false))state.returnHistorySince??=now;
+  if(migrated)for(const session of Object.values(state.sessions))if(session.completedOnce===undefined)session.completedOnce=true;
+  state.cycles??={};state.version=3;state.returnRuleVersion=2;
+  for(const session of Object.values(state.sessions))if(session.lastConfirmedAt===undefined)session.lastConfirmedAt=session.completedAt||null;
+  for(const record of records.filter(row=>row.kind==='training-cycle')){
+   const event=firstEvents.get(record.id),initial=event?{...record,data:JSON.parse(event.before_data||'null'),deleted:!!event.before_deleted}:record;
+   rememberAchievementCycle(state,initial);
+  }
   if(!stored){
-   const firstEvents=new Map();for(const event of events)if(!firstEvents.has(event.record_id))firstEvents.set(event.record_id,event);
    for(const record of records.filter(r=>['calendar-task','schedule'].includes(r.kind))){
     const event=firstEvents.get(record.id);
     const initial=event?{...record,data:JSON.parse(event.before_data||'null'),deleted:!!event.before_deleted}:record;
     if(!trainingRecord(initial))continue;
     const temp=newAchievementState();
     applyTrainingEvent(temp,initial,safeTime(event?.before_at||record.updatedAt,now));
+    const baseline=temp.sessions[record.id];
+    if(!baseline.completed){baseline.completedOnce=true;state.returnHistorySince??=now;}
     for(const [id,session] of Object.entries(temp.sessions))Object.defineProperty(state.sessions,id,{value:session,enumerable:true,writable:true,configurable:true});
    }
    for(const record of records.filter(r=>r.kind==='achievement'&&!r.deleted&&r.data?.type==='weekly-training')){
@@ -53,6 +66,12 @@ export function reconcileAchievements(db,userId,now=new Date().toISOString()) {
      state.legacy[data.weekStart]={trainingCount:Number.isInteger(data.trainingCount)&&data.trainingCount>0?data.trainingCount:1};
     }catch{}
    }
+  }
+  // Older ledgers did not retain cycle positions. Enrich only surviving evidence.
+  for(const record of records.filter(row=>trainingRecord(row))){
+   const session=Object.hasOwn(state.sessions,record.id)?state.sessions[record.id]:null;
+   if(session&&session.cycleId===undefined)Object.assign(session,achievementCycleMembership(record));
+   if(session&&session.completedOnce===undefined)session.completedOnce=!!session.completedAt;
   }
   for(const event of events)applyTrainingEvent(state,{id:event.record_id,kind:event.kind,data:JSON.parse(event.after_data||'null'),deleted:!!event.after_deleted},safeTime(event.occurred_at,now));
   settleAchievementWeeks(state,now);

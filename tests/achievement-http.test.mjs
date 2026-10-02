@@ -35,4 +35,12 @@ test('HTTP awards are authoritative, scoped, deduplicated and reversible across 
  response=await sync([{...change,data:done,baseVersion:3}]);assert.equal(summary(response).sessions,1);const awardId=awards(response)[0].id;
  response=await sync([{...change,data:null,deleted:true,baseVersion:4}]);assert.equal(summary(response).sessions,1);assert.equal(awards(response)[0].id,awardId);
  const exported=await api('/api/export',null,alice.cookie);assert.equal(summary(exported).sessions,1);
+ // Real sync captures cycle rules and positions, including undo and stale writes.
+ const rule={id:'http-round',startDate:beijingDate(),plan:{name:'肩背循环',planVersion:'http-v1',days:[{id:'a',name:'肩背训练',exercises:[{exerciseId:'bench',sets:4,reps:'8'}]},{id:'rest',rest:true,exercises:[]},{id:'b',name:'胸部训练',exercises:[{exerciseId:'bench',sets:4,reps:'8'}]}]}};
+ const cycleChanges=[{id:'calendar-cycle',kind:'training-cycle',data:rule,baseVersion:0},...[0,2].map(offset=>({id:'task:cycle:http-round:'+offset,kind:'calendar-task',baseVersion:0,data:{...done,cycleId:rule.id,planVersion:rule.plan.planVersion,dayId:offset===0?'a':'b'}}))];
+ response=await sync(cycleChanges);assert.equal(response.status,200);assert.equal(summary(response).cycles,1);assert.equal(awards(response).filter(r=>r.data.type==='cycle-complete').length,1);
+ response=await sync([{...cycleChanges[2],data:{...cycleChanges[2].data,daySnapshot:data.daySnapshot},baseVersion:1}]);assert.equal(summary(response).cycles,0);assert.equal(awards(response).some(r=>r.data.type==='cycle-complete'),false);
+ response=await sync([{...cycleChanges[2],baseVersion:1}]);assert.equal(response.body.conflicts.length,1);assert.equal(summary(response).cycles,0);
+ response=await sync([{...cycleChanges[2],baseVersion:2}]);assert.equal(summary(response).cycles,1);
+
 });

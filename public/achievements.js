@@ -29,7 +29,13 @@ export const achievementDefinitions=Object.freeze([
  {id:'weeks-4',name:'四周积累',condition:'累计达成 4 周',metric:'weeks',target:4,icon:'sprout',category:'milestone'},
  {id:'weeks-12',name:'自成节奏',condition:'累计达成 12 周',metric:'weeks',target:12,icon:'rhythm',category:'milestone'},
  {id:'weeks-24',name:'长久同行',condition:'累计达成 24 周',metric:'weeks',target:24,icon:'tree',category:'milestone'},
+ {id:'sessions-10',name:'渐入佳境',condition:'累计完成 10 次训练',metric:'sessions',target:10,icon:'footprints',category:'milestone'},
+ {id:'sessions-25',name:'稳步前行',condition:'累计完成 25 次训练',metric:'sessions',target:25,icon:'steps',category:'milestone'},
  {id:'sessions-50',name:'五十次抵达',condition:'累计完成 50 次训练',metric:'sessions',target:50,icon:'mountain',category:'milestone'},
+ {id:'sessions-100',name:'百次积累',condition:'累计完成 100 次训练',metric:'sessions',target:100,icon:'summit',category:'milestone'},
+ {id:'cycle-complete',name:'一轮圆满',condition:'完成一个方案循环的全部训练日',metric:'cycles',target:1,icon:'cycle',category:'milestone'},
+ {id:'training-return',name:'再次出发',condition:'间隔至少 14 天后再次完成训练',icon:'sunrise',category:'milestone'},
+ {id:'weeks-52',name:'四季同行',condition:'累计达成 52 周',metric:'weeks',target:52,icon:'seasons',category:'milestone'},
 ].map(Object.freeze));
 export function earnedWeeklyAchievements(records) {
  const weeks=new Map();

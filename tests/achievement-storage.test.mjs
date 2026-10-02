@@ -44,7 +44,7 @@ test('legacy award without detail preserves weeks but never invents session coun
  write('achievement:week:2026-09-21',{type:'weekly-training',weekStart:'2026-09-21',weekEnd:'2026-09-27',earnedDate:'2026-09-27',trainingCount:3},fri,'alice','achievement');
  reconcileAchievements(db,'alice',fri);
  assert.equal(awards()[0].data.source,'legacy');
- assert.deepEqual(getRecords(db,'alice').find(r=>r.id==='achievement-summary').data,{ruleVersion:2,sessions:0,weeks:1});
+ assert.deepEqual(getRecords(db,'alice').find(r=>r.id==='achievement-summary').data,{ruleVersion:2,sessions:0,weeks:1,cycles:0});
 });
 
 test('first upgrade keeps pre-existing completion when the first new event is deletion after week close',async t=>{
@@ -53,4 +53,67 @@ test('first upgrade keeps pre-existing completion when the first new event is de
  write('old',null,mon);reconcileAchievements(db,'alice',mon);
  assert.equal(awards().filter(r=>r.data.type==='weekly-training').length,1);
  assert.equal(awards().find(r=>r.data.type==='first-training').data.earnedDate,'2026-10-02');
+});
+
+const cycleRule={id:'original',startDate:'2026-10-02',plan:{name:'肩背方案',planVersion:'v1',days:[{id:'one',name:'肩背训练',exercises:[{exerciseId:'bench',sets:4,reps:'8'}]},{id:'rest',rest:true,exercises:[]},{id:'two',name:'胸部训练',exercises:[{exerciseId:'bench',sets:4,reps:'8'}]}]}};
+const cycleTask=(offset,done)=>({...data(done),cycleId:'original',dayId:offset===0?'one':'two',planVersion:'v1'});
+test('cycle journal survives reset, isolates accounts, and retracts on undo',async t=>{
+ const {db,write,awards}=await fixture(t);
+ write('calendar-cycle',cycleRule,fri,'alice','training-cycle');
+ for(const offset of [0,2])write('task:cycle:original:'+offset,cycleTask(offset,true));
+ write('calendar-cycle',null,mon,'alice','training-cycle');for(const offset of [0,2])write('task:cycle:original:'+offset,null,mon);
+ reconcileAchievements(db,'alice',mon);assert.ok(awards().find(r=>r.data.type==='cycle-complete'));
+ reconcileAchievements(db,'bob',mon);assert.equal(awards('bob').length,0);
+ const initial=db.prepare('SELECT data FROM achievement_state WHERE user_id=?').get('alice').data;
+ db.exec('BEGIN');write('task:cycle:original:2',cycleTask(2,false),mon);reconcileAchievements(db,'alice',mon);assert.equal(awards().some(r=>r.data.type==='cycle-complete'),false);db.exec('ROLLBACK');
+ assert.equal(db.prepare('SELECT data FROM achievement_state WHERE user_id=?').get('alice').data,initial);
+});
+test('older stored ledger is enriched from surviving cycle records without changing completion time',async t=>{
+ const {db,write,awards}=await fixture(t);
+ write('calendar-cycle',cycleRule,fri,'alice','training-cycle');
+ const sessions={};
+ for(const offset of [0,2]){
+  const id='task:cycle:original:'+offset;write(id,cycleTask(offset,true),mon);
+  sessions[id]={id,date:'2026-10-02',title:'肩背训练',archived:false,completed:true,completedAt:fri,blockedFuture:false};
+ }
+ db.exec('DELETE FROM achievement_events');
+ db.prepare('INSERT INTO achievement_state VALUES(?,?)').run('alice',JSON.stringify({version:2,sessions,weeks:{},legacy:{}}));
+ reconcileAchievements(db,'alice',mon);assert.ok(awards().find(r=>r.data.type==='cycle-complete'));
+ assert.equal(awards().find(r=>r.data.type==='cycle-complete').data.earnedAt,fri);
+ assert.equal(awards().some(r=>r.data.type==='training-return'),false);
+ const before=getRecords(db,'alice');reconcileAchievements(db,'alice',mon);assert.deepEqual(getRecords(db,'alice'),before);
+});
+
+test('ambiguous v2 undone history cannot earn return via an old recheck or a new card across missing history',async t=>{
+ const {db,write,awards}=await fixture(t),migration='2026-09-09T10:00:00.000Z';
+ for(const user of ['alice','bob']){
+  const first={id:'first',date:'2026-09-01',title:'训练',archived:false,completed:true,completedAt:'2026-09-01T10:00:00.000Z',blockedFuture:false};
+  const old={id:'old',date:'2026-09-08',title:'训练',archived:false,completed:false,completedAt:null,blockedFuture:false};
+  write('first',{...data(true),date:first.date},first.completedAt,user);write('old',{...data(),date:old.date},migration,user);
+  db.prepare('INSERT INTO achievement_state VALUES(?,?)').run(user,JSON.stringify({version:2,sessions:{first,old},weeks:{},legacy:{}}));
+ }
+ db.exec('DELETE FROM achievement_events');
+ for(const user of ['alice','bob']){
+  reconcileAchievements(db,user,migration);
+  write(user==='alice'?'old':'new',{...data(true),date:'2026-09-15'},'2026-09-15T10:00:00.000Z',user);
+  reconcileAchievements(db,user,'2026-09-15T10:00:00.000Z');assert.equal(awards(user).some(r=>r.data.type==='training-return'),false,user);
+  write('return',{...data(true),date:'2026-09-29'},'2026-09-29T10:00:00.000Z',user);
+  reconcileAchievements(db,user,'2026-09-29T10:00:00.000Z');assert.equal(awards(user).some(r=>r.data.type==='training-return'),true,user);
+ }
+});
+
+test('first-time baseline import treats incomplete old cards as ambiguous return evidence',async t=>{
+ const {db,write,awards}=await fixture(t),migration='2026-09-09T10:00:00.000Z';
+ for(const user of ['alice','bob']){
+  write('first',{...data(true),date:'2026-09-01'},'2026-09-01T10:00:00.000Z',user);
+  write('old',{...data(),date:'2026-09-08'},'2026-09-08T10:00:00.000Z',user);
+ }
+ db.exec('DELETE FROM achievement_events');
+ for(const user of ['alice','bob']){
+  reconcileAchievements(db,user,migration);
+  write(user==='alice'?'old':'new',{...data(true),date:'2026-09-15'},'2026-09-15T10:00:00.000Z',user);
+  reconcileAchievements(db,user,'2026-09-15T10:00:00.000Z');assert.equal(awards(user).some(r=>r.data.type==='training-return'),false,user);
+  write('return',{...data(true),date:'2026-09-29'},'2026-09-29T10:00:00.000Z',user);
+  reconcileAchievements(db,user,'2026-09-29T10:00:00.000Z');assert.equal(awards(user).some(r=>r.data.type==='training-return'),true,user);
+ }
 });
