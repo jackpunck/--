@@ -4,8 +4,8 @@ import {getDailyQuote} from './daily-quotes.js?v=1';
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
-import {beijingDate,validTrainingCompletion,achievementWall} from './achievements.js?v=4';
-import {renderAchievementWall,renderAchievementDetails} from './achievement-view.js?v=3';
+import {beijingDate,validTrainingCompletion,achievementWall} from './achievements.js?v=5';
+import {renderAchievementWall,renderAchievementDetails} from './achievement-view.js?v=4';
 import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=10';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
@@ -1259,7 +1259,8 @@ function renderAchievements() {
  carousel.addEventListener('touchend',event=>{const p=event.changedTouches[0];if(touch&&Math.abs(p.clientX-touch.x)>60&&Math.abs(p.clientY-touch.y)<45){state.achievementPage+=p.clientX<touch.x?1:-1;renderAchievements();}touch=null;},{passive:true});
 }
 function showAchievement(id) {
- const card=achievementWall([...state.store.records.values()]).cards.find(item=>item.id===id);if(!card)return;
+ const all=[...state.store.records.values()];
+ const card=achievementWall(all).cards.find(item=>item.id===id)||achievementWall(all,'milestone').cards.find(item=>item.id===id);if(!card)return;
  modal(card.name,renderAchievementDetails([...state.store.records.values()],id));
  $('#modal').classList.add('achievement-detail-modal');
 }

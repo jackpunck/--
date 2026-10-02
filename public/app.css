@@ -577,3 +577,10 @@
  .achievement-next{padding:16px;gap:12px;flex-wrap:wrap}.achievement-next>img{width:52px;height:52px}.achievement-next-progress{width:100%;min-width:0;margin:0}.achievement-next h3{font-size:13px}
 }
 @media(prefers-reduced-motion:reduce){.achievement-carousel .achievement-stamp{transition:none;transform:none}}
+
+/* Unearned milestones remain visible without the earned checkmark. */
+.achievement-carousel .achievement-stamp.is-earned{background:#f6faff;border-color:#c9dfef}
+.achievement-carousel .achievement-stamp.is-unearned{background:#f6f6f9;border-color:#e7e7ee}
+.achievement-stamp.is-unearned>img,.achievement-detail-intro.is-unearned>img{filter:grayscale(1);opacity:.42}
+.achievement-stamp.is-unearned h3{color:#777b89}
+.achievement-pending-label{margin-top:auto;font-size:10px;line-height:1.8;color:var(--muted)}
