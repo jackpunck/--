@@ -1,3 +1,5 @@
+import {reconcileAchievements} from './server/achievements.mjs';
+import {beijingDate,validTrainingCompletion} from './public/achievements.js';
 import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
 import { createReadStream } from 'node:fs';
@@ -238,6 +240,7 @@ export function createServer(options = {}) {
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');
           if (expectedUser && expectedUser !== user.id) throw new HttpError(409, '当前登录账号已变更，请重新登录后同步。');
+          reconcileAchievements(db,user.id,currentTime());
           send(res, 200, { userId: user.id, records: getRecords(db, user.id) }); return;
         }
         if (pathname === '/api/sync' && method === 'POST') {
@@ -248,12 +251,15 @@ export function createServer(options = {}) {
           for (const change of changes) {
             if (!change || typeof change.id !== 'string' || !ID.test(change.id) || typeof change.kind !== 'string' || !/^[\w-]{1,40}$/.test(change.kind) || !Number.isSafeInteger(change.baseVersion) || change.baseVersion < 0 || (change.deleted !== undefined && typeof change.deleted !== 'boolean') || change.data === undefined || (!change.deleted && (!change.data || typeof change.data !== 'object' || Array.isArray(change.data))) || seen.has(change.id)) throw new HttpError(400, '同步记录格式无效或重复。');
             if (Buffer.byteLength(JSON.stringify(change.data)) > (change.kind === 'conversation' ? 2 * 1024 * 1024 : 256 * 1024)) throw new HttpError(413, change.kind === 'conversation' ? '单个会话已超过 2 MB，请新建会话后继续。' : '单条记录已超过 256 KB，请缩短内容。');
+            if(['achievement','achievement-summary'].includes(change.kind)||change.id.startsWith('achievement:')||change.id==='achievement-summary')throw new HttpError(400,'成就由系统根据训练记录核算，不能直接修改。');
+            if(!change.deleted&&validTrainingCompletion(change)&&change.data.date>beijingDate(currentTime()))throw new HttpError(400,'未来日期的训练不能提前完成。');
             seen.add(change.id);
           }
           const conflicts = [];
           const removedAttachments = new Set();
           db.exec('BEGIN IMMEDIATE');
           try {
+            reconcileAchievements(db,user.id,currentTime());
             for (const change of changes) {
               const existing = db.prepare('SELECT * FROM records WHERE user_id = ? AND id = ?').get(user.id, change.id);
               if ((existing?.version ?? 0) !== change.baseVersion || existing && existing.kind !== change.kind) { conflicts.push({ id: change.id, server: recordFromRow(existing) ?? null }); continue; }
@@ -268,6 +274,7 @@ export function createServer(options = {}) {
             for (const id of removedAttachments) {
               if (!db.prepare('SELECT 1 FROM records WHERE user_id = ? AND deleted = 0 AND instr(data, ?) > 0 LIMIT 1').get(user.id, id)) db.prepare('DELETE FROM attachments WHERE id = ? AND user_id = ?').run(id, user.id);
             }
+            reconcileAchievements(db,user.id,currentTime());
             db.exec('COMMIT');
           } catch (error) { db.exec('ROLLBACK'); throw error; }
           send(res, 200, { userId: user.id, ...getRecordChanges(db,user.id,cursor), conflicts }); return;
@@ -403,6 +410,7 @@ export function createServer(options = {}) {
           send(res, 200, { ok: true }); return;
         }
         if (pathname === '/api/export' && method === 'GET') {
+          reconcileAchievements(db,user.id,currentTime());
           const attachments = db.prepare('SELECT * FROM attachments WHERE user_id = ? ORDER BY created_at').all(user.id).map(item => ({ id: item.id, name: item.name, type: item.type, size: item.size, createdAt: item.created_at, data: Buffer.from(item.data).toString('base64') }));
           res.setHeader('Content-Disposition', 'attachment; filename="fitness-data.json"');
           send(res, 200, { schemaVersion: 1, exportedAt: currentTime(), user: publicUser(user), records: getRecords(db, user.id), ...getProviders(db, user.id), attachments }); return;
