@@ -1,0 +1,246 @@
+/* Authenticated workspace uses the homepage brand palette in landing.css.
+   Light blue/lilac surfaces, charcoal actions, electric blue, coral and lime accents.
+   Scope includes dialogs/toasts outside .layout and resets when returning to the landing page. */
+:root[data-theme="workspace"] {
+  color-scheme: light;
+  --paper: var(--home-paper);
+  --surface: #ffffff;
+  --surface-soft: #e8e8f3;
+  --green: var(--home-blue);
+  --green-hover: #1e2ddd;
+  --ink: var(--home-action);
+  --muted: #707184;
+  --line: #dddde9;
+  --soft: #e9ebfc;
+  --accent: var(--home-training);
+  --action-bg: var(--home-training);
+  --action-hover: #adc4f5;
+  --action-ink: var(--home-action);
+  --violet: var(--home-orbit);
+  --accent-line: #d1d7ed;
+  --focus: #233aff;
+  --warm: var(--home-coral);
+  --warm-ink: #98633c;
+  --sky: var(--home-training);
+  --sky-light: #e9ebfc;
+  --cyan: #b8c7f2;
+  --coral-soft: color-mix(in srgb, var(--home-coral) 22%, white);
+  --mint-soft: color-mix(in srgb, var(--home-lime) 30%, white);
+  --lavender-soft: color-mix(in srgb, var(--home-knowledge) 65%, white);
+  --sunshine-soft: #faf2df;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+:root[data-theme="workspace"] body { background: var(--paper); }
+:root[data-theme="workspace"] ::selection { background: var(--accent); color: var(--green-hover); }
+:root[data-theme="workspace"] .layout { color: var(--ink); }
+:root[data-theme="workspace"] :is(button, a):focus-visible { outline-color: var(--focus); }
+:root[data-theme="workspace"] :is(input, select, textarea) { border-color: var(--line); }
+:root[data-theme="workspace"] :is(input, select, textarea):focus { border-color: var(--focus); box-shadow: 0 0 0 3px #233aff14; }
+:root[data-theme="workspace"] :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+:root[data-theme="workspace"] :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--green); }
+:root[data-theme="workspace"] :is(label, .eyebrow) { color: var(--muted); }
+
+/* Sky-blue navigation with readable blue text on light selected surfaces. */
+:root[data-theme="workspace"] .sidebar { background: var(--surface-soft); color: var(--ink); border-color: var(--line); }
+:root[data-theme="workspace"] .sidebar .brand { color: var(--green); }
+:root[data-theme="workspace"] .brand-symbol { background: var(--action-bg); color: var(--home-action); border-radius: 12px; }
+:root[data-theme="workspace"] :is(.sidebar .brand small, .sidebar .section-label, .sidebar .history small, .account small) { color: var(--muted); }
+:root[data-theme="workspace"] :is(.sidebar .sidebar-toggle, .sidebar .icon-button, .icon-button) { color: #74758e; }
+:root[data-theme="workspace"] :is(.sidebar .icon-button, .icon-button):hover { background: #dddff0; color: var(--green); }
+:root[data-theme="workspace"] .nav button { color: #66677c; }
+:root[data-theme="workspace"] .nav button.active { background: var(--action-bg); color: var(--action-ink); box-shadow: 0 5px 14px #233aff14; }
+:root[data-theme="workspace"] .nav button .nav-dot { background: #233aff; }
+:root[data-theme="workspace"] .nav button:not(.active):hover { background: #e0e3f5; color: var(--green); }
+:root[data-theme="workspace"] .nav button[data-page="nutrition"]:not(.active) > .icon { color: #ca7a53; }
+:root[data-theme="workspace"] .nav button[data-page="training"]:not(.active) > .icon { color: #84a755; }
+:root[data-theme="workspace"] .nav button[data-page="library"]:not(.active) > .icon { color: #8f83bb; }
+:root[data-theme="workspace"] .sidebar .history-item { color: var(--muted); }
+:root[data-theme="workspace"] .sidebar .history-item:is(:hover, .current) { background: #e0e5fa; color: var(--green); }
+:root[data-theme="workspace"] .sidebar .link-button { color: var(--green); }
+:root[data-theme="workspace"] .side-note { background: var(--home-hero); border-color: #d1d5ee; color: #5c6080; }
+:root[data-theme="workspace"] .side-note strong { color: #35364e; }
+:root[data-theme="workspace"] .side-note-kicker { color: #686d8e; }
+:root[data-theme="workspace"] .side-note-bars i { background: #929bf9; }
+:root[data-theme="workspace"] .side-note-bars i:nth-child(3n) { background: #b8beee; }
+:root[data-theme="workspace"] .account { border-color: var(--line); }
+:root[data-theme="workspace"] .avatar { background: #e2e4f6; color: var(--green); }
+:root[data-theme="workspace"] .topbar { background: #f1f0fae6; border-color: var(--line); }
+:root[data-theme="workspace"] .breadcrumb { color: var(--muted); }
+:root[data-theme="workspace"] .breadcrumb strong { color: var(--ink); }
+:root[data-theme="workspace"] .status { background: #eef4e6; color: #677f48; }
+:root[data-theme="workspace"] .status::before { background: #84a755; box-shadow: 0 0 0 3px #84a75514; }
+:root[data-theme="workspace"] .status.warn { background: var(--sunshine-soft); color: var(--warm-ink); }
+:root[data-theme="workspace"] .status.warn::before { background: var(--warm); box-shadow: 0 0 0 3px #ff895414; }
+
+/* Shared controls and surfaces; errors retain their existing red semantics. */
+:root[data-theme="workspace"] .button { background: var(--surface); border-color: var(--line); border-radius: 11px; }
+:root[data-theme="workspace"] .button:hover { background: var(--soft); border-color: var(--accent-line); }
+:root[data-theme="workspace"] .button.primary { background: var(--home-action); border-color: var(--home-action); color: #fff; box-shadow: 0 3px 10px #233aff0d; }
+:root[data-theme="workspace"] .button.primary:hover { background: var(--home-blue); border-color: var(--home-blue); box-shadow: 0 4px 12px #233aff1f; }
+:root[data-theme="workspace"] .button.subtle { background: var(--soft); border-color: var(--soft); color: var(--green); }
+:root[data-theme="workspace"] .button.danger { background: #fff4ef; border-color: #ebd6cf; color: #a04840; }
+:root[data-theme="workspace"] .button.danger:hover { background: #fbe7df; border-color: #ddbfb5; }
+:root[data-theme="workspace"] .link-button { color: #3548c3; }
+:root[data-theme="workspace"] :is(.card, .stat, .meal-card, .timetable-shell) { border-color: var(--line); box-shadow: 0 3px 18px #27283303; }
+:root[data-theme="workspace"] .card { background: var(--surface); border-radius: 17px; }
+:root[data-theme="workspace"] .badge { background: var(--soft); color: #536097; }
+:root[data-theme="workspace"] .badge.neutral { background: #edecf5; color: #747589; }
+:root[data-theme="workspace"] .badge.amber { background: var(--sunshine-soft); color: var(--warm-ink); }
+:root[data-theme="workspace"] .notice { background: var(--soft); border-color: var(--accent-line); color: #626b91; }
+:root[data-theme="workspace"] :is(.empty, .empty .icon) { color: var(--muted); }
+
+/* A light-blue welcome panel with colorful movement rings. */
+:root[data-theme="workspace"] .greeting { background: var(--home-hero); color: #272833; border-radius: 20px; }
+:root[data-theme="workspace"] .greeting::before { background: #ffffff38; }
+:root[data-theme="workspace"] .greeting h1 { font-weight: 500; }
+:root[data-theme="workspace"] .greeting h1 span { background: linear-gradient(110deg, #333b73, #5368ee); background-clip: text; -webkit-background-clip: text; color: transparent; }
+:root[data-theme="workspace"] .greeting :is(.eyebrow, .greeting-hello, p, .greeting-tags) { color: #616680; }
+:root[data-theme="workspace"] .greeting-tags > span:first-child { background: #ffffff70; border-color: #ffffff99; color: #545f9b; }
+:root[data-theme="workspace"] .live-dot { background: #6579e4; box-shadow: 0 0 0 4px #6579e418; }
+:root[data-theme="workspace"] .energy-orbit { border-color: #ffffff99; }
+:root[data-theme="workspace"] .energy-visual .orbit-two { border-color: var(--home-orbit); border-right-color: var(--home-orbit-light); }
+:root[data-theme="workspace"] .energy-visual .orbit-three { border-color: #b8beee; border-bottom-color: #7582e0; box-shadow: 0 12px 20px #565b9b24, inset 0 0 15px #565b9b14; }
+:root[data-theme="workspace"] .energy-core { background: var(--home-blue); color: #ffffff; box-shadow: inset 0 2px 7px #ffffff60, 0 0 25px #bed1fa15; }
+:root[data-theme="workspace"] .energy-caption { color: #646a95; }
+:root[data-theme="workspace"] .satellite-lime { background: var(--home-lime); color: #53683c; }
+:root[data-theme="workspace"] .satellite-coral { background: #ffbd9f; color: #98633c; }
+:root[data-theme="workspace"] .satellite-white { background: var(--home-knowledge); color: #706394; }
+:root[data-theme="workspace"] .quick-heading > span { color: var(--muted); }
+:root[data-theme="workspace"] .prompt-card:nth-child(n) { background: var(--surface); border-color: var(--line); border-radius: 15px; }
+:root[data-theme="workspace"] .prompt-card:nth-child(n):hover { background: #e3e9fc; border-color: #bac4ef; box-shadow: 0 5px 16px #233aff08; }
+:root[data-theme="workspace"] .prompt-card:nth-child(n) .prompt-icon { background: var(--soft); color: #4e60bd; border-radius: 10px; }
+:root[data-theme="workspace"] .prompt-card:nth-child(2) .prompt-icon { background: #ffccb2; color: #a05d3c; }
+:root[data-theme="workspace"] .prompt-card:nth-child(3) .prompt-icon { background: #d9d8ed; color: #726694; }
+:root[data-theme="workspace"] .prompt-card:nth-child(4) .prompt-icon { background: #dceebc; color: #6b8346; }
+:root[data-theme="workspace"] .prompt-card strong { color: var(--ink); }
+:root[data-theme="workspace"] .prompt-card:nth-child(n) small { color: var(--muted); }
+:root[data-theme="workspace"] .prompt-card .arrow { color: #7479a3; }
+
+/* Nutrition, training and chat share the same semantic palette. */
+:root[data-theme="workspace"] .context-date { color: var(--muted); }
+:root[data-theme="workspace"] .ring { background: conic-gradient(var(--green) calc(var(--percent)*1%), #e9eaf3 0); }
+:root[data-theme="workspace"] .ring > div { background: var(--surface); }
+:root[data-theme="workspace"] .ring strong { color: var(--ink); }
+:root[data-theme="workspace"] :is(.ring small, .macro-row small) { color: var(--muted); }
+:root[data-theme="workspace"] .macro-row strong { color: var(--green); }
+:root[data-theme="workspace"] .bar { background: #e5e5ef; }
+:root[data-theme="workspace"] .bar i { background: #929bf9; }
+:root[data-theme="workspace"] .bar.carbs i { background: #a6c574; }
+:root[data-theme="workspace"] .bar.fat i { background: #f2ad88; }
+:root[data-theme="workspace"] .chat-aside .today-training { background: #edf6dd; border-color: #dce8c5; }
+:root[data-theme="workspace"] .today-training :is(.context-date, .card-head > .icon, .link-button) { color: #6a794f; }
+:root[data-theme="workspace"] .today-training .training-mini { background: #ffffffb3; }
+:root[data-theme="workspace"] .today-training .mini-icon { background: #dbeaba; color: #72884c; }
+:root[data-theme="workspace"] .tip-card { background: #faf2df; border-color: #e9ddbf; }
+:root[data-theme="workspace"] .tip-card :is(strong, p) { color: #94764a; }
+:root[data-theme="workspace"] .composer { background: var(--paper); }
+:root[data-theme="workspace"] .composer-box { background: var(--surface); border-color: #d6d7e7; box-shadow: 0 5px 20px #233aff05; }
+:root[data-theme="workspace"] .composer-box:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px #233aff12, 0 5px 20px #233aff08; }
+:root[data-theme="workspace"] .composer textarea { caret-color: var(--green); box-shadow: none; }
+:root[data-theme="workspace"] .composer .icon-button { color: #74758e; }
+:root[data-theme="workspace"] .composer .icon-button:hover { background: var(--soft); color: var(--green); }
+:root[data-theme="workspace"] .composer .send { background: var(--home-action); color: #fff; }
+:root[data-theme="workspace"] .composer .send:hover:not(:disabled) { background: var(--home-blue); box-shadow: 0 3px 10px #233aff22; }
+:root[data-theme="workspace"] :is(.composer-model, .composer-note) { color: var(--muted); }
+:root[data-theme="workspace"] .message.user .bubble { background: #e4e8fc; color: var(--ink); }
+:root[data-theme="workspace"] .message .message-icon { background: #dde4fc; color: var(--green); }
+:root[data-theme="workspace"] .message.user .message-icon { background: #e5e2f2; color: var(--green); }
+:root[data-theme="workspace"] :is(.attachment, .chat-scene) { background: var(--soft); color: var(--green); }
+:root[data-theme="workspace"] .stat { background: #e1e8fc; }
+:root[data-theme="workspace"] .stat:nth-child(2) { background: #e6e5f3; border-color: var(--line); }
+:root[data-theme="workspace"] .stat:nth-child(3) { background: #edf5df; border-color: #dce8c5; }
+:root[data-theme="workspace"] .stat:nth-child(4) { background: #ffe5d9; border-color: #f2d7c7; }
+:root[data-theme="workspace"] .stat strong { color: var(--ink); }
+:root[data-theme="workspace"] .stat :is(small, p, strong em) { color: var(--muted); }
+:root[data-theme="workspace"] .nutrition-day { background: #dde4fc; color: #626e9a; }
+:root[data-theme="workspace"] .nutrition-day.distance-1 { background: #e7eaf6; color: #6c7290; }
+:root[data-theme="workspace"] .nutrition-day.distance-2 { background: #edecf6; color: #72748a; }
+:root[data-theme="workspace"] :is(.nutrition-day.distance-3, .nutrition-day.distance-4) { background: #efeef8; color: var(--muted); }
+:root[data-theme="workspace"] .nutrition-day.is-selected { background: var(--action-bg); color: var(--action-ink); box-shadow: 0 5px 12px #233aff18; }
+:root[data-theme="workspace"] .nutrition-day:not(.is-selected):hover { background: #d4dcf5; color: var(--green); }
+:root[data-theme="workspace"] :is(.meal-macro.protein, .balance-tile.protein) { background: #e6e5f3; }
+:root[data-theme="workspace"] :is(.meal-macro.carbs, .balance-tile.carbs) { background: #edf5df; }
+:root[data-theme="workspace"] :is(.meal-macro.fat, .balance-tile.fat) { background: #ffe5d9; }
+:root[data-theme="workspace"] .timetable-cell.is-today { background: #eeeffb; }
+:root[data-theme="workspace"] .calendar-task.training-task { background: #e4ebfc; border-color: #cdd7f3; }
+
+/* Knowledge, settings and achievements. */
+:root[data-theme="workspace"] .knowledge-tabs > button { background: var(--surface); border-color: var(--line); }
+:root[data-theme="workspace"] .knowledge-tabs > button.active { background: var(--action-bg); border-color: var(--action-bg); color: var(--action-ink); }
+:root[data-theme="workspace"] .knowledge-tabs .active small { color: #545f9b; }
+:root[data-theme="workspace"] .knowledge-tabs > button:nth-child(2):not(.active) { background: #ffe5d9; border-color: #dce8c5; }
+:root[data-theme="workspace"] .knowledge-tabs > button:nth-child(3):not(.active) { background: #e6e5f3; border-color: var(--line); }
+:root[data-theme="workspace"] .knowledge-tabs > button:nth-child(4):not(.active) { background: var(--mint-soft); border-color: #dce8c5; }
+:root[data-theme="workspace"] .knowledge-tabs > button:not(.active):hover { background: var(--soft); }
+:root[data-theme="workspace"] .tool-card .card-head > .icon { color: #9097cf; }
+:root[data-theme="workspace"] .settings-nav button { color: var(--muted); }
+:root[data-theme="workspace"] .settings-nav button.active { background: #dde4fc; color: var(--green); }
+:root[data-theme="workspace"] .provider-intro { background: #e6e9fc; border-color: var(--accent-line); }
+:root[data-theme="workspace"] .provider-intro p { color: var(--muted); }
+:root[data-theme="workspace"] .preset-tile:hover { background: var(--soft); border-color: #bac4ef; }
+:root[data-theme="workspace"] .model-option:has(input:checked) { background: var(--soft); }
+:root[data-theme="workspace"] .achievement-filters button { background: var(--surface-soft); }
+:root[data-theme="workspace"] .achievement-filters button[aria-pressed="true"] { background: var(--soft); color: var(--green); }
+:root[data-theme="workspace"] .achievement-carousel .achievement-stamp { background: #fafaff; border-color: var(--line); }
+:root[data-theme="workspace"] .achievement-carousel .achievement-stamp:hover { border-color: #bac4ef; }
+:root[data-theme="workspace"] .achievement-arrow:disabled { background: #edecf5; color: #b2b3ca; }
+:root[data-theme="workspace"] .achievement-pagination button::after { background: #e0e2f0; }
+:root[data-theme="workspace"] .achievement-pagination button[aria-current="page"]::after { background: var(--violet); }
+:root[data-theme="workspace"] .achievement-next progress { background: #e9eaf3; color: #929bf9; }
+:root[data-theme="workspace"] .achievement-next progress::-webkit-progress-bar { background: #e9eaf3; }
+:root[data-theme="workspace"] .achievement-next progress::-webkit-progress-value { background: #929bf9; }
+:root[data-theme="workspace"] .achievement-next progress::-moz-progress-bar { background: #929bf9; }
+
+:root[data-theme="workspace"] dialog { background: #fdfdff; border-color: var(--line); box-shadow: 0 25px 100px #2627302b; }
+:root[data-theme="workspace"] dialog::backdrop { background: #26273055; }
+:root[data-theme="workspace"] .toast { background: var(--home-chat); color: #f4f3ff; }
+:root[data-theme="workspace"] :is(.chat-body, .nutrition-panel-scroll) { scrollbar-color: #c6c9e2 var(--paper); }
+:root[data-theme="workspace"] :is(.chat-body, .nutrition-panel-scroll)::-webkit-scrollbar-track { background: var(--paper); }
+:root[data-theme="workspace"] :is(.chat-body, .nutrition-panel-scroll)::-webkit-scrollbar-thumb { background: #c6c9e2; }
+
+@media (max-width: 700px) {
+  :root[data-theme="workspace"] .greeting { border-radius: 17px; }
+  :root[data-theme="workspace"] .greeting-copy { max-width: 100%; }
+  :root[data-theme="workspace"] .greeting .energy-visual { right: -113px; opacity: .5; }
+}
+
+/* Pastel color families give each shortcut and metric its own visual identity. */
+:root[data-theme="workspace"] .side-note-bars i:nth-child(3n + 1) { background: #8e9ae9; }
+:root[data-theme="workspace"] .side-note-bars i:nth-child(4n) { background: #b4ce88; }
+:root[data-theme="workspace"] .side-note-bars i:nth-child(5n) { background: #f0b18e; }
+:root[data-theme="workspace"] .prompt-card:nth-child(1) { background: color-mix(in srgb, var(--home-training) 65%, white); border-color: #c6d2f2; }
+:root[data-theme="workspace"] .prompt-card:nth-child(2) { background: var(--coral-soft); border-color: #f0d4c4; }
+:root[data-theme="workspace"] .prompt-card:nth-child(3) { background: var(--lavender-soft); border-color: #d6d3e9; }
+:root[data-theme="workspace"] .prompt-card:nth-child(4) { background: color-mix(in srgb, var(--home-lime) 42%, white); border-color: #d8e5bd; }
+:root[data-theme="workspace"] .prompt-card:nth-child(1):hover { background: #c8d7fa; border-color: #9eafe1; }
+:root[data-theme="workspace"] .prompt-card:nth-child(2):hover { background: #ffd9c5; border-color: #e2b49a; }
+:root[data-theme="workspace"] .prompt-card:nth-child(3):hover { background: #d9d8ed; border-color: #bcb6d9; }
+:root[data-theme="workspace"] .prompt-card:nth-child(4):hover { background: #e0efc7; border-color: #bacf94; }
+:root[data-theme="workspace"] :is(.calendar button.selected, .timetable-day.is-today strong) { background: var(--action-bg); color: var(--action-ink); }
+:root[data-theme="workspace"] :is(.tool-intro, .tool-footnote, .formula-card p, .meal-foods, .meal-totals, .meal-recorded, .training-content-notes, .training-plan-content > .description, .provider-footnote) { color: var(--muted); }
+:root[data-theme="workspace"] :is(.tool-result-panel, .meal-totals-box, .meal-revision-form, .provider-advanced) { background: #eceefa; border-color: var(--line); }
+:root[data-theme="workspace"] :is(.tool-numbers strong, .tool-total > strong, .meal-ingredient div > span, .meal-totals strong, .training-content-amount, .training-part strong, .split-summary strong) { color: #5966a1; }
+:root[data-theme="workspace"] :is(.tool-numbers small, .tool-total > small, .tool-result-panel p, .tool-numbers em, .tool-total em) { color: var(--muted); }
+:root[data-theme="workspace"] .formula-card { background: #f9f9fd; border-color: var(--line); }
+:root[data-theme="workspace"] .formula-card .formula-expression { background: #e9ecfa; color: #686e91; }
+:root[data-theme="workspace"] :is(.advice-tabs button.active, .training-part[aria-pressed="true"] .part-symbol) { background: var(--action-bg); color: var(--action-ink); }
+:root[data-theme="workspace"] :is(.meal-cover, .meal-icon, .food-symbol, .advice-plan-mark, .meal-note-number, .part-symbol) { background: #e3e8fc; color: #6876ad; }
+:root[data-theme="workspace"] :is(.meal-macro, .balance-tile, .advice-overview, .split-summary, .training-plan-panel) { background: #eceefa; }
+:root[data-theme="workspace"] :is(.meal-macro.protein, .balance-tile.protein) { background: var(--lavender-soft); }
+:root[data-theme="workspace"] :is(.meal-macro.carbs, .balance-tile.carbs) { background: var(--mint-soft); }
+:root[data-theme="workspace"] :is(.meal-macro.fat, .balance-tile.fat) { background: var(--coral-soft); }
+:root[data-theme="workspace"] :is(.meal-note-item, .advice-meal-plan, .advice-food-card, .advice-text-card, .meal-confirm-item, .training-content-exercise, .draft-exercise) { background: #f8f8fc; border-color: var(--line); }
+:root[data-theme="workspace"] :is(.advice-meal-plan.recorded, .calendar-task.task-completed, .tool-result.success) { background: var(--mint-soft); border-color: #dce8c5; }
+:root[data-theme="workspace"] :is(.advice-tabs, .plan-library-modal, .plan-library-modal .modal-head, .plan-library-footer, .provider-editor-footer) { background: #f4f4fb; }
+:root[data-theme="workspace"] .library-template.is-selected { background: #e4e9fc; border-color: #a5b3e5; }
+:root[data-theme="workspace"] .library-template-days span { background: #e9ebfa; color: #6873a0; }
+:root[data-theme="workspace"] .training-part[aria-pressed="true"] { background: #e3e9fc; border-color: #919ee1; box-shadow: inset 0 0 0 1px #919ee1; }
+:root[data-theme="workspace"] .training-part:hover { background: #f0f1fc; border-color: #bac4ef; }
+:root[data-theme="workspace"] .exercise-card:nth-child(3n + 1) .exercise-visual { background: #dce5fb; }
+:root[data-theme="workspace"] .exercise-card:nth-child(3n + 2) .exercise-visual { background: var(--coral-soft); }
+:root[data-theme="workspace"] .exercise-card:nth-child(3n + 3) .exercise-visual { background: var(--lavender-soft); }
+:root[data-theme="workspace"] .trend-column i { background: #94a8ef; }
+:root[data-theme="workspace"] .trend-column:nth-child(3n + 2) i { background: #b0b4e4; }
+:root[data-theme="workspace"] .trend-column:nth-child(3n) i { background: #bad08d; }
