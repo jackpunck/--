@@ -1,4 +1,4 @@
-import {weeklyAchievement} from '../public/achievements.js';
+import {validTrainingCompletion} from '../public/achievements.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -10,7 +10,7 @@ const content=source.slice(source.indexOf('function trainingExerciseSummary('),s
 const conflictCheck=source.slice(source.indexOf('function assertTaskCurrent('),source.indexOf('function renderCalendarCard('));
 const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('function renderTraining('));
 function setup(extra={}) {
-  const context={weeklyAchievement,allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES,...extra};
+  const context={button:()=>'',validTrainingCompletion,beijingDate:()=>'2026-09-30',weekDates:()=>['2026-09-28','2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-03','2026-10-04'],allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES,...extra};
   runInNewContext(conflictCheck+content,context);
   return context;
 }
@@ -140,19 +140,26 @@ test('completion summary keeps saved training complete and does not complete emp
   assert.equal(typeof context.trainingTaskCompleted,'function');
   const record=task();record.data.daySnapshot.exercises=[];
   assert.equal(context.trainingTaskCompleted(record),false);
-  record.data.completed=true;assert.equal(context.trainingTaskCompleted(record),true);
+  record.data.completed=true;assert.equal(context.trainingTaskCompleted(record),false);
+  record.data.daySnapshot=task().data.daySnapshot;record.data.actual=structuredClone(record.data.daySnapshot.exercises);assert.equal(context.trainingTaskCompleted(record),true);
 });
 
-test('last exercise saves its weekly award in the same batch and repeated completion preserves the award',async()=>{
-  const record=task(),stored=new Map([[record.id,record]]),batches=[];
+test('last exercise saves only training; local celebration never writes an official award',async()=>{
+  const record=task(),stored=new Map([[record.id,record]]),writes=[];
   record.data.daySnapshot.exercises[0].completed=true;
-  const store={records:stored,put:async(kind,id,data)=>{stored.set(id,{kind,id,data});},putMany:async entries=>{batches.push(structuredClone(entries));for(const entry of entries)stored.set(entry.id,structuredClone(entry));}};
+  const store={records:stored,put:async(kind,id,data)=>{writes.push(id);stored.set(id,{kind,id,data});}};
   const context=setup({state:{user:{id:'one'},calendarDetail:structuredClone(record),store},allCalendarTasks:()=>[stored.get(record.id)],calendarTask:()=>stored.get(record.id),taskDay:r=>r.data.daySnapshot});
   await context.toggleTrainingExercise(record.id,1);
-  assert.equal(batches.length,1);assert.equal(batches[0].length,2);
-  const award=stored.get('achievement:week:2026-09-28');assert.equal(award.data.trainingCount,1);
-  assert.equal(context.state.weekCelebration.weekStart,award.data.weekStart);
+  assert.deepEqual(writes,[record.id]);assert.equal(stored.size,1);
+  assert.equal(context.state.weekCelebration.weekStart,'2026-09-28');
   context.state.weekCelebration=null;
   for(let i=0;i<2;i++){context.state.calendarDetail=structuredClone(stored.get(record.id));await context.toggleTrainingExercise(record.id,1);}
-  assert.equal(batches.length,1);assert.deepEqual(stored.get(award.id),award);assert.equal(context.state.weekCelebration,null);
+  assert.equal(stored.size,1);assert.equal(context.state.weekCelebration,null);
+});
+
+test('legacy future checkoffs can be undone so the offline sync queue can recover',async()=>{
+ const record=task();record.data.date='2026-10-05';record.data.daySnapshot.exercises.forEach(e=>e.completed=true);
+ let writes=0;const context=setup({state:{calendarDetail:structuredClone(record),store:{put:async(kind,id,data)=>{record.data=data;writes++;}}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot});
+ await context.toggleTrainingExercise(record.id,0);assert.equal(record.data.daySnapshot.exercises[0].completed,false);assert.equal(writes,1);
+ context.state.calendarDetail=structuredClone(record);await assert.rejects(context.toggleTrainingExercise(record.id,0),/未来日期/);assert.equal(writes,1);
 });
