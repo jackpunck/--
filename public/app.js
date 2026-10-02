@@ -130,7 +130,12 @@ function authFormMarkup() {
   const register=state.authMode==='register';
   return `<div class="auth-form"><div class="auth-welcome"><span></span> 你的循序空间</div><h2 id="landing-auth-heading" tabindex="-1">${register?'创建账号，开始记录':'欢迎回到循序'}</h2><p>保存你的训练计划、餐食记录和阶段变化。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">使用同一服务地址，可在电脑与手机间同步记录。</p></div>`;
 }
+function setWorkspaceTheme(active) {
+  document.documentElement.dataset.theme=active?'workspace':'landing';
+  document.querySelector('meta[name="theme-color"]').content=active?'#e4e6fa':'#263dff';
+}
 function renderAuth() {
+  setWorkspaceTheme(false);
   const panel=$('[data-auth-panel]');
   if(panel){
     const email=$('#email')?.value||'';
@@ -146,6 +151,7 @@ function renderAuth() {
 }
 
 function render() {
+  setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
   const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',settings:'个人中心'};
