@@ -18,7 +18,7 @@ import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
 import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=2';
 import {providerPresets} from './provider-presets.js?v=9';
-import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=10';
+import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=12';
 import {coverUrl} from './exercise-covers.js?v=9';
 
@@ -1418,7 +1418,7 @@ async function saveProvider() {
  readProviderForm();
  if(!d.apiKey&&(!d.hasKey||d.clearKey)&&presetFor(d.presetId).requiresKey)throw new Error('请填写此供应商的 API Key。');
  const providers=state.providers.filter(p=>p.id!==d.id).map(p=>({...p}));providers.push(providerPayload(d));
- const selection=reconcileTasks(providers,state.tasks,state.taskModels,state.providers.some(p=>enabledModels(p).length)?undefined:d.id);
+ const selection=reconcileTasks(providers,state.tasks,state.taskModels,d.id,{defaultTasks:state.providers.some(p=>enabledModels(p).length)?['motion']:undefined});
  await api('/providers',{method:'PUT',body:{providers,...selection}});
  $('#provider-form')?.reset();d.apiKey='';state.providerDraft=null;await loadProviders();closeModal();renderAISettings();toast('供应商与模型已保存');
 }

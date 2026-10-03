@@ -9,6 +9,7 @@ import http from 'node:http';
 import {startServer} from '../server.mjs';
 import {compactMotionAnalysis, sanitizeMotionCoachResponse, mergeCoachAssessment} from '../public/motion-contract.js';
 import {getMotionExercise} from '../public/motion-catalog.js';
+import {reconcileTasks} from '../public/provider-ui.js';
 
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=';
 const frames=[{time:1,mimeType:'image/png',data:png},{time:2,mimeType:'image/png',data:png}];
@@ -53,6 +54,38 @@ test('motion route uses the dedicated account task, transient images and bounded
   assert.equal((await f.api('/api/motion/coach',{cookie:f.bob.cookie,body:{duration:3,analysis:local(),keyframes:frames}})).status,400);
   assert.equal((await f.api('/api/motion/coach',{cookie:f.alice.cookie,headers:{'X-Fitness-User':f.bob.body.user.id},body:{duration:3,analysis:local(),keyframes:frames}})).status,409);
   assert.equal(f.calls.length,1,'Another account cannot borrow the configured provider or key');
+});
+
+test('saving an existing provider assigns an unconfigured motion task to its selected default',async t=>{
+  const f=await fixture(t);
+  const provider={id:'existing',name:'Existing AI',protocol:'openai',baseUrl:'http://127.0.0.1:9/v1',models:[{id:'text-default',vision:false},{id:'vision-alternative',vision:true},{id:'next-default',vision:false}],model:'vision-alternative'};
+  const tasks={chat:'existing',meal:'existing',planning:'existing'},taskModels={chat:'text-default',meal:'vision-alternative',planning:'text-default'};
+  const initial=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:[provider],tasks,taskModels}});
+  assert.equal(initial.status,200);
+  let settings=(await f.api('/api/providers',{cookie:f.alice.cookie})).body;
+  assert.equal(Object.hasOwn(settings.tasks,'motion'),false,'Reading old settings does not assign the new task');
+  assert.equal(Object.hasOwn(settings.taskModels,'motion'),false);
+  const editedProvider={...settings.providers[0],model:'text-default'};
+  const selection=reconcileTasks([editedProvider],settings.tasks,settings.taskModels,editedProvider.id,{defaultTasks:['motion']});
+  const saved=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:[editedProvider],...selection}});
+  assert.equal(saved.status,200);
+  settings=(await f.api('/api/providers',{cookie:f.alice.cookie})).body;
+  assert.equal(settings.tasks.motion,'existing');
+  assert.equal(settings.taskModels.motion,'text-default','The selected default takes priority over another vision model');
+  for(const task of Object.keys(tasks)) {
+    assert.equal(settings.tasks[task],tasks[task]);assert.equal(settings.taskModels[task],taskModels[task]);
+  }
+  const result=await f.api('/api/motion/coach',{cookie:f.alice.cookie,body:{duration:3,analysis:local(),keyframes:frames}});
+  assert.equal(result.status,200);assert.equal(result.body.model,'text-default');assert.equal(result.body.mode,'evidence-only');
+  assert.equal(f.calls[0].body.model,'text-default');
+  assert.equal(f.calls[0].body.messages[1].content.some(part=>part.type==='image_url'),false);
+
+  const explicit=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:settings.providers,tasks:settings.tasks,taskModels:{...settings.taskModels,motion:'vision-alternative'}}});
+  assert.equal(explicit.status,200);settings=explicit.body;
+  const changedProvider={...settings.providers[0],model:'next-default'};
+  const preserved=reconcileTasks([changedProvider],settings.tasks,settings.taskModels,changedProvider.id,{defaultTasks:['motion']});
+  const changed=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:[changedProvider],...preserved}});
+  assert.equal(changed.status,200);assert.equal(changed.body.providers[0].model,'next-default');assert.equal(changed.body.taskModels.motion,'vision-alternative');
 });
 
 test('text models receive no pixels and cannot claim visual recognition or spine observations',async t=>{
