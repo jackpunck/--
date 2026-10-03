@@ -13,7 +13,7 @@ export function taskSelection(task, providers, tasks, taskModels) {
 export function reconcileTasks(providers, tasks, taskModels, editedId) {
   const nextTasks = {...tasks}, nextModels = {...taskModels};
   const edited = providers.find(provider => provider.id === editedId);
-  for (const task of ['chat','meal','planning']) {
+  for (const task of ['chat','meal','planning','motion']) {
     const provider = providers.find(item => item.id === nextTasks[task]);
     if (provider) {
       const models = enabledModels(provider);
@@ -26,7 +26,8 @@ export function reconcileTasks(providers, tasks, taskModels, editedId) {
     }
     if (!nextTasks[task] && edited) {
       const models = enabledModels(edited);
-      const candidate = task === 'meal' ? models.find(model => model.vision === true) : models.find(model => model.id === edited.model) || models[0];
+      const preferred=models.find(model => model.id === edited.model) || models[0];
+      const candidate = task === 'meal' ? models.find(model => model.vision === true) : task === 'motion' ? models.find(model => model.vision === true) || preferred : preferred;
       if (candidate) {nextTasks[task] = edited.id;nextModels[task] = candidate.id;}
     }
   }

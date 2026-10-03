@@ -131,9 +131,9 @@ export class RecordStore extends EventTarget {
     try {
       for (const change of this.pending.values()) {
         if (this.conflicts.some(x => x.id === change.id)) continue;
-        const limit = change.kind === 'conversation' ? 2 * 1024 * 1024 : 256 * 1024;
+        const limit = change.kind === 'conversation' ? 2 * 1024 * 1024 : change.kind === 'motion-assessment' ? 1024 * 1024 : 256 * 1024;
         if (new TextEncoder().encode(JSON.stringify(change.data)).byteLength > limit) {
-          const error = new Error(change.kind === 'conversation' ? '单个会话已超过 2 MB，请导出保留本机内容并新建会话；此会话尚未同步。' : '单条记录已超过 256 KB，请缩短内容后重试；更改仍保留在本机。');
+          const error = new Error(change.kind === 'conversation' ? '单个会话已超过 2 MB，请导出保留本机内容并新建会话；此会话尚未同步。' : change.kind === 'motion-assessment' ? '单份动作评估报告已超过 1 MB，尚未同步；完整报告仍保留在本机。' : '单条记录已超过 256 KB，请缩短内容后重试；更改仍保留在本机。');
           error.status = 413; this.blocked.set(change.id, error); continue;
         }
         const size = new TextEncoder().encode(JSON.stringify(change)).byteLength;

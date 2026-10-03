@@ -62,7 +62,11 @@ test('automatically recognizes full squats and push-ups and returns timed, trans
     assert.equal(result.exerciseId, exercise, JSON.stringify(result));
     assert.equal(result.status, 'complete', JSON.stringify(result));
     assert.equal(result.reps.length, 2);
-    assert.ok(result.score >= 90);
+    assert.ok(result.observedScore >= 90);
+    assert.equal(result.scoreStatus, 'provisional');
+    assert.ok(result.score <= 69);
+    assert.equal(result.qualifiedRepCount, 0);
+    assert.equal(result.checks.find(c => c.code === 'SPINE_NEUTRAL').status, 'unobservable');
     assert.equal(result.quality.view, 'side');
     for (const rep of result.reps) {
       assert.ok(rep.start < rep.bottom && rep.bottom < rep.end);
@@ -139,11 +143,13 @@ test('stationary standing, plank, and small local jitter never generate repetiti
   }
 });
 
-test('unknown arm curls are rejected rather than forced into a supported class', () => {
+test('elbow isolation is recognized without inventing a grip or equipment variant', () => {
   const result = run('curl');
-  assert.equal(result.status, 'unsupported');
+  assert.equal(result.exerciseFamily, 'elbow-isolation');
   assert.equal(result.exerciseId, null);
-  assert.equal(result.score, null);
+  assert.equal(result.requiresVisualConfirmation, true);
+  assert.ok(result.candidates.some(c => c.exerciseId === 'curl'));
+  assert.ok(result.candidates.some(c => c.exerciseId === 'triceps'));
 });
 
 test('clips missing their beginning or return to the top are unscored', () => {
@@ -166,7 +172,7 @@ test('shallow but complete attempts are recognized, counted, and scored as insuf
     assert.equal(result.attemptCount, 2);
     assert.equal(result.qualifiedRepCount, 0);
     assert.ok(result.score < 70);
-    assert.ok(result.issues.some(i => i.code === 'LIMITED_DEPTH'));
+    assert.ok(result.issues.some(i => ['SQUAT_DEPTH', 'PUSHUP_DEPTH'].includes(i.code)));
   }
 });
 
@@ -202,7 +208,7 @@ test('complete repetitions survive a gap between repetitions without merging acr
 test('front views, extensive occlusion, absent confidence and insufficient sampling are rejected', () => {
   const front = run('squat', {front: true});
   assert.equal(front.score, null);
-  assert.ok(front.quality.reasons.includes('SIDE_VIEW_REQUIRED'));
+  assert.ok(front.quality.reasons.includes('INSUFFICIENT_CHECK_COVERAGE'));
   const clip = recording('squat');
   for (const frames of [
     clip.frames.map((f, i) => i % 3 ? {...f, landmarks: []} : f),
@@ -237,11 +243,11 @@ test('observable shallow depth, trunk lean and hip sag reduce relevant scores wi
   const shallow = run('squat', {depth: 33});
   assert.equal(shallow.status, 'complete', JSON.stringify(shallow));
   assert.ok(shallow.score < squat.score);
-  assert.ok(shallow.issues.some(i => i.code === 'LIMITED_DEPTH'));
+  assert.ok(shallow.issues.some(i => ['SQUAT_DEPTH', 'PUSHUP_DEPTH'].includes(i.code)));
   const leaning = run('squat', {lean: 210});
   assert.equal(leaning.status, 'complete', JSON.stringify(leaning));
   assert.ok(leaning.score < squat.score);
-  assert.ok(leaning.issues.some(i => i.code === 'TORSO_LEAN'));
+  assert.ok(leaning.issues.some(i => i.code === 'SQUAT_TORSO_LEAN'));
   const sagging = run('pushup', {sag: 75});
   assert.equal(sagging.status, 'complete', JSON.stringify(sagging));
   assert.ok(sagging.score < run('pushup').score);
@@ -291,5 +297,41 @@ test('real extracted poses preserve squat and perspective push-up recognition wi
     assert.ok(result.reps.every(rep => rep.start < rep.bottom && rep.bottom < rep.end));
     if (exercise === 'squat') assert.equal(result.reps.length, 5); // independently reviewed count
     else assert.ok(result.reps.length >= 1); // no unverified on-screen counter as a golden label
+  }
+});
+
+
+test('a visual squat hint cannot force an unrelated push-up into squat repetitions', () => {
+  const clip = recording('pushup');
+  const result = analyzeMotion(clip.frames, {...clip.options, exerciseHint: 'squat'});
+  assert.equal(result.score, null);
+  assert.equal(result.attemptCount, 0);
+  assert.ok(result.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+});
+
+test('squat torso lean records sustained time but does not diagnose spinal neutrality', () => {
+  const result = run('squat', {lean: 210});
+  const lean = result.checks.find(c => c.code === 'SQUAT_TORSO_LEAN');
+  assert.equal(lean.status, 'fail');
+  assert.ok(lean.evidence.duration >= 0.2);
+  assert.ok(lean.evidence.value > 50);
+  assert.ok(lean.time > 0);
+  assert.equal(result.checks.find(c => c.code === 'SPINE_NEUTRAL').status, 'unobservable');
+  const clip = recording('squat');
+  for (const f of clip.frames.filter(f => f.time > 1.61 && f.time < 1.71)) {
+    for (const index of [11, 12]) f.landmarks[index].x += 0.19;
+  }
+  const spike = analyzeMotion(clip.frames, clip.options);
+  assert.equal(spike.checks.find(c => c.code === 'SQUAT_TORSO_LEAN').status, 'pass');
+});
+
+
+test('all squat and push-up catalogue variants reach the compatible-hint scoring recipe', () => {
+  for (const [kind, id] of [['squat', 'squat'], ['squat', 'goblet-squat'], ['pushup', 'pushup']]) {
+    const clip = recording(kind);
+    const result = analyzeMotion(clip.frames, {...clip.options, exerciseHint: id});
+    assert.equal(result.exerciseId, id);
+    assert.equal(result.attemptCount, 2);
+    assert.ok(result.checks.length >= 4);
   }
 });

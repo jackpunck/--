@@ -1,6 +1,7 @@
 import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createId, RecordStore } from '../public/store.js';
+import {longMotionReport} from './helpers/motion-long-report.mjs';
 
 // Minimal asynchronous IndexedDB adapter: exercises the store's account keys,
 // serialized transactions and queue lifecycle without browser dependencies.
@@ -277,4 +278,15 @@ test('batch calendar updates persist and sync cycle rules together with task tom
   assert.equal(afterReset.records.get('task').deleted,true);
   const server=fakeServer();globalThis.fetch=server.fetch;online=true;await afterReset.sync();
   assert.equal(server.remote.get('cycle').deleted,true);assert.equal(server.remote.get('task').deleted,true);assert.equal(server.remote.get('plan').data.name,'saved plan');
+});
+
+
+test('large motion assessments sync intact while reports over 1 MiB remain locally available with an explicit error',async()=>{
+ const {report}=longMotionReport();assert.ok(new TextEncoder().encode(JSON.stringify(report)).byteLength>256*1024);
+ const store=await open();await store.put('motion-assessment','motion:long',report);
+ const server=fakeServer();globalThis.fetch=server.fetch;online=true;await store.sync();
+ assert.equal(store.pending.size,0);assert.equal(store.status,'synced');assert.deepEqual(server.remote.get('motion:long').data,report);
+ assert.deepEqual((await open()).get('motion:long'),report);
+ online=false;const oversized={...report,extra:'a'.repeat(1024*1024)};await store.put('motion-assessment','motion:too-big',oversized);
+ online=true;await assert.rejects(store.sync(),/1 MB/);assert.equal(store.status,'error');assert.equal(store.pending.size,1);assert.deepEqual((await open()).get('motion:too-big'),oversized);assert.ok(!server.remote.has('motion:too-big'));
 });

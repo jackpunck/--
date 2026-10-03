@@ -87,7 +87,8 @@ export function getProviders(db, userId) {
   const row = db.prepare('SELECT tasks,task_models FROM preferences WHERE user_id = ?').get(userId);
   const tasks = row ? JSON.parse(row.tasks) : { chat: '', meal: '', planning: '' };
   const storedModels = row ? JSON.parse(row.task_models) : {};
-  const taskModels = Object.fromEntries(['chat', 'meal', 'planning'].map(task => [task, storedModels[task] ?? providers.find(provider => provider.id === tasks[task])?.model ?? '']));
+  const taskNames = ['chat', 'meal', 'planning', ...(Object.hasOwn(tasks, 'motion') || Object.hasOwn(storedModels, 'motion') ? ['motion'] : [])];
+  const taskModels = Object.fromEntries(taskNames.map(task => [task, storedModels[task] ?? providers.find(provider => provider.id === tasks[task])?.model ?? '']));
   return { providers, tasks, taskModels };
 }
 

@@ -2,21 +2,40 @@
  * Import the unmodified ESM API here, rather than running inference in the UI.
  */
 let pose;
-let crowdPose;
-let lastCrowdCheck = -Infinity;
+let regionPose;
+let tracker;
+let targetPoint, targetBox, lastDiscovery=-Infinity, trackingHelpers;
 let busy = false;
 let sequential;
 const assetBase = new URL('./vendor/mediapipe/', self.location.href);
 
 function analyzeFrame(image, timestampMs) {
   const started = performance.now();
-  let crowdCount = 0;
-  const multiPersonCheck = timestampMs - lastCrowdCheck >= 500;
-  if (multiPersonCheck) { crowdCount = crowdPose.detect(image).landmarks.length; lastCrowdCheck = timestampMs; }
-  const result = pose.detectForVideo(image, timestampMs);
+  const groups = [pose.detectForVideo(image, timestampMs)];
+  const knownRegions=trackingHelpers.knownPersonRegions(groups[0].landmarks);
+  const crops=[];
+  const selectedCrop=trackingHelpers.targetDetectionCrop({bbox:targetBox,point:targetPoint});
+  if(selectedCrop)crops.push(selectedCrop);
+  // Global detection can miss smaller people. Discover both sides regularly;
+  // the selected region is checked every frame, including during brief loss.
+  if(timestampMs-lastDiscovery>=500){crops.push({xMin:0,yMin:0,xMax:.6,yMax:1,discovery:true},{xMin:.4,yMin:0,xMax:1,yMax:1,discovery:true});lastDiscovery=timestampMs;}
+  for(const crop of crops) {
+    const canvas=new OffscreenCanvas(Math.max(1,Math.round(image.width*(crop.xMax-crop.xMin))),Math.max(1,Math.round(image.height*(crop.yMax-crop.yMin))));
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(image,crop.xMin*image.width,crop.yMin*image.height,image.width*(crop.xMax-crop.xMin),image.height*(crop.yMax-crop.yMin),0,0,canvas.width,canvas.height);
+    if(crop.discovery){
+      ctx.fillStyle='#777777';
+      for(const region of knownRegions)ctx.fillRect((region.xMin-crop.xMin)/(crop.xMax-crop.xMin)*canvas.width,(region.yMin-crop.yMin)/(crop.yMax-crop.yMin)*canvas.height,(region.xMax-region.xMin)/(crop.xMax-crop.xMin)*canvas.width,(region.yMax-region.yMin)/(crop.yMax-crop.yMin)*canvas.height);
+    }
+    const result=regionPose.detect(canvas);
+    groups.push({landmarks:result.landmarks.map(points=>trackingHelpers.mapCropLandmarks(points,crop)),worldLandmarks:result.worldLandmarks,crop});
+    canvas.width=canvas.height=1;
+  }
+  const result=trackingHelpers.mergePoseCandidates(groups);
+  const selected = tracker.update(result.landmarks, timestampMs / 1000);
+  if(selected.subjectTracking.status==='locked')targetBox=selected.subjectTracking.bbox;
   const copy = points => (points || []).map(({ x, y, z, visibility, presence }) => ({ x, y, z, visibility: visibility ?? 0, presence: presence ?? null }));
-  const personCount = Math.max(crowdCount, result.landmarks.length);
-  return { personCount, multiPersonCheck, landmarks: personCount === 1 ? copy(result.landmarks[0]) : [], worldLandmarks: personCount === 1 ? copy(result.worldLandmarks[0]) : [], inferenceMs: performance.now() - started };
+  return { personCount: result.landmarks.length, multiPersonCheck: true, subjectTracking: selected.subjectTracking, landmarks: selected.index === null ? [] : copy(result.landmarks[selected.index]), worldLandmarks: selected.index === null ? [] : copy(result.worldLandmarks[selected.index]), inferenceMs: performance.now() - started };
 }
 
 self.onmessage = async ({ data }) => {
@@ -30,6 +49,9 @@ self.onmessage = async ({ data }) => {
   try {
     if (type === 'init') {
       if (typeof OffscreenCanvas === 'undefined') throw new Error('浏览器不支持后台画布，请使用新版 Chrome 或 Edge。');
+      trackingHelpers = await import('./motion-tracking.js');
+      targetPoint=trackingHelpers.validateTargetPoint(data.targetPoint);targetBox=undefined;lastDiscovery=-Infinity;
+      tracker = trackingHelpers.createSubjectTracker({ targetPoint });
       const { PoseLandmarker, FilesetResolver } = await import(new URL('vision_bundle.mjs', assetBase).href);
       const fileset = await FilesetResolver.forVisionTasks(new URL('wasm', assetBase).href);
       const options = {
@@ -37,16 +59,17 @@ self.onmessage = async ({ data }) => {
           modelAssetPath: new URL('pose_landmarker_full.task', assetBase).href,
           delegate: data.delegate,
         },
-        runningMode: 'VIDEO', numPoses: 1,
+        runningMode: 'VIDEO', numPoses: 4,
         minPoseDetectionConfidence: 0.5,
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
         outputSegmentationMasks: false,
       };
       pose = await PoseLandmarker.createFromOptions(fileset, options);
-      // A second pass twice per second avoids forcing the expensive
-      // detector on every frame when only one person is actually present.
-      crowdPose = await PoseLandmarker.createFromOptions(fileset, { ...options, numPoses: 2, runningMode: 'IMAGE' });
+      // A region seeks one local target. IMAGE with multiple poses may emit
+      // duplicate estimates for that same person; the global pass retains up
+      // to four independent candidates for actual crowd/overlap competition.
+      regionPose = await PoseLandmarker.createFromOptions(fileset, {...options,runningMode:'IMAGE',numPoses:1});
       self.postMessage({ id, delegate: data.delegate });
     } else if (type === 'prepare-mp4') {
       const { prepareMp4 } = await import('./motion-decode.js');
@@ -67,7 +90,7 @@ self.onmessage = async ({ data }) => {
         self.postMessage({ id, ...analyzeFrame(data.bitmap, data.timestampMs) });
       } finally { data.bitmap.close(); }
     } else if (type === 'close') {
-      pose?.close(); crowdPose?.close(); pose = crowdPose = undefined;
+      pose?.close(); regionPose?.close(); pose = regionPose = tracker = undefined;
       self.postMessage({ id });
     } else throw new Error('未知的姿态分析请求。');
   } catch (error) {

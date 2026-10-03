@@ -1,0 +1,399 @@
+{
+  "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+  "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "transformation": "Derived MediaPipe body landmarks rounded to six decimal places; face points and source video omitted. Numerical model estimates for regression testing, not human annotations.",
+  "source": "Body-only MediaPipe observations at 8.533s: left discovery tile cuts real legs and produces a distorted duplicate; compare only jointly visible points",
+  "groups": [
+    {
+      "landmarks": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          {
+            "x": 0.366477,
+            "y": 0.404651,
+            "visibility": 0.999959
+          },
+          {
+            "x": 0.353278,
+            "y": 0.367777,
+            "visibility": 0.999835
+          },
+          {
+            "x": 0.418871,
+            "y": 0.538075,
+            "visibility": 0.99315
+          },
+          {
+            "x": 0.39305,
+            "y": 0.488182,
+            "visibility": 0.26971
+          },
+          {
+            "x": 0.428117,
+            "y": 0.710951,
+            "visibility": 0.992795
+          },
+          {
+            "x": 0.388562,
+            "y": 0.600815,
+            "visibility": 0.574037
+          },
+          {
+            "x": 0.410287,
+            "y": 0.729218,
+            "visibility": 0.98947
+          },
+          {
+            "x": 0.374149,
+            "y": 0.609159,
+            "visibility": 0.59843
+          },
+          {
+            "x": 0.403627,
+            "y": 0.719961,
+            "visibility": 0.988403
+          },
+          {
+            "x": 0.372202,
+            "y": 0.613917,
+            "visibility": 0.603932
+          },
+          {
+            "x": 0.409587,
+            "y": 0.71151,
+            "visibility": 0.975437
+          },
+          {
+            "x": 0.37789,
+            "y": 0.612575,
+            "visibility": 0.596786
+          },
+          {
+            "x": 0.52099,
+            "y": 0.475551,
+            "visibility": 0.998706
+          },
+          {
+            "x": 0.506465,
+            "y": 0.442292,
+            "visibility": 0.995133
+          },
+          {
+            "x": 0.627574,
+            "y": 0.534849,
+            "visibility": 0.840128
+          },
+          {
+            "x": 0.617113,
+            "y": 0.52196,
+            "visibility": 0.342022
+          },
+          {
+            "x": 0.737453,
+            "y": 0.557474,
+            "visibility": 0.939248
+          },
+          {
+            "x": 0.715852,
+            "y": 0.539879,
+            "visibility": 0.504085
+          },
+          {
+            "x": 0.760308,
+            "y": 0.545718,
+            "visibility": 0.941761
+          },
+          {
+            "x": 0.74111,
+            "y": 0.531469,
+            "visibility": 0.696268
+          },
+          {
+            "x": 0.735047,
+            "y": 0.633327,
+            "visibility": 0.941654
+          },
+          {
+            "x": 0.720097,
+            "y": 0.612984,
+            "visibility": 0.749821
+          }
+        ]
+      ],
+      "crop": null
+    },
+    {
+      "landmarks": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          {
+            "x": 0.371774,
+            "y": 0.402321,
+            "visibility": 0.999858
+          },
+          {
+            "x": 0.357865,
+            "y": 0.365367,
+            "visibility": 0.999639
+          },
+          {
+            "x": 0.424488,
+            "y": 0.541746,
+            "visibility": 0.997508
+          },
+          {
+            "x": 0.395131,
+            "y": 0.490761,
+            "visibility": 0.361277
+          },
+          {
+            "x": 0.42809,
+            "y": 0.713239,
+            "visibility": 0.996937
+          },
+          {
+            "x": 0.388308,
+            "y": 0.603769,
+            "visibility": 0.510138
+          },
+          {
+            "x": 0.411015,
+            "y": 0.733455,
+            "visibility": 0.993807
+          },
+          {
+            "x": 0.372433,
+            "y": 0.610934,
+            "visibility": 0.488558
+          },
+          {
+            "x": 0.405294,
+            "y": 0.723703,
+            "visibility": 0.993069
+          },
+          {
+            "x": 0.370672,
+            "y": 0.614909,
+            "visibility": 0.484609
+          },
+          {
+            "x": 0.410596,
+            "y": 0.714702,
+            "visibility": 0.985882
+          },
+          {
+            "x": 0.378448,
+            "y": 0.614446,
+            "visibility": 0.489618
+          },
+          {
+            "x": 0.524547,
+            "y": 0.481735,
+            "visibility": 0.998579
+          },
+          {
+            "x": 0.51329,
+            "y": 0.45002,
+            "visibility": 0.995018
+          },
+          {
+            "x": 0.630517,
+            "y": 0.534474,
+            "visibility": 0.949669
+          },
+          {
+            "x": 0.621406,
+            "y": 0.518589,
+            "visibility": 0.51331
+          },
+          {
+            "x": 0.734539,
+            "y": 0.56153,
+            "visibility": 0.970521
+          },
+          {
+            "x": 0.71112,
+            "y": 0.536206,
+            "visibility": 0.586819
+          },
+          {
+            "x": 0.762307,
+            "y": 0.551971,
+            "visibility": 0.969613
+          },
+          {
+            "x": 0.735046,
+            "y": 0.524512,
+            "visibility": 0.703549
+          },
+          {
+            "x": 0.725264,
+            "y": 0.627165,
+            "visibility": 0.946101
+          },
+          {
+            "x": 0.70893,
+            "y": 0.607647,
+            "visibility": 0.770637
+          }
+        ]
+      ],
+      "crop": null
+    },
+    {
+      "landmarks": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          {
+            "x": 0.357347,
+            "y": 0.407291,
+            "visibility": 0.999975
+          },
+          {
+            "x": 0.337112,
+            "y": 0.392001,
+            "visibility": 0.999893
+          },
+          {
+            "x": 0.405535,
+            "y": 0.530509,
+            "visibility": 0.992934
+          },
+          {
+            "x": 0.383511,
+            "y": 0.489031,
+            "visibility": 0.190423
+          },
+          {
+            "x": 0.418463,
+            "y": 0.713913,
+            "visibility": 0.992683
+          },
+          {
+            "x": 0.38897,
+            "y": 0.603255,
+            "visibility": 0.347648
+          },
+          {
+            "x": 0.406774,
+            "y": 0.731731,
+            "visibility": 0.987711
+          },
+          {
+            "x": 0.374711,
+            "y": 0.611949,
+            "visibility": 0.338077
+          },
+          {
+            "x": 0.400223,
+            "y": 0.723398,
+            "visibility": 0.986929
+          },
+          {
+            "x": 0.374049,
+            "y": 0.618335,
+            "visibility": 0.350088
+          },
+          {
+            "x": 0.407127,
+            "y": 0.716045,
+            "visibility": 0.973594
+          },
+          {
+            "x": 0.379518,
+            "y": 0.614909,
+            "visibility": 0.341143
+          },
+          {
+            "x": 0.46173,
+            "y": 0.432776,
+            "visibility": 0.999902
+          },
+          {
+            "x": 0.445609,
+            "y": 0.424959,
+            "visibility": 0.999361
+          },
+          {
+            "x": 0.433432,
+            "y": 0.515603,
+            "visibility": 0.843122
+          },
+          {
+            "x": 0.433145,
+            "y": 0.464921,
+            "visibility": 0.342901
+          },
+          {
+            "x": 0.454212,
+            "y": 0.548092,
+            "visibility": 0.354098
+          },
+          {
+            "x": 0.454428,
+            "y": 0.544045,
+            "visibility": 0.063135
+          },
+          {
+            "x": 0.46529,
+            "y": 0.547098,
+            "visibility": 0.494717
+          },
+          {
+            "x": 0.466279,
+            "y": 0.55441,
+            "visibility": 0.163445
+          },
+          {
+            "x": 0.427892,
+            "y": 0.580822,
+            "visibility": 0.435121
+          },
+          {
+            "x": 0.430561,
+            "y": 0.586784,
+            "visibility": 0.115361
+          }
+        ]
+      ],
+      "crop": {
+        "xMin": 0,
+        "yMin": 0,
+        "xMax": 0.6,
+        "yMax": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "description": "Real-person local QA media only. Downloads stay in .qa and are not bundled in the app. Labels are dataset metadata, not verified clinical ground truth.",
+  "samples": [
+    {
+      "id": "mendeley-bicep_curl-good",
+      "filename": "subject_001_bicep_curl_good_side.mp4",
+      "playable": "subject_001_bicep_curl_good_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/426e7195-d4cc-4789-8356-43278101eb87/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/426e7195-d4cc-4789-8356-43278101eb87",
+      "sha256": "055ec2601cab5aa85db98dd6fe03d5acb4a0d7ef04744bcdc72b254f6e950f76",
+      "playableSha256": "131ce2f4f085891860c8742a2194eb4d8258640f85c5bd70b00c30d1fbae716c",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "alternating dumbbell bicep curl",
+        "quality": "good",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "mendeley-shoulder-good",
+      "filename": "subject_001_shoulder_good_side.mp4",
+      "playable": "subject_001_shoulder_good_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/92eabc2a-2f91-4d74-8dd4-465dba95b55d/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/92eabc2a-2f91-4d74-8dd4-465dba95b55d",
+      "sha256": "555fef4b7a4087f42120e16f8cf74ec9ce2d0abd13f34a37c0f4cc419bbf1090",
+      "playableSha256": "f2433f029422e5eb305ad552746e004f25e22766c0cc3be15d5ade4397075ce6",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "standing dumbbell shoulder press",
+        "quality": "good",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "mendeley-back-good",
+      "filename": "subject_001_back_good_side.mp4",
+      "playable": "subject_001_back_good_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/7e870b64-21a3-4501-8e27-d0e976dfac2e/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/7e870b64-21a3-4501-8e27-d0e976dfac2e",
+      "sha256": "bdb89107e9821fcf42f5a3a758532e558deabad2b39f8cc23cfc20272c103b95",
+      "playableSha256": "ecdf674e57fbd386d43770cfef28c8045ecbba13e162af69df6592dbbc60ff5c",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "bilateral bent-over dumbbell row",
+        "quality": "good",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "mendeley-bicep_curl-bad",
+      "filename": "subject_001_bicep_curl_bad_side.mp4",
+      "playable": "subject_001_bicep_curl_bad_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/bc59a3d7-648c-49ac-8b13-6009bb08fe34/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/bc59a3d7-648c-49ac-8b13-6009bb08fe34",
+      "sha256": "e23645e50f45ed66fa9365b37a4a1753af126ee56c4891bfe1158700c2a097d5",
+      "playableSha256": "4a364b6e414685b45a7b6a3a463662264511a8c59c729d8708914c9f392b7961",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "alternating dumbbell bicep curl",
+        "quality": "bad",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "mendeley-back-bad",
+      "filename": "subject_001_back_bad_side.mp4",
+      "playable": "subject_001_back_bad_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/7b1c01c1-b501-44e7-8db2-7819f171bf2f/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/7b1c01c1-b501-44e7-8db2-7819f171bf2f",
+      "sha256": "f634447e9089ce39c7be7141f1d3d1274ce553efddbabc4645676388be411c6d",
+      "playableSha256": "87e6e661b56f754120247a9866208b5ced0dc4263a5eb8a7d2b2a53fdc34a791",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "bilateral bent-over dumbbell row",
+        "quality": "bad",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "mendeley-shoulder-bad",
+      "filename": "subject_001_shoulder_bad_side.mp4",
+      "playable": "subject_001_shoulder_bad_side-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/999abaed-ba34-4529-bf2e-20e62e8d7a87/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/999abaed-ba34-4529-bf2e-20e62e8d7a87",
+      "sha256": "ab25c3c247f13b5683002daba9643350dcf8aac168c5f9a75e23ed7ab7ab1ffa",
+      "playableSha256": "3d09ce6bf5b315e2be081d29aac3e04bd11433732ff8ea6d2ac539b0303a937b",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+      "author": "S Ashlesh Pai, Pratham PN, Advith P, Abhishek Mashetty",
+      "label": {
+        "exercise": "standing dumbbell shoulder press",
+        "quality": "bad",
+        "view": "side",
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size unchanged"
+    },
+    {
+      "id": "deadlift-rounded_back",
+      "filename": "deadlift-PB_S01_R01.mp4",
+      "playable": "deadlift-PB_S01_R01-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/w5prmmxyt9/files/b2e7d36d-a715-41bb-99c4-fd7cd516a93d/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/w5prmmxyt9/1/files/b2e7d36d-a715-41bb-99c4-fd7cd516a93d",
+      "sha256": "6828b5542b936345297ed84db8fe9178d0f3a048a04f0833d040ac4e0ac301c1",
+      "playableSha256": "082c1ee82ee0bb4bf040db2cdac6ba7869c3f182ba4ab81d751ebbb6d86057e7",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/w5prmmxyt9/1",
+      "author": "Ivan Conanta; Gloria Virginia",
+      "label": {
+        "exercise": "barbell deadlift",
+        "specificFault": "rounded_back",
+        "view": "side",
+        "repetitions": 1
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size preserved"
+    },
+    {
+      "id": "deadlift-correct",
+      "filename": "deadlift-GB_S01_R01.mp4",
+      "playable": "deadlift-GB_S01_R01-h264.mp4",
+      "url": "https://data.mendeley.com/public-files/datasets/w5prmmxyt9/files/8cd7b69a-a1cf-4299-98a6-77edb3c7d9fc/file_downloaded",
+      "sourcePage": "https://data.mendeley.com/datasets/w5prmmxyt9/1/files/8cd7b69a-a1cf-4299-98a6-77edb3c7d9fc",
+      "sha256": "00ac077b0468064837f37d627867d975c4d89923da1879a9c23d61449eb807db",
+      "playableSha256": "1e51a7bce669c7a89ae95a089fb6feb15bca64574b11819f19efe775eedb414c",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseSource": "https://data.mendeley.com/datasets/w5prmmxyt9/1",
+      "author": "Ivan Conanta; Gloria Virginia",
+      "label": {
+        "exercise": "barbell deadlift",
+        "specificFault": "correct",
+        "view": "side",
+        "repetitions": 1
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and size preserved"
+    },
+    {
+      "id": "seated-row",
+      "filename": "wger-seated-row.MOV",
+      "playable": "wger-seated-row-h264.mp4",
+      "url": "https://wger.de/media/exercise-video/512/fff4c294-93f0-4926-b3a2-bf59ad4afaa5.MOV",
+      "sourcePage": "https://wger.de/en/exercise/512/view/",
+      "api": "https://wger.de/api/v2/video/1/",
+      "sha256": "623708fc1e5b1fb1be2b1647a0fa044d0208b2ebea2a5ed6bf1a77e9c1e21b90",
+      "playableSha256": "0b98dc1daeb00d0e209cd0ec5f39ae3afa1bbe03bf7ce4cd788a0ef18814e478",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "licenseSource": "https://wger.de/api/v2/license/2/",
+      "author": "Goulart",
+      "label": {
+        "exercise": "Rowing seated, narrow grip",
+        "quality": null,
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and displayed size preserved"
+    },
+    {
+      "id": "lateral-raise",
+      "filename": "wger-lateral-raise.MOV",
+      "playable": "wger-lateral-raise-h264.mp4",
+      "url": "https://wger.de/media/exercise-video/348/de69928a-8a35-4096-821c-1f46de5e0e03.MOV",
+      "sourcePage": "https://wger.de/en/exercise/348/view/",
+      "api": "https://wger.de/api/v2/video/6/",
+      "sha256": "41c47c5efd245d0dfbcd25e4c1e6a4f46f2093281871df3503278ea9e5444d7f",
+      "playableSha256": "dcc81f74d479b3997b30af6b8f48128f643d415c989eec05fdaaf6c8e3c4545c",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "licenseSource": "https://wger.de/api/v2/license/2/",
+      "author": "Goulart",
+      "label": {
+        "exercise": "Lateral Raises",
+        "quality": null,
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and displayed size preserved"
+    },
+    {
+      "id": "barbell-lunge",
+      "filename": "wger-barbell-lunge.MOV",
+      "playable": "wger-barbell-lunge-h264.mp4",
+      "url": "https://wger.de/media/exercise-video/46/d45df7af-586b-42d0-bc56-d1e028812f12.MOV",
+      "sourcePage": "https://wger.de/en/exercise/46/view/",
+      "api": "https://wger.de/api/v2/video/30/",
+      "sha256": "4246d6c1973de9cd0b56b0ff03ac75e759a5f27d68235be6748848de3d2e1d15",
+      "playableSha256": "1803f6f2005a82048cc828fe83b90870fcdd265e041733650684b8fe01003c3d",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "licenseSource": "https://wger.de/api/v2/license/2/",
+      "author": "Goulart",
+      "label": {
+        "exercise": "Barbell Lunges Standing",
+        "quality": null,
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and displayed size preserved"
+    },
+    {
+      "id": "hip-thrust",
+      "filename": "wger-hip-thrust.MOV",
+      "playable": "wger-hip-thrust-h264.mp4",
+      "url": "https://wger.de/media/exercise-video/294/45bacf4b-1bb6-4d47-8bd1-9f00eddd4019.MOV",
+      "sourcePage": "https://wger.de/en/exercise/294/view/",
+      "api": "https://wger.de/api/v2/video/72/",
+      "sha256": "2d9af3456d9bf47f6f52ee31c8da2af883b58acdd02b161e32d23d90ab87a26b",
+      "playableSha256": "b18a44a6e32aa6fcfdc138170fb25484924d19f841ffb00f619eda1219dde28f",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "licenseSource": "https://wger.de/api/v2/license/2/",
+      "author": "Goulart",
+      "label": {
+        "exercise": "Hip Thrust",
+        "quality": null,
+        "specificFault": null
+      },
+      "conversion": "FFmpeg7.1 libx264 CRF20 fast yuv420p; audio removed; timing and displayed size preserved"
+    }
+  ]
+}

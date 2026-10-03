@@ -18,6 +18,7 @@ import { completeNutritionAdvice } from './server/nutrition-advice.mjs';
 import { contextSections, readChatContext } from './server/chat-context.mjs';
 import { addDays } from './public/schedule.js';
 import {prepareChatHistory,historyTools} from './server/chat-history.mjs';
+import {completeMotionCoach, validateMotionCoachRequest, MOTION_COACH_REQUEST_BYTES} from './server/motion-coach.mjs';
 
 const scrypt = promisify(scryptCallback);
 const root = dirname(fileURLToPath(import.meta.url));
@@ -250,7 +251,7 @@ export function createServer(options = {}) {
           const seen = new Set();
           for (const change of changes) {
             if (!change || typeof change.id !== 'string' || !ID.test(change.id) || typeof change.kind !== 'string' || !/^[\w-]{1,40}$/.test(change.kind) || !Number.isSafeInteger(change.baseVersion) || change.baseVersion < 0 || (change.deleted !== undefined && typeof change.deleted !== 'boolean') || change.data === undefined || (!change.deleted && (!change.data || typeof change.data !== 'object' || Array.isArray(change.data))) || seen.has(change.id)) throw new HttpError(400, '同步记录格式无效或重复。');
-            if (Buffer.byteLength(JSON.stringify(change.data)) > (change.kind === 'conversation' ? 2 * 1024 * 1024 : 256 * 1024)) throw new HttpError(413, change.kind === 'conversation' ? '单个会话已超过 2 MB，请新建会话后继续。' : '单条记录已超过 256 KB，请缩短内容。');
+            if (Buffer.byteLength(JSON.stringify(change.data)) > (change.kind === 'conversation' ? 2 * 1024 * 1024 : change.kind === 'motion-assessment' ? 1024 * 1024 : 256 * 1024)) throw new HttpError(413, change.kind === 'conversation' ? '单个会话已超过 2 MB，请新建会话后继续。' : change.kind === 'motion-assessment' ? '单份动作评估报告已超过 1 MB，无法同步。' : '单条记录已超过 256 KB，请缩短内容。');
             if(['achievement','achievement-summary'].includes(change.kind)||change.id.startsWith('achievement:')||change.id==='achievement-summary')throw new HttpError(400,'成就由系统根据训练记录核算，不能直接修改。');
             if(!change.deleted&&validTrainingCompletion(change)&&change.data.date>beijingDate(currentTime()))throw new HttpError(400,'未来日期的训练不能提前完成。');
             seen.add(change.id);
@@ -287,7 +288,7 @@ export function createServer(options = {}) {
           const providers = body.providers.map(value => resolveProvider(user.id, value));
           if (new Set(providers.map(item => item.id)).size !== providers.length) throw new HttpError(400, '供应商 ID 不能重复。');
           const tasks = {}, taskModels = {};
-          for (const task of ['chat', 'meal', 'planning']) {
+          for (const task of ['chat', 'meal', 'planning', ...(Object.hasOwn(body.tasks || {}, 'motion') || Object.hasOwn(body.taskModels || {}, 'motion') || Object.hasOwn(previous.tasks, 'motion') ? ['motion'] : [])]) {
             const id = body.tasks?.[task] ?? (providers.some(item => item.id === previous.tasks[task]) ? previous.tasks[task] : '');
             if (typeof id !== 'string' || id && !providers.some(item => item.id === id)) throw new HttpError(400, '任务选择了不存在的供应商。');
             tasks[task] = id;
@@ -321,6 +322,23 @@ export function createServer(options = {}) {
           provider = selectProviderModel(provider, body.model);
           await callAi(user.id, provider, [{ role: 'user', content: 'Reply briefly with OK.' }]);
           send(res, 200, { ok: true, message: '连接成功，模型已返回有效回复。' }); return;
+        }
+        if (pathname === '/api/motion/coach' && method === 'POST') {
+          const body = validateMotionCoachRequest(await readBody(req, MOTION_COACH_REQUEST_BYTES));
+          const settings = getProviders(db, user.id);
+          const id = settings.tasks.motion, model = settings.taskModels.motion;
+          if (!id || !model) throw new HttpError(400, '尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
+          const provider = selectProviderModel(providerWithKey(user.id, id), model);
+          const controller = new AbortController();
+          const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
+          res.once('close', disconnect);
+          try {
+            if (req.aborted || res.destroyed) return;
+            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal}));
+            if (!controller.signal.aborted && !res.destroyed) send(res, 200, result);
+          } catch (error) { if (!controller.signal.aborted && !res.destroyed) throw error; }
+          finally { res.off('close', disconnect); }
+          return;
         }
         if (pathname === '/api/ai' && method === 'POST') {
           const body = await readBody(req);
