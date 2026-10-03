@@ -1,0 +1,29 @@
+{
+  "package": "mp4box",
+  "version": "2.4.1",
+  "license": "BSD-3-Clause",
+  "tarball": "https://registry.npmjs.org/mp4box/-/mp4box-2.4.1.tgz",
+  "integrity": "sha512-0HGX7nXoDIX6FKLVl4a3wtYjBlwqsN3xuQC3GXzNtKp98FXUOhDSq623azsz8DG5ptd9ZXcXodDkgbdMZOjWvw==",
+  "files": [
+    {
+      "path": "mp4box.all.mjs",
+      "packagePath": "dist/mp4box.all.mjs",
+      "sha256": "34fa8fd681e8b63998ca9e4c3b477830dd11310c8aaedc37ecb8f49c5452d259"
+    },
+    {
+      "path": "styp-9TIZZDLN.mjs",
+      "packagePath": "dist/styp-9TIZZDLN.mjs",
+      "sha256": "ae15acb79233251b72af7f7cc9f47e7f47cadb209206753b7000b502a2391049"
+    },
+    {
+      "path": "rolldown-runtime-w6R9maHv.mjs",
+      "packagePath": "dist/rolldown-runtime-w6R9maHv.mjs",
+      "sha256": "183552fe973134bce551888434b581d5a2cb695a82d8907e2cd9d2b61e12ce24"
+    },
+    {
+      "path": "LICENSE",
+      "packagePath": "LICENSE",
+      "sha256": "ebad0332150a08f37389158289d93ab2f70b0ee8717d1db9b3d002febc6c5047"
+    }
+  ]
+}

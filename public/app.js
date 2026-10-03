@@ -16,6 +16,7 @@ import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {formulaCards, foodPortions, rmPresets, rmConversionReference, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, calculateRMConversion} from './knowledge-tools.js?v=11';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
+import {mountMotionView} from './motion-view.js?v=1';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
 import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=12';
@@ -61,6 +62,9 @@ const state = {page:'chat',setting:'profile',date:today(),conversation:null,user
 try { state.sidebarCollapsed = localStorage.getItem('fitness:sidebar-collapsed') === 'true'; } catch { state.sidebarCollapsed = false; }
 const knowledgeDrafts = {};
 const modelViewer = new ModelViewer();
+let motionView = null;
+let motionContainer = null;
+function closeMotionView() { motionView?.destroy(); motionView=null; motionContainer=null; }
 let landingCleanup = null;
 const chatDrafts = new Map();
 const chatScroll = new Map();
@@ -151,11 +155,12 @@ function renderAuth() {
 }
 
 function render() {
+  closeMotionView();
   setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
-  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',settings:'个人中心'};
-  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
+  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',settings:'个人中心'};
+  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
   updateSidebarQuote(); renderSidebarHistory(); updateSync(); renderPage();
 }
 function updateSidebarQuote() {
@@ -177,8 +182,26 @@ function renderSidebarHistory() {
   if(el._renderedMarkup!==html){el.innerHTML=html;el._renderedMarkup=html;}
 }
 function renderPage() {
+ if(state.page!=='motion')closeMotionView();
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
-  ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,settings:renderSettings}[state.page])();
+  ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,motion:renderMotion,settings:renderSettings}[state.page])();
+}
+function renderMotion() {
+ const container=$('#page');
+ if(motionView&&motionContainer===container){motionView.refreshHistory?.();return;}
+ closeMotionView();motionContainer=container;
+ const store=state.store;
+ motionView=mountMotionView(container,{
+   saveAssessment:async data=>{
+     if(state.store!==store)throw new Error('账号已切换，请重新分析视频。');
+     if(new TextEncoder().encode(JSON.stringify(data)).byteLength>200*1024)throw new Error('报告过大，请选择较短的视频重新分析。');
+     const id='motion:'+uid();await store.put('motion-assessment',id,data);return {id,data};
+   },
+   listAssessments:()=>store.list('motion-assessment'),
+   deleteAssessment:async id=>{if(state.store!==store)throw new Error('账号已切换。');if(store.records.get(id)?.kind==='motion-assessment')await store.remove(id);},
+   openExercise:showExercise,
+   notify:toast,
+ });
 }
 function title(name,desc,actions='') { return `<div class="page-title"><div><h1>${name}</h1><p>${desc}</p></div>${actions}</div>`; }
 function macros(current,target,compact=false) {
@@ -838,7 +861,7 @@ function renderTraining() {
  const completed=weekTasks.filter(trainingTaskCompleted).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
  const achieved=weekTasks.length>0&&completed===weekTasks.length;
  const rangeLabel=days.map(date=>`${Number(date.slice(5,7))}月${Number(date.slice(8))}日`);
- $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',`<div class="training-page-actions">${button(icon('calendar')+' 繁忙日','busy-days','','busy-days-button')}${button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary')}</div>`)+`<section class="timetable-shell">
+ $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',`<div class="training-page-actions">${button(icon('body')+' 评估动作','motion-open')}${button(icon('calendar')+' 繁忙日','busy-days','','busy-days-button')}${button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary')}</div>`)+`<section class="timetable-shell">
   <div class="timetable-toolbar">
    <div class="week-navigation"><div class="calendar-period"><details class="calendar-popover calendar-date-picker"><summary aria-label="选择日期，当前${monthLabel}"><strong>${monthLabel}</strong><span aria-hidden="true">⌄</span></summary><div class="calendar-popover-panel"><label for="training-date">跳转到日期</label><input type="date" id="training-date" value="${state.date}"></div></details><small>${rangeLabel[0]} — ${rangeLabel[6]}${days[0].slice(0,4)!==days[6].slice(0,4)?' · 跨年':''}</small></div><div class="calendar-week-controls"><div class="calendar-week-arrows">${button('‹','calendar-week','data-offset="-7" aria-label="上一周"','small')}${button('›','calendar-week','data-offset="7" aria-label="下一周"','small')}</div>${button('本周','calendar-today','','small')}</div></div>
    <div class="calendar-toolbar-actions">${achieved?`<div class="weekly-achievement" role="status"><img class="weekly-seal" src="/assets/achievements/week.svg" alt=""><div class="calendar-progress"><span><strong>${days.includes(beijingDate())?'本周计划已完成':'该周计划已完成'}</strong> ${icon('check')}</span><small>完成 ${completed} 次训练</small><progress value="1" max="1" aria-label="本周训练已全部完成"></progress></div></div>`:`<div class="calendar-progress" role="status" aria-live="polite"><span>本周完成 <strong>${completed} / ${weekTasks.length}</strong></span><progress value="${completed}" max="${weekTasks.length||1}" aria-label="本周训练完成进度"></progress></div>`}<details class="calendar-popover calendar-options"><summary aria-label="日历更多操作"><span aria-hidden="true">···</span></summary><div class="calendar-popover-panel">${button(icon('history')+' 重置日历','calendar-reset','','calendar-reset')}</div></details></div>
@@ -1193,7 +1216,7 @@ function sourceLink(name,url) {return url?`<a class="knowledge-source" href="${e
 function knowledgeSources() {return `<details class="knowledge-sources"><summary>知识来源与说明</summary><div class="source-grid">${knowledgeCards.map(card=>`<article><strong>${esc(card.title)}</strong><p>${esc(card.summary)}</p>${sourceLink(card.sourceName,card.sourceUrl)}</article>`).join('')}</div></details>`;}
 function renderLibrary() {
  const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['weights','RM 换算','估算单次最大重量'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
- $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。')+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
+ $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。',button(icon('body')+' 视频动作评估','motion-open'))+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
  const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,weights:renderWeightTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
  (renderPanel[state.knowledgeTab]||renderNutritionTools)();
 }
@@ -1471,6 +1494,7 @@ document.addEventListener('click',async event=>{
    break;
  }
  case 'nav':await navigate(target.dataset.page);break;
+ case 'motion-open':modelViewer.close();closeModal();await navigate('motion');break;
  case 'toggle-sidebar': {
    state.sidebarCollapsed = !state.sidebarCollapsed;
    $('.layout').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
@@ -1701,9 +1725,10 @@ document.addEventListener('input',event=>{
  if(event.target.id==='exercise-search'){const start=event.target.selectionStart;state.filter=event.target.value;renderLibrary();$('#exercise-search').focus();$('#exercise-search').setSelectionRange(start,start);}
 });
 async function logout() {
+ closeMotionView();
  modelViewer.destroy();
  await chatUploads.clearAll({removeUploaded:true});await stopChat();
- if(state.store?.status!=='expired')try{await api('/auth/logout',{method:'POST',body:{}});}catch(error){if(![401,409].includes(error.status))throw error;}
+ if(state.store?.status!=='expired')try{await api('/auth/logout',{method:'POST',body:{}});}catch(error){if(![401,409].includes(error.status)){if(state.page==='motion')renderMotion();throw error;}}
  await state.store?.close?.();localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';chatDrafts.clear();chatScroll.clear();renderAuth();
 }
 $('#modal').addEventListener('cancel',()=>{if($('#provider-form'))clearProviderDraft();});

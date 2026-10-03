@@ -1,5 +1,6 @@
-const CACHE = 'fitness-shell-v51';
+const CACHE = 'fitness-shell-v54';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
+SHELL.push('/motion.css', '/motion-view.js', '/motion-video.js', '/motion-worker.js', '/motion-analysis.js', '/motion-decode.js');
 SHELL.push('/achievement-view.js', ...['first','week','sprout','rhythm','tree','mountain','footprints','steps','summit','cycle','sunrise','seasons'].flatMap(name=>[`/assets/achievements/${name}.svg`,`/assets/achievements/${name}-pending.svg`]));
 SHELL.push('/energy.css', '/landing.css', '/workspace-theme.css', '/landing.js', '/daily-quotes.js');
 SHELL.push('/vendor/gsap.min.js', '/vendor/ScrollTrigger.min.js', '/assets/fonts/cabinet-grotesk-400.woff2', '/assets/fonts/cabinet-grotesk-700.woff2');
@@ -12,6 +13,12 @@ self.addEventListener('fetch', event => {
     if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(url.pathname, copy))); }
     return response;
   }).catch(() => caches.open(CACHE).then(cache => cache.match(url.pathname)).then(response => response || Response.error())));
+  // Large, pinned pose assets are cached only when an analysis needs them.
+  // A model upgrade must bump CACHE alongside the model manifest.
+  if (url.pathname.startsWith('/vendor/mediapipe/') || url.pathname.startsWith('/vendor/mp4box/')) event.respondWith(caches.open(CACHE).then(async cache => {
+    const hit=await cache.match(event.request);if(hit)return hit;
+    const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;
+  }));
   // 动作封面按需缓存：先给缓存命中，再后台更新，避免 25 张图每次都走网络。
   if (url.pathname.startsWith('/assets/exercises/')) event.respondWith(caches.open(CACHE).then(cache => cache.match(url.pathname).then(hit => {
     const fresh = fetch(event.request).then(response => { if (response.ok) cache.put(url.pathname, response.clone()); return response; }).catch(() => hit || Response.error());
