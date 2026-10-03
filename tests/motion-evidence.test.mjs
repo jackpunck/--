@@ -63,6 +63,36 @@ test('target crop includes context and maps normalized original-image coordinate
   assert.deepEqual(evidenceCropRegion(null), { xMin: 0, yMin: 0, xMax: 1, yMax: 1 });
 });
 
+test('extracted evidence retains two complete scenes for equipment and keeps the tracked target', async () => {
+  const previousDocument = globalThis.document, draws = [];
+  class Video extends EventTarget {
+    duration = 10; videoWidth = 1000; videoHeight = 1000; readyState = 4; time = 0;
+    get currentTime() { return this.time; }
+    set currentTime(value) { this.time = value; queueMicrotask(() => this.dispatchEvent(new Event('seeked'))); }
+    load() { if (this.src) queueMicrotask(() => this.dispatchEvent(new Event('loadedmetadata'))); }
+    pause() {}
+    removeAttribute() { this.src = ''; }
+  }
+  const box = { xMin: .45, yMin: .32, xMax: .65, yMax: .7 };
+  const tracked = frames.map(frame => ({ ...frame, subjectTracking: { status: 'locked', trackId: 'target', confidence: .95, bbox: box } }));
+  globalThis.document = { createElement(tag) {
+    if (tag === 'video') return new Video();
+    const context = { drawImage(...args) { draws.push(args.slice(1, 5)); }, strokeRect() {}, fillRect() {}, fillText() {} };
+    return { width: 0, height: 0, getContext: () => context, toBlob: callback => callback(new Blob(['image'], { type: 'image/jpeg' })) };
+  } };
+  try {
+    const result = await buildMotionEvidence(new File(['video'], 'row.mp4', { type: 'video/mp4' }), { duration: 10, width: 1000, height: 1000, frames: tracked }, {});
+    const scenes = result.images.filter(image => image.crop.xMin === 0 && image.crop.yMin === 0 && image.crop.xMax === 1 && image.crop.yMax === 1);
+    assert.equal(scenes.length, 2, 'two different instants must retain apparatus outside the body box');
+    assert(scenes[0].time < scenes[1].time);
+    assert(result.images.length <= 6);
+    assert(result.images.every(image => image.subjectTracking.trackId === 'target'));
+    assert(result.images.some(image => image.crop.xMin > 0), 'other frames retain detail crops');
+    assert.equal(draws.filter(([x, y, width, height]) => x === 0 && y === 0 && width === 1000 && height === 1000).length, 2);
+    assert.equal(result.summary.evidenceFrames.filter(frame => frame.framing === 'equipment-context').length, 2);
+  } finally { globalThis.document = previousDocument; }
+});
+
 test('summary is bounded data and excludes video pixels and raw pose arrays', () => {
   const report = { status: 'complete', exerciseId: 'squat', quality: { validFrames: 100, frames: [1, 2] },
     reps: Array.from({ length: 100 }, (_, index) => ({ index, score: index, metrics: { knee: 80 }, landmarks: new Array(1000).fill(1) })),

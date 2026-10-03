@@ -5,7 +5,7 @@
  * Thresholds need calibration against independently labelled real recordings.
  */
 import {motionFamilies, getMotionExercise, getMotionFamily} from './motion-catalog.js';
-export const MOTION_RULE_VERSION = 'motion-rules-2.0.0';
+export const MOTION_RULE_VERSION = 'motion-rules-2.2.0';
 
 const SIDES = [[11, 13, 15, 23, 25, 27], [12, 14, 16, 24, 26, 28]];
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
@@ -187,6 +187,24 @@ function identifyPatterns(features) {
   const wristUp = ratio(features, f => f.wrist && f.wrist.y < f.shoulder.y - torso * 0.15);
   const wristLow = ratio(features, f => f.wrist && f.wrist.y > f.shoulder.y + torso * 0.35);
   const elbowShift = range(features.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null));
+  // Extended or unseen legs need not establish the bent-knee seated posture.
+  // Require the elbow to move back against the extended wrist's projected
+  // direction. Wrist-to-shoulder shortening alone also occurs in a curl.
+  const extendedAngle = qField(features, 'elbowAngle', 0.75), flexedAngle = qField(features, 'elbowAngle', 0.25);
+  const extendedArm = features.filter(f => Number.isFinite(f.elbowAngle) && f.elbowAngle >= extendedAngle);
+  const flexedArm = features.filter(f => Number.isFinite(f.elbowAngle) && f.elbowAngle <= flexedAngle);
+  const wristRetraction = quantile(extendedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5) - quantile(flexedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5);
+  const wristForward = quantile(extendedArm.map(f => f.wrist ? (f.wrist.x - f.shoulder.x) / torso : null), 0.5);
+  const elbowRetraction = (quantile(extendedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5) - quantile(flexedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5)) * Math.sign(wristForward);
+  const directionalPull = Math.abs(wristForward) > 0.25 && elbowRetraction > 0.18 && wristRetraction > 0.18 && shoulderMove < 0.25;
+  const directionalSupport = finiteRatio(features, 'kneeAngle') < 0.5 || ratio(features, f => f.knee && Math.abs(f.knee.y - f.hip.y) < torso * 0.6) > 0.6;
+  // Standing upper-arm retraction can also be a drag curl. Keep both families
+  // when no seated support is observable and the upper arm remains low/stable.
+  const standingPullOverlap = directionalPull && !directionalSupport && vertical > 0.7 && ratio(features, f => f.upright) > 0.6 && qField(features, 'armElevation') < 65 && a < 35;
+  // A tilted, supported torso with extended hips can be a lying press or a
+  // supported row. Camera projection can put a pressing wrist below the
+  // shoulder; unseen legs cannot establish the bent-over pulling stance.
+  const supportedPressOverlap = bent && shoulderMove < 0.25 && (finiteRatio(features, 'hipAngle') < 0.5 || qField(features, 'hipAngle') > 140);
   const patterns = [];
   const add = (family, evidence, confidence = 0.82) => patterns.push({family, confidence, evidence});
   const legacy = classifyWindow(features);
@@ -199,7 +217,11 @@ function identifyPatterns(features) {
   }
   if (legacy.id === 'pushup') add('pushup', '水平身体、手脚支撑、肩部升降与屈肘共同变化', legacy.confidence);
   if (!patterns.length && e >= 18 && finiteRatio(features, 'elbowAngle') >= 0.65) {
-    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) add('row', '屈肘拉回，肘部相对躯干前后移动');
+    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent || directionalPull && directionalSupport || standingPullOverlap) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) {
+      add('row', '屈肘拉回，肘部相对躯干前后移动');
+      if (standingPullOverlap) add('elbow-isolation', '站姿屈肘与小幅上臂后撤也符合拖弯举，需要器械和受力方向证据');
+      if (supportedPressOverlap) add('horizontal-press', '倾斜躯干与屈伸肘的投影也符合支撑卧推动作，需确认器械、支撑面与受力方向');
+    }
     else if (qField(features, 'armElevation', 0.25) > 120 && a < 25) add('overhead-extension', '上臂保持过顶，肘部反复屈伸');
     else if (wristUp > 0.35 && vertical > 0.6) {
       add('overhead-press', '手臂在头上屈伸，单靠骨架无法确定推或拉');
@@ -207,17 +229,34 @@ function identifyPatterns(features) {
     } else if ((bent && wristUp > 0.55 && shoulderMove < 0.25) || (vertical > 0.7 && seated && wristLow < 0.4 && elbowShift > 0.15)) add('horizontal-press', '手臂在胸部附近伸展，需确认凳面或器械');
     else if (vertical > 0.7 && qField(features, 'armElevation') < 65 && a < 35 && hipMove < 0.25) add('elbow-isolation', '上臂相对稳定、肘关节反复屈伸；握法和受力方向未知');
   }
-  if (patterns.some(p => p.family === 'elbow-isolation') && qField(features, 'viewRatio') > 0.38 && elbowShift > 0.18) add('row', '斜前方视角下屈肘与拉回投影相近，需要器械与支撑证据');
+  if (patterns.some(p => p.family === 'elbow-isolation') && !patterns.some(p => p.family === 'row') && qField(features, 'viewRatio') > 0.38 && elbowShift > 0.18) add('row', '斜前方视角下屈肘与拉回投影相近，需要器械与支撑证据');
   if (!patterns.length && a >= 25 && (e < 25 || a > e * 0.8) && finiteRatio(features, 'armElevation') >= 0.65) add(bent ? 'reverse-fly' : 'lateral-raise', '肘部变化较小，手臂相对躯干抬起');
   if (!patterns.length && k >= 25 && hipMove < 0.12 && shoulderMove < 0.12) add('knee-isolation', '髋部稳定、膝部反复屈伸，需确认器械与受力方向');
   if (!patterns.length && qField(features, 'kneeAngle') < 135 && bent) {
     if (hipMove > 0.12 && hipMove > shoulderMove * 1.6 && h > 15) add('bridge', '屈膝支撑、肩部相对固定而髋部升降');
     else if (shoulderMove > 0.1 && shoulderMove > hipMove * 1.5 && h > 15) add('crunch', '髋部相对稳定，上躯干反复卷起');
   }
-  if (!patterns.length && vertical > 0.75 && k < 15 && fieldRange(features, 'heelLift') >= 0.045 && hipMove > 0.02) add('calf', '膝部变化较小，脚跟相对前脚掌升降');
+  const activeUpperBody = e >= 18 && finiteRatio(features, 'elbowAngle') >= 0.65 || a >= 25 && finiteRatio(features, 'armElevation') >= 0.65;
+  // Foot and hip projection noise must not turn an unresolved arm movement
+  // into an exclusive lower-body label.
+  if (!patterns.length && !activeUpperBody && vertical > 0.75 && k < 15 && fieldRange(features, 'heelLift') >= 0.045 && hipMove > 0.02) add('calf', '膝部变化较小，脚跟相对前脚掌升降');
   const stableSupport = ratio(features, f => f.horizontal) > 0.8 && e < 12 && k < 15 && fieldRange(features, 'bodyAngle') < 15;
   if (!patterns.length && stableSupport && features.at(-1).time - features[0].time >= 3 && qField(features, 'elbowAngle') < 125) add('plank', '持续的前臂支撑姿态，未观察到重复屈伸');
   return patterns;
+}
+
+function familyMotionTemplate(family) {
+  if (typeof family !== 'string' || !Object.hasOwn(motionFamilies, family)) return null;
+  const template = getMotionFamily(family)[0];
+  // Reuse the family's checks without claiming its first catalogue exercise or
+  // selecting that exercise's specific repetition direction.
+  return template ? {...template, id: null, name: motionFamilies[family]} : null;
+}
+
+function resolveMotionHint(hint) {
+  const exact = getMotionExercise(typeof hint === 'string' ? hint : hint?.exerciseId);
+  if (exact) return exact;
+  return hint && typeof hint === 'object' && !Array.isArray(hint) ? familyMotionTemplate(hint.family) : null;
 }
 
 function recognizeMotion(features, exerciseHint) {
@@ -235,11 +274,11 @@ function recognizeMotion(features, exerciseHint) {
     const strongest = Math.max(0, ...[...votes.values()].map(p => p.windows));
     if (strongest >= 2 || !patterns.length) patterns = [...votes.values()].filter(p => p.windows >= Math.max(1, strongest * 0.75));
   }
-  const hinted = getMotionExercise(typeof exerciseHint === 'string' ? exerciseHint : exerciseHint?.exerciseId);
+  const hinted = resolveMotionHint(exerciseHint);
   const families = [...new Set(patterns.map(p => p.family))];
   const hintCompatible = hinted && (families.includes(hinted.family) || (!families.length && postureMatches(features, hinted.family)));
   if (hinted && !hintCompatible) return {exerciseId: null, family: null, confidence: 0, candidates: candidatesFor(patterns, features), requiresVisualConfirmation: true, conflict: true};
-  if (hintCompatible) return {exerciseId: hinted.id, family: hinted.family, confidence: Math.max(0.8, patterns.find(p => p.family === hinted.family)?.confidence || 0), candidates: candidatesFor(patterns, features), requiresVisualConfirmation: false, hintUsed: true};
+  if (hintCompatible) return {exerciseId: hinted.id, family: hinted.family, confidence: Math.max(0.8, patterns.find(p => p.family === hinted.family)?.confidence || 0), candidates: candidatesFor(patterns, features), requiresVisualConfirmation: hinted.id === null, hintUsed: true};
   const candidates = candidatesFor(patterns, features);
   if (families.length !== 1) return {exerciseId: null, family: families.length > 1 ? 'ambiguous' : null, confidence: 0, candidates, requiresVisualConfirmation: families.length > 1};
   const family = families[0], entries = getMotionFamily(family);
@@ -285,9 +324,17 @@ function detectPatternReps(segments, family, exerciseId) {
   const [key, direction, minimum] = spec;
   const reps = []; let partial = 0;
   for (const segment of segments) {
-    const signal = segment.map((f, i) => Number.isFinite(f[key]) ? quantile(segment.slice(Math.max(0, i - 1), i + 2).filter(g => Math.abs(g.time - f.time) <= 0.12).map(g => g[key]), 0.5) * direction : null);
-    const lo = quantile(signal, 0.08), hi = quantile(signal, 0.92), span = hi - lo;
+    let signal = segment.map((f, i) => Number.isFinite(f[key]) ? quantile(segment.slice(Math.max(0, i - 1), i + 2).filter(g => Math.abs(g.time - f.time) <= 0.12).map(g => g[key]), 0.5) * direction : null);
+    let lo = quantile(signal, 0.08), hi = quantile(signal, 0.92);
+    const span = hi - lo;
     if (span < minimum) continue;
+    // A press may begin at either endpoint. Pick one baseline per continuous
+    // segment; running both directions would count overlapping half cycles.
+    const firstEndpoint = signal.find(value => Number.isFinite(value) && (value <= lo + span * 0.12 || value >= hi - span * 0.12));
+    if (family === 'horizontal-press' && firstEndpoint >= hi - span * 0.12) {
+      signal = signal.map(value => Number.isFinite(value) ? -value : null);
+      [lo, hi] = [-hi, -lo];
+    }
     const base = lo + span * 0.12, departure = lo + span * 0.3;
     let anchor = null, active = null;
     for (let i = 0; i < segment.length; i++) {
@@ -452,7 +499,7 @@ function aggregateChecks(reps, definitions) {
 
 /**
  * @param {Array<{time:number,landmarks:Array,worldLandmarks?:Array}>} frames Seconds, monotonic samples (missing poses may have an empty array).
- * @param {{width:number,height:number,duration?:number,sourceFps?:number|null,exerciseHint?:string}} options Original display dimensions after rotation; sourceFps is original video FPS when known, not sampling FPS.
+ * @param {{width:number,height:number,duration?:number,sourceFps?:number|null,exerciseHint?:(string|{exerciseId?:string,family?:string})}} options Original display dimensions after rotation; sourceFps is original video FPS when known, not sampling FPS.
  * @returns {object} score:null is intentional whenever the clip cannot be evaluated.
  */
 export function analyzeMotion(frames, {width, height, duration, sourceFps, exerciseHint} = {}) {
@@ -478,12 +525,26 @@ export function analyzeMotion(frames, {width, height, duration, sourceFps, exerc
   const intervals = ordered.slice(1).map((f, i) => f.time - ordered[i].time);
   const medianInterval = quantile(intervals, 0.5);
   const maxGap = Math.min(0.35, Math.max(0.18, medianInterval * 2.1));
-  const side = mean(ordered.map(f => mean(SIDES[0].map(i => confidence(f.landmarks?.[i]))))) >= mean(ordered.map(f => mean(SIDES[1].map(i => confidence(f.landmarks?.[i]))))) ? 0 : 1;
-  const timeline = ordered.map(f => {
+  const sideFeatures = [0, 1].map(candidate => ordered.map(f => {
     const tracking = f.subjectTracking;
     const locked = !tracking || (tracking.status === 'locked' && tracking.confidence >= 0.65 && typeof tracking.trackId === 'string' && tracking.trackId.length > 0);
-    return {time: f.time, feature: locked ? frameFeatures(f, side, width, height) : null};
-  });
+    return locked ? frameFeatures(f, candidate, width, height) : null;
+  }));
+  let side = mean(ordered.map(f => mean(SIDES[0].map(i => confidence(f.landmarks?.[i]))))) >= mean(ordered.map(f => mean(SIDES[1].map(i => confidence(f.landmarks?.[i]))))) ? 0 : 1;
+  const sideCoverage = sideFeatures.map(features => features.filter(Boolean).length / ordered.length);
+  // Confidence averaged over visible limbs must not favour a side whose torso
+  // cannot be observed. Both sides still obey the original coverage threshold.
+  if (sideCoverage[side] < 0.7 && sideCoverage[1 - side] >= 0.7) side = 1 - side;
+  if (resolveMotionHint(exerciseHint)?.family === 'row') {
+    // A single-arm row's support arm can be clearer yet stationary. Select one
+    // sufficiently observed moving arm for the whole clip, never per frame.
+    const activeSides = [0, 1].filter(candidate => {
+      const observed = sideFeatures[candidate].filter(f => f && Number.isFinite(f.elbowAngle));
+      return observed.length / ordered.length >= 0.7 && fieldRange(observed, 'elbowAngle') >= 18;
+    });
+    if (activeSides.length === 1) side = activeSides[0];
+  }
+  const timeline = ordered.map((f, i) => ({time: f.time, feature: sideFeatures[side][i]}));
   const allFeatures = timeline.map(f => f.feature).filter(Boolean);
   const hasTracking = ordered.some(f => f.subjectTracking);
   const targetCoverage = hasTracking ? ratio(ordered, f => f.subjectTracking?.status === 'locked' && f.subjectTracking.confidence >= 0.65 && typeof f.subjectTracking.trackId === 'string' && f.subjectTracking.trackId.length > 0) : null;
@@ -508,7 +569,7 @@ export function analyzeMotion(frames, {width, height, duration, sourceFps, exerc
     return reject(staticPose ? 'NO_MOVEMENT' : 'UNSUPPORTED_MOVEMENT', staticPose ? '未观察到足够的动作变化或可确认的支撑姿态。' : '尚不能可靠确定动作模式，需要关键帧补充识别。', staticPose ? 'insufficient' : 'unsupported');
   }
   if (identified.family === 'ambiguous') return reject('AMBIGUOUS_MOVEMENT', '存在多个合理动作候选，需要看到器械与支撑关系后再选择专属规则。', 'unsupported');
-  const exercise = getMotionExercise(identified.exerciseId) || getMotionFamily(identified.family)[0];
+  const exercise = getMotionExercise(identified.exerciseId) || familyMotionTemplate(identified.family);
   if (!exercise) return reject('UNSUPPORTED_MOVEMENT', '当前动作没有对应的评估规则。', 'unsupported');
   result.quality.view = ratio(features, f => Number.isFinite(f.viewRatio) && f.viewRatio <= 0.38) >= 0.7 ? 'side' : 'front-or-oblique';
   // Missing required samples split a repetition even when timestamps are close.

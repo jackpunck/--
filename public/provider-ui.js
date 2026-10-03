@@ -10,7 +10,7 @@ export function taskSelection(task, providers, tasks, taskModels) {
   return enabledModels(provider).some(model => model.id === modelId) ? JSON.stringify({providerId:provider.id,modelId}) : '';
 }
 
-export function reconcileTasks(providers, tasks, taskModels, editedId) {
+export function reconcileTasks(providers, tasks, taskModels, editedId, {defaultTasks = ['chat','meal','planning','motion']} = {}) {
   const nextTasks = {...tasks}, nextModels = {...taskModels};
   const edited = providers.find(provider => provider.id === editedId);
   for (const task of ['chat','meal','planning','motion']) {
@@ -24,10 +24,10 @@ export function reconcileTasks(providers, tasks, taskModels, editedId) {
     } else {
       nextTasks[task] = ''; nextModels[task] = '';
     }
-    if (!nextTasks[task] && edited) {
+    if (!nextTasks[task] && edited && defaultTasks.includes(task)) {
       const models = enabledModels(edited);
       const preferred=models.find(model => model.id === edited.model) || models[0];
-      const candidate = task === 'meal' ? models.find(model => model.vision === true) : task === 'motion' ? models.find(model => model.vision === true) || preferred : preferred;
+      const candidate = task === 'meal' ? models.find(model => model.vision === true) : preferred;
       if (candidate) {nextTasks[task] = edited.id;nextModels[task] = candidate.id;}
     }
   }
