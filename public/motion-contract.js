@@ -1,6 +1,6 @@
-import {motionExercises, motionCheckDefinitions, getMotionExercise, getMotionFamily} from './motion-catalog.js';
+import {motionExercises, motionFamilies, motionCheckDefinitions, getMotionExercise, getMotionFamily} from './motion-catalog.js';
 
-export const MOTION_COACH_VERSION = 'motion-coach-v2';
+export const MOTION_COACH_VERSION = 'motion-coach-v3';
 export const MOTION_COACH_LIMITS = Object.freeze({maxFrames:6, maxFrameBytes:512*1024, maxImageBytes:2*1024*1024, maxAnalysisBytes:128*1024});
 export const MOTION_HARD_QUALITY_FAILURES = Object.freeze(['INVALID_DIMENSIONS','NO_POSE','TOO_FEW_FRAMES','MULTIPLE_PEOPLE','LOW_POSE_COVERAGE','LOW_TARGET_COVERAGE','LOW_SOURCE_FRAME_RATE','LOW_SOURCE_RATE','LOW_SAMPLE_RATE','SIDE_VIEW_REQUIRED','EXERCISE_HINT_CONFLICT','INSUFFICIENT_CHECK_COVERAGE','TARGET_ID_CHANGED']);
 const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -40,7 +40,7 @@ function compactCheck(value) {
 /** Whitelist an analysis summary; pixel data and landmark sequences never enter it. */
 export function compactMotionAnalysis(value={}) {
   const result={};
-  for(const key of ['version','status','scoreStatus','summary','family','exerciseFamily','exerciseFamilyName'])if(typeof value[key]==='string')result[key]=text(value[key],key==='summary'?2000:80);
+  for(const key of ['version','status','scoreStatus','summary','family','exerciseFamily','exerciseFamilyName','exerciseName','recognitionSource'])if(typeof value[key]==='string')result[key]=text(value[key],key==='summary'?2000:80);
   result.exerciseId=exercise(value.exerciseId)?.id||null;
   result.requiresVisualConfirmation=value.requiresVisualConfirmation===true;
   result.candidates=(Array.isArray(value.candidates)?value.candidates:[]).slice(0,motionExercises.length).map(item=>typeof item==='string'?{exerciseId:exercise(item)?.id}:typeof item==='object'&&item?{...evidenceObject(item),exerciseId:exercise(item.exerciseId||item.id)?.id}:null).filter(item=>item?.exerciseId);
@@ -73,18 +73,55 @@ function narrative(value, fallback='') {
 }
 const alignTime = (value, available) => finite(value) ? available.find(time=>Math.abs(time-value)<=0.05) : undefined;
 const matchTimes = (values, available) => [...new Set((Array.isArray(values)?values:[]).map(time=>alignTime(time,available)).filter(finite))].slice(0,6);
-const recognitionValues = Object.freeze(Object.fromEntries(['equipment','support','laterality'].map(key=>[key,new Set(motionExercises.flatMap(item=>item.recognitionRules?.[key]||[]))])));
-const recognitionMovements = new Set(motionExercises.filter(item=>item.recognitionRules).map(item=>item.family));
+const supportedFamily = value => typeof value==='string'&&Object.hasOwn(motionFamilies,value)?value:null;
+const actionName = value => text(value,80).replace(/\s+/g,' ');
+const assistanceValues = new Set(['none','machine','band','partner','unknown']);
+const generalVisualCodes = new Set(['MOTION_CONTROL','SPINE_NEUTRAL','EQUIPMENT_SETUP']);
 function compactObservations(value, available) {
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
-  if(!['equipment','support','laterality'].every(key=>recognitionValues[key].has(value[key]))||!recognitionMovements.has(value.movement))return null;
   const evidence=narrative(value.evidence),evidenceTimes=matchTimes(value.evidenceTimes,available);
   if(evidence.replace(/\s/g,'').length<4||!evidenceTimes.length)return null;
-  return {equipment:value.equipment,support:value.support,movement:value.movement,laterality:value.laterality,evidence,evidenceTimes};
+  return {equipment:text(value.equipment,60)||null,support:text(value.support,60)||null,movement:supportedFamily(value.movement),laterality:['unilateral','bilateral'].includes(value.laterality)?value.laterality:null,
+    ...(assistanceValues.has(value.assistance)?{assistance:value.assistance}:{}),evidence,evidenceTimes};
 }
 function matchesRecognition(exercise, observations, actionTimes) {
   const rules=exercise?.recognitionRules;
-  return !rules||!!observations&&['equipment','support','laterality'].every(key=>rules[key].includes(observations[key]))&&rules.movement===observations.movement&&observations.evidenceTimes.filter(time=>actionTimes.includes(time)).length>=2;
+  return !rules||!!observations&&['equipment','support','laterality',...(rules.assistance?['assistance']:[])].every(key=>rules[key].includes(observations[key]))&&rules.movement===observations.movement&&observations.evidenceTimes.filter(time=>actionTimes.includes(time)).length>=2;
+}
+function resolveAction(value) {
+  const hasName=typeof value?.name==='string', name=hasName?actionName(value.name):'';
+  const catalog=hasName?motionExercises.find(item=>item.name===name)||null:exercise(value?.exerciseId);
+  return {catalog,name:hasName?name:catalog?.name||'',family:catalog?.family||supportedFamily(value?.family)};
+}
+function matchesPullup(name,family,observations,actionTimes) {
+  if(!/(?:引体|pull[ -]?up|chin[ -]?up)/i.test(name))return true;
+  if(family!=='vertical-pull')return false;
+  const generic=name==='引体向上（辅助情况待确认）';
+  const assisted=/(?:辅助|助力|弹力带|assisted|band|machine)/i.test(name);
+  return !!observations&&['pullup-bar','assisted-pullup-machine'].includes(observations.equipment)&&observations.support==='hanging'&&observations.movement==='vertical-pull'&&observations.laterality==='bilateral'
+    &&(generic?observations.assistance==='unknown':assisted?['machine','band','partner'].includes(observations.assistance):observations.assistance==='none')&&observations.evidenceTimes.filter(time=>actionTimes.includes(time)).length>=2;
+}
+function matchesOpenPressOrRow(name,family,observations,actionTimes) {
+  const movement=/(?:卧推|\bbench[ -]?press\b)/i.test(name)?'horizontal-press':/(?:划船|\brows?\b|\browing\b)/i.test(name)?'row':['horizontal-press','row'].includes(family)?family:null;
+  if(!movement)return true;
+  return (!family||family===movement)&&!!observations&&!!observations.equipment&&observations.equipment!=='unknown'&&!!observations.support&&observations.support!=='unknown'&&observations.movement===movement
+    &&['unilateral','bilateral'].includes(observations.laterality)&&observations.evidenceTimes.filter(time=>actionTimes.includes(time)).length>=2;
+}
+function actionConfirmation(value,available) {
+  const resolved=resolveAction(value),evidenceTimes=matchTimes(value?.evidenceTimes,available),observations=compactObservations(value?.observations,available);
+  const evidence=narrative(value?.evidence||(resolved.catalog?observations?.evidence:''));
+  if(value?.status!=='identified'||value?.confidence!=='high'||evidenceTimes.length<2||!resolved.name)return null;
+  const rawFamily=supportedFamily(value.family);
+  if(resolved.catalog&&rawFamily&&rawFamily!==resolved.catalog.family||resolved.family&&observations?.movement&&resolved.family!==observations.movement)return null;
+  if(!resolved.catalog&&evidence.replace(/\s/g,'').length<4)return null;
+  if(!matchesRecognition(resolved.catalog,observations,evidenceTimes)||!matchesPullup(resolved.name,resolved.family,observations,evidenceTimes)||!matchesOpenPressOrRow(resolved.name,resolved.family,observations,evidenceTimes))return null;
+  return {exerciseId:resolved.catalog?.id||null,name:resolved.name,family:resolved.family,status:'identified',confidence:'high',evidenceTimes,evidence,...(observations?{observations}:{})};
+}
+
+/** Share the same name, assistance and equipment gates between merging and UI. */
+export function confirmedMotionAction(coach) {
+  if(coach?.mode!=='visual')return null;
+  return actionConfirmation(coach.action,boundedTimes(coach.action?.evidenceTimes));
 }
 
 /** Sanitize untrusted model output against the evidence actually sent upstream. */
@@ -92,19 +129,18 @@ export function sanitizeMotionCoachResponse(value,{mode='evidence-only',analysis
   if(!value||typeof value!=='object'||Array.isArray(value)||!Array.isArray(value.checks))throw new Error('动作点评结构无效，请重试。');
   const visual=mode==='visual'&&keyframes.length>0, frameTimes=boundedTimes(keyframes.map(frame=>frame.time));
   const local=compactMotionAnalysis(analysis);
-  const actionTimes=matchTimes(value.action?.evidenceTimes,frameTimes);
-  const proposed=exercise(value.action?.exerciseId),observations=visual?compactObservations(value.action?.observations,frameTimes):null;
-  const selected=visual&&value.action?.status==='identified'&&value.action?.confidence==='high'&&actionTimes.length>=2&&matchesRecognition(proposed,observations,actionTimes)?proposed:null;
-  const action={exerciseId:selected?.id||null,status:selected?'identified':'unknown',confidence:selected?'high':'low',evidenceTimes:selected?actionTimes:[],...(observations?{observations}:{})};
+  const identified=visual?actionConfirmation(value.action,frameTimes):null;
+  const action=identified||{exerciseId:null,name:'',family:null,status:'unknown',confidence:'low',evidenceTimes:[],evidence:''};
   const candidates=[];
   if(visual)for(const item of [value.action,...(Array.isArray(value.candidates)?value.candidates:[])]){
-    const itemExercise=exercise(item?.exerciseId),times=matchTimes(item?.evidenceTimes,frameTimes);
-    if(!itemExercise||!times.length||candidates.some(candidate=>candidate.exerciseId===itemExercise.id))continue;
-    const observed=compactObservations(item.observations,frameTimes),supported=matchesRecognition(itemExercise,observed,times);
-    candidates.push({exerciseId:itemExercise.id,confidence:supported&&confidences.has(item.confidence)?item.confidence:'low',evidenceTimes:times,...(observed?{observations:observed}:{})});
+    const resolved=resolveAction(item),times=matchTimes(item?.evidenceTimes,frameTimes);
+    if(!resolved.name||!times.length||candidates.some(candidate=>candidate.name===resolved.name))continue;
+    const observed=compactObservations(item.observations,frameTimes),supported=matchesRecognition(resolved.catalog,observed,times)&&matchesPullup(resolved.name,resolved.family,observed,times);
+    candidates.push({exerciseId:resolved.catalog?.id||null,name:resolved.name,family:resolved.family,confidence:supported&&confidences.has(item.confidence)?item.confidence:'low',evidenceTimes:times,...(observed?{observations:observed}:{})});
     if(candidates.length===3)break;
   }
-  const target=selected||exercise(local.exerciseId)||familyTemplate(local.exerciseFamily),allowed=new Set(target?.checks.map(check=>check.code)||[]),checks=[];
+  const target=identified?(exercise(identified.exerciseId)||familyTemplate(identified.family)):exercise(local.exerciseId)||familyTemplate(local.exerciseFamily);
+  const allowed=identified&&!target?generalVisualCodes:new Set(target?.checks.map(check=>check.code)||[]),checks=[];
   for(const item of value.checks.slice(0,66)){
     const rule=definition(item?.code);if(!rule||!allowed.has(rule.code))continue;
     const base=local.checks.find(check=>check.code===rule.code);
@@ -120,10 +156,12 @@ export function sanitizeMotionCoachResponse(value,{mode='evidence-only',analysis
     const status=valid&&['pass','fail','uncertain'].includes(item.status)?item.status:'uncertain';
     checks.push({code:rule.code,status,severity:status==='fail'?(item.severity==='severe'?'severe':'warning'):'info',
       time:times[0]??null,evidence:valid?(rule.code==='SPINE_NEUTRAL'?'仅关键帧可见外形：':'')+evidence:'现有关键帧不足以确认这一项。',correction:narrative(item.correction),source:'visual',scope:'sampled-frames',evidenceTimes:times});
+    if(identified&&!target&&checks.length===3)break;
   }
   const limitations=(Array.isArray(value.limitations)?value.limitations:[]).map(item=>narrative(item)).filter(Boolean).slice(0,5);
   limitations.unshift(visual?'视觉点评只覆盖所提供的关键帧，无法确认关键帧之间的完整动作过程。':'当前模型仅解释本地分析证据，没有进行视觉动作确认。');
-  if(!selected)limitations.push('AI 未可靠确认动作名称；候选动作不能作为已确认结果。');
+  if(!identified)limitations.push('AI 未可靠确认动作名称；候选动作不能作为已确认结果。');
+  else if(!identified.exerciseId)limitations.push(identified.family?'该动作不在教学目录中；评估只使用对应动作类别的检查规则，不能作为专属动作标准。':'已识别动作名称，但暂无对应的本地检查规则；仅提供关键画面反馈，不计算分数或次数。');
   if(checks.some(check=>check.code==='SPINE_NEUTRAL'))limitations.push('可见身体外形不能证明真实腰椎三维中立位。');
   return {version:MOTION_COACH_VERSION,mode:visual?'visual':'evidence-only',action,candidates,
     overallEvaluation:narrative(value.overallEvaluation,'请结合下方有时间依据的检查与纠正建议查看本次动作。'),checks,limitations:[...new Set(limitations)]};
@@ -172,20 +210,20 @@ export function mergeCoachAssessment(analysis,coach,{originalAnalysis}={}) {
   const originalHard=(Array.isArray(original?.quality?.reasons)?original.quality.reasons:[]).filter(code=>MOTION_HARD_QUALITY_FAILURES.includes(code));
   if(originalHard.length)base={...base,quality:{...base.quality,reasons:[...new Set([...(base.quality?.reasons||[]),...originalHard])]}};
   const localExercise=exercise(base.exerciseId),localFamily=localExercise||familyTemplate(base.exerciseFamily);
-  const proposed=coach?.mode==='visual'&&coach.action?.status==='identified'?exercise(coach.action.exerciseId):null;
-  const actionTimes=boundedTimes(coach?.action?.evidenceTimes);
-  const observed=proposed?.recognitionRules?compactObservations(coach.action.observations,actionTimes):null;
-  const identified=proposed&&(!proposed.recognitionRules||coach.action.confidence==='high'&&actionTimes.length>=2&&matchesRecognition(proposed,observed,actionTimes))?proposed:null;
-  const conflict=localFamily&&identified&&localFamily.family!==identified.family;
-  if((Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).some(code=>MOTION_HARD_QUALITY_FAILURES.includes(code)))return {...base,...(identified&&!conflict?{exerciseId:identified.id,exerciseFamily:identified.family,exerciseFamilyName:identified.familyName,requiresVisualConfirmation:false}:{}),status:base.status==='unsupported'?'unsupported':'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(unscoredRep),coach};
-  let target=conflict?null:identified||localExercise||localFamily;
-  const familyOnly=!!target&&!identified&&(!localExercise||base.requiresVisualConfirmation===true);
-  if(familyOnly)target={...target,id:null,name:target.familyName};
-  if(!target)return {...base,score:null,observedScore:null,scoreCoverage:0,scoreStatus:'unavailable',status:'insufficient',qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(unscoredRep),coach,
+  const identified=confirmedMotionAction(coach),identifiedExercise=exercise(identified?.exerciseId),identifiedFamily=identifiedExercise||familyTemplate(identified?.family);
+  const originalFamily=exercise(original?.exerciseId)?.family||supportedFamily(original?.exerciseFamily);
+  const hintConflict=(Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).includes('EXERCISE_HINT_CONFLICT');
+  const conflict=!!identified&&(hintConflict||!!identified.family&&[localFamily?.family,originalFamily].some(family=>family&&family!==identified.family));
+  const identity=identified?{exerciseId:conflict?null:identified.exerciseId,exerciseName:identified.name,exerciseFamily:identified.family,familyName:motionFamilies[identified.family]||null,exerciseFamilyName:motionFamilies[identified.family]||null,requiresVisualConfirmation:conflict,recognitionSource:'visual',recognitionConflict:conflict}:{};
+  if(identified&&!identifiedFamily)return {...base,...identity,status:'unsupported',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,attemptCount:0,incompleteAttemptCount:0,reps:[],checks:(Array.isArray(coach.checks)?coach.checks:[]).filter(check=>check.source==='visual'&&generalVisualCodes.has(check.code)).slice(0,3),issues:[],visualReviewRequests:[],coach,summary:`已识别${identified.name}；暂无对应的本地检查规则，仅提供关键画面反馈，不计算分数或次数。`};
+  if((Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).some(code=>MOTION_HARD_QUALITY_FAILURES.includes(code)))return {...base,...identity,status:base.status==='unsupported'?'unsupported':'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(unscoredRep),coach,...(conflict?{summary:'本地分析与视觉识别的动作类别不一致，请补充更清晰的完整动作视频。'}:{})};
+  let target=conflict?null:identifiedFamily||localExercise||localFamily;
+  const familyOnly=!!target&&(identified?!identifiedExercise:!localExercise||base.requiresVisualConfirmation===true);
+  if(familyOnly)target={...target,id:null,name:identified?.name||target.familyName};
+  if(!target)return {...base,...identity,score:null,observedScore:null,scoreCoverage:0,scoreStatus:'unavailable',status:'insufficient',qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(unscoredRep),coach,
     summary:conflict?'本地分析与视觉识别的动作类别不一致，请补充更清晰的完整动作视频。':'尚未可靠确认动作，暂不合并评分。'};
-  if(!Array.isArray(base.reps)||!base.reps.length)return {...base,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:familyOnly,status:'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,coach,summary:'动作名称可以由画面补充确认，但缺少完整动作过程，暂不评分。'};
+  if(!Array.isArray(base.reps)||!base.reps.length)return {...base,...identity,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:!identified&&familyOnly,status:'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,coach,summary:'动作名称可以由画面补充确认，但缺少完整动作过程，暂不评分。'};
   const coachChecks=coach?.mode==='visual'&&Array.isArray(coach.checks)?coach.checks:[];
-  const originalFamily=exercise(original?.exerciseId)?.family||original?.exerciseFamily;
   const originalFailures=originalFamily===target.family?(Array.isArray(original?.checks)?original.checks:[]).filter(check=>check.status==='fail'&&(!check.source||check.source==='pose')&&target.requiredChecks.includes(check.code)):[];
   const localChecks=target.checks.map(rule=>{
     const current=(Array.isArray(base.checks)?base.checks:[]).find(check=>check.code===rule.code);
@@ -214,7 +252,7 @@ export function mergeCoachAssessment(analysis,coach,{originalAnalysis}={}) {
     const measured=checkScores(reps.flatMap(rep=>rep.checks),base.score,{familyOnly});
     scores={...measured,observedScore:preserved.length&&finite(scores.observedScore)&&finite(measured.observedScore)?Math.min(measured.observedScore,scores.observedScore):measured.observedScore,score:measured.score===null?null:Math.min(measured.score,scores.scoreCap),scoreCap:Math.min(measured.scoreCap,scores.scoreCap),scoreStatus:measured.score===null?'unavailable':measured.scoreStatus==='provisional'||scores.scoreStatus==='provisional'?'provisional':'assessed',qualified:measured.qualified&&scores.qualified};
   }
-  return {...base,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:familyOnly,status:scores.score===null?'insufficient':'complete',checks,...scores,reps,qualifiedRepCount:reps.filter(rep=>rep.qualified).length,issues:[...(base.issues||[]),...preservedIssues,...visualIssues],coach,
+  return {...base,...identity,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:!identified&&familyOnly,status:scores.score===null?'insufficient':'complete',checks,...scores,reps,qualifiedRepCount:reps.filter(rep=>rep.qualified).length,issues:[...(base.issues||[]),...preservedIssues,...visualIssues],coach,
     summary:scores.score===null?'证据不足，暂不评分。':`${target.name}：${scores.scoreStatus==='provisional'?'当前为部分证据参考分，尚有未完整核验的项目。':checks.some(check=>check.status==='fail')?'检测到需要纠正的动作问题。':'已检查项目未发现明显问题。'}`};
 }
 

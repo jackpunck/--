@@ -113,20 +113,44 @@ try{
   assert.equal(response.status(),200);const review=await response.json();assert.equal(review.action.exerciseId,id);assert.equal(review.assessment.exerciseId,id);assert.equal(review.assessment.score,null);
   changes.push({id:`motion:equipment-qa-${id}`,kind:'motion-assessment',baseVersion:0,data:{...review.assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
  }
+ const openCases=[
+  {name:'引体向上',exerciseId:'pullup',family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'none',expectedId:null,evidence:'两帧可见训练者握单杠悬垂并拉起身体，双脚悬空，未接触助力垫、弹力带或他人。'},
+  {name:'辅助引体向上',exerciseId:'pullup',family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'band',expectedId:'pullup',evidence:'两帧可见训练者握单杠拉起身体，脚部持续踩住连接杆上的绷紧弹力带。'},
+  {name:'壶铃摆荡',exerciseId:null,family:'hinge',equipment:'kettlebell',support:'standing',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手握壶铃，以髋部往返带动负重在身前摆动。'},
+  {name:'双杠臂屈伸',exerciseId:null,family:null,equipment:'parallel-bars',support:'suspended',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手支撑双杠，通过屈伸肘让悬空身体上下移动。'},
+ ];
+ for(const item of openCases){
+  equipmentAction={exerciseId:item.exerciseId,name:item.name,family:item.family,evidence:item.evidence,status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:item.equipment,support:item.support,movement:item.family,laterality:'bilateral',assistance:item.assistance,evidence:item.evidence,evidenceTimes:[1,2]}};
+  const response=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{status:'insufficient',quality:{reasons:['LOW_POSE_COVERAGE']},reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+  assert.equal(response.status(),200);const review=await response.json();
+  assert.equal(review.action.status,'identified');assert.equal(review.action.name,item.name);assert.equal(review.action.exerciseId,item.expectedId);
+  assert.equal(review.assessment.exerciseName,item.name);assert.equal(review.assessment.exerciseId,item.expectedId);assert.equal(review.assessment.score,null);
+  changes.push({id:`motion:open-qa-${changes.length}`,kind:'motion-assessment',baseVersion:0,data:{...review.assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
+ }
+ equipmentAction={exerciseId:'bench',name:'哑铃卧推',family:'horizontal-press',evidence:'两帧可见训练者握哑铃并在平凳上推举。',status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:'dumbbell',support:'flat-bench',movement:'horizontal-press',laterality:'bilateral',evidence:'两帧可见训练者握哑铃并在平凳上推举。',evidenceTimes:[1,2]}};
+ const conflicted=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{exerciseFamily:'row',status:'complete',quality:{reasons:[]},score:90,reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+ assert.equal(conflicted.status(),200);const conflict=(await conflicted.json()).assessment;
+ assert.equal(conflict.recognitionConflict,true);assert.equal(conflict.score,null);
+ changes.push({id:'motion:conflict-qa',kind:'motion-assessment',baseVersion:0,data:{...conflict,createdAt:new Date().toISOString(),video:{duration:3}}});
  equipmentAction=null;
  assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes}})).status(),200);
  await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.waitForFunction(count=>document.querySelectorAll('.motion-history-item').length>=count,changes.length);
  for(const {data}of changes){
-  const exercise=motionExercises.find(item=>item.id===data.exerciseId);
-  const item=page.locator('.motion-history-item').filter({has:page.locator('strong',{hasText:exercise.name})});
+  const exercise=motionExercises.find(item=>item.id===data.exerciseId),name=data.recognitionConflict?'动作名称待确认':data.exerciseName||exercise?.name;
+  const item=page.locator('.motion-history-item').filter({has:page.getByText(name,{exact:true})});
+  if(data.recognitionConflict||data.recognitionSource==='visual'&&!data.exerciseFamily)assert.match(await item.textContent(),/未计次/);
   await item.locator('[data-motion-action="history"]').click();
-  assert.equal(await page.locator('#motion-result-title').textContent(),exercise.name);
-  assert.match(await page.locator('.motion-coach-identification').textContent(),/负重、支撑面与推拉变化/);
-  assert.equal(await page.locator('[data-motion-action="exercise"]').count(),exercise.hasTeaching?1:0);
+  assert.equal(await page.locator('#motion-result-title').textContent(),name);
+  if(data.recognitionConflict||data.recognitionSource==='visual'&&!data.exerciseFamily)assert.match(await page.locator('.motion-result-facts').textContent(),/未计次/);
+  if(data.recognitionConflict){assert.match(await page.locator('.motion-coach-identification').textContent(),/视觉候选/);assert.match(await page.locator('.motion-coach-identification').textContent(),/尚待确认/);}
+  else assert((await page.locator('.motion-coach-identification').textContent()).includes(data.coach.action.observations.evidence));
+  assert.equal(await page.locator('[data-motion-action="exercise"]').count(),exercise?.hasTeaching?1:0);
   assert.equal(await page.locator('.motion-coach-identification [data-motion-action="seek"]').count(),0);
  }
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await shot('mobile-equipment-report');
  checks.push('equipment-contract-http','identified-name-without-pose-score','equipment-observations-persist','equipment-history-display','no-missing-3d-link');
+ checks.push('ordinary-pullup-no-assisted-mapping','assisted-pullup-requires-assistance','unlisted-motion-http','unlisted-name-history-reload');
+ checks.push('conflicting-visual-name-is-only-a-candidate');
  assert.equal(browserRequests.filter(r=>r.method==='POST'&&r.url.includes('/api/attachments')).length,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  await writeFile(join(dataDir,'results.json'),JSON.stringify({checks,calls:calls.map(({input,...call})=>({...call,frameTimes:input.frames.map(f=>f.time),checkCount:input.analysis.checks.length})),errors,external},null,2));console.log(JSON.stringify({dataDir,checks,errors,external},null,2));
 }catch(error){await shot('failure').catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}

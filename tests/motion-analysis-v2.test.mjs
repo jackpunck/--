@@ -76,6 +76,47 @@ test('an incompatible visual hint cannot relabel a clearly observed movement',()
   const r=run('curl',{},'squat');assert.equal(r.score,null);assert.ok(r.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
 });
 
+test('a compatible family hint resolves push-pull ambiguity without borrowing a catalogue identity',()=>{
+  for(const family of ['vertical-pull','overhead-press']){
+    // Pulling starts with extended elbows; pressing starts with flexed elbows.
+    const r=run('overhead',{phaseOffset:family==='vertical-pull'?2:0}, {family});
+    assert.equal(r.exerciseFamily,family);assert.equal(r.exerciseId,null);
+    assert.equal(r.attemptCount,2);assert.equal(r.classificationSource,'visual-hint+pose');
+    assert.equal(r.requiresVisualConfirmation,true);assert.equal(r.scoreStatus,'provisional');
+    assert.equal(r.qualifiedRepCount,0);assert.ok(r.reps.every(rep=>rep.qualified===false));
+  }
+  const r=run('row',{}, {family:'row'});
+  assert.equal(r.exerciseFamily,'row');assert.equal(r.exerciseId,null);assert.equal(r.attemptCount,2);
+  assert.equal(r.scoreStatus,'provisional');assert.equal(r.requiresVisualConfirmation,true);
+});
+
+test('an incompatible family hint retains the same pose conflict veto as an exact exercise hint',()=>{
+  const r=run('curl',{}, {family:'squat'});
+  assert.equal(r.exerciseId,null);assert.equal(r.score,null);assert.equal(r.attemptCount,0);
+  assert.ok(r.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+});
+
+test('family hints only accept canonical own family names and a known exercise ID takes priority',()=>{
+  for(const family of ['invented-family','constructor','__proto__','toString']){
+    const r=run('overhead',{}, {family});
+    assert.equal(r.exerciseFamily,'ambiguous');assert.equal(r.exerciseId,null);
+    assert.equal(r.classificationSource,'pose');assert.equal(r.score,null);
+  }
+  const exact=run('curl',{}, {exerciseId:'hammer-curl',family:'squat'});
+  assert.equal(exact.exerciseId,'hammer-curl');assert.equal(exact.exerciseFamily,'elbow-isolation');
+  assert.equal(exact.requiresVisualConfirmation,false);
+  const family=run('overhead',{}, {exerciseId:'outside-catalogue',family:'vertical-pull'});
+  assert.equal(family.exerciseId,null);assert.equal(family.exerciseFamily,'vertical-pull');
+});
+
+test('a family hint cannot erase target coverage or pose gap scoring restrictions',()=>{
+  const c=clip('overhead');
+  const frames=c.frames.map((frame,i)=>({...frame,subjectTracking:{status:i<30?'locked':'lost',trackId:'subject-1',confidence:i<30?0.99:0.1}}));
+  const r=analyzeMotion(frames,{...c.options,exerciseHint:{family:'vertical-pull'}});
+  assert.equal(r.exerciseId,null);assert.equal(r.score,null);assert.equal(r.qualifiedRepCount,0);
+  assert.ok(r.quality.reasons.includes('LOW_TARGET_COVERAGE'));
+});
+
 test('row shoulder elevation is a temporal measured failure distinct from unknown spinal shape',()=>{
   const neutral=run('row',{},'row'), bad=run('row',{shrug:50},'row');
   assert.equal(neutral.attemptCount,2,JSON.stringify(neutral));assert.equal(bad.attemptCount,2);
@@ -135,6 +176,20 @@ test('a visible active row arm is selected over a slightly clearer stationary su
     const c=singleArmRow({activeSide,mirror}),r=analyzeMotion(c.frames,{...c.options,exerciseHint:'dumbbell-row'});
     assert.equal(r.exerciseId,'dumbbell-row');assert.equal(r.attemptCount,2,JSON.stringify({activeSide,mirror,...r}));
   }
+});
+
+test('an open row family hint selects the active arm and preserves gaps without naming a dumbbell exercise',()=>{
+  for(const activeSide of [0,1])for(const mirror of [false,true]){
+    const c=singleArmRow({activeSide,mirror}),r=analyzeMotion(c.frames,{...c.options,exerciseHint:{family:'row'}});
+    assert.equal(r.exerciseId,null);assert.equal(r.exerciseFamily,'row');
+    assert.equal(r.attemptCount,2,JSON.stringify({activeSide,mirror,...r}));
+    assert.equal(r.classificationSource,'visual-hint+pose');assert.equal(r.qualifiedRepCount,0);
+  }
+  const c=singleArmRow({hiddenStart:1.4,hiddenEnd:2.6}),r=analyzeMotion(c.frames,{...c.options,exerciseHint:{family:'row'}});
+  assert.equal(r.exerciseId,null);assert.equal(r.attemptCount,1,JSON.stringify(r));
+  assert.ok(r.reps.every(rep=>!(rep.start<1.4&&rep.end>2.6)));
+  const hidden=singleArmRow({hiddenStart:-1,hiddenEnd:9}),missing=analyzeMotion(hidden.frames,{...hidden.options,exerciseHint:{family:'row'}});
+  assert.equal(missing.attemptCount,0);assert.equal(missing.score,null);
 });
 
 test('a more confident support side without a visible hip cannot block the observable row side',()=>{
@@ -201,6 +256,58 @@ test('horizontal press, reverse fly, bridge and crunch retain their movement fam
     const r=run(kind,{},id);assert.equal(r.exerciseFamily,family,JSON.stringify({kind,...r}));assert.ok(r.attemptCount>=1,JSON.stringify(r));
     assert.ok(r.score===null||r.score<100);assert.equal(r.qualifiedRepCount,0);
   }
+});
+
+function rotatedHorizontalClip(degrees,{hideLegs=false,mirror=false}={}) {
+  const c=clip('horizontal'),radians=degrees*Math.PI/180;
+  c.frames=c.frames.map(frame=>({...frame,landmarks:frame.landmarks.map((point,index)=>{
+    if(!point||hideLegs&&[25,26,27,28,29,30,31,32].includes(index))return null;
+    const x=point.x-0.5,y=point.y-0.5;
+    const projectedX=0.5+x*Math.cos(radians)-y*Math.sin(radians);
+    return {...point,x:mirror?1-projectedX:projectedX,y:0.5+x*Math.sin(radians)+y*Math.cos(radians)};
+  })}));
+  return c;
+}
+
+test('rotated lying press projections stay ambiguous with row rather than rejecting a supported press hint',()=>{
+  for(const [degrees,hideLegs] of [[180,true],[-150,false]])for(const mirror of [false,true]){
+    const c=rotatedHorizontalClip(degrees,{hideLegs,mirror}),base=analyzeMotion(c.frames,c.options);
+    assert.equal(base.exerciseFamily,'ambiguous',JSON.stringify({degrees,hideLegs,mirror,family:base.exerciseFamily,reasons:base.quality.reasons}));
+    assert.equal(base.score,null);assert.equal(base.exerciseId,null);
+    assert.ok(base.candidates.some(candidate=>candidate.exerciseId==='bench'));
+    assert.ok(base.candidates.some(candidate=>candidate.exerciseId==='row'));
+    const hinted=analyzeMotion(c.frames,{...c.options,exerciseHint:'bench'});
+    assert.equal(hinted.exerciseId,'bench');assert.equal(hinted.exerciseFamily,'horizontal-press');
+    assert.equal(hinted.attemptCount,2);assert.ok(!hinted.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+    const family=analyzeMotion(c.frames,{...c.options,exerciseHint:{family:'horizontal-press'}});
+    assert.equal(family.exerciseId,null);assert.equal(family.exerciseFamily,'horizontal-press');
+    assert.equal(family.attemptCount,2);assert.equal(family.scoreStatus,'provisional');
+  }
+});
+
+test('upright row and curl evidence cannot borrow the lying press projection exception',()=>{
+  for(const kind of ['row','curl'])for(const hideLegs of [false,true]){
+    const c=clip(kind);
+    if(hideLegs)for(const frame of c.frames)for(const index of [25,26,27,28,29,30,31,32])frame.landmarks[index]=null;
+    const base=analyzeMotion(c.frames,c.options),hinted=analyzeMotion(c.frames,{...c.options,exerciseHint:'bench'});
+    assert.equal(base.exerciseFamily,kind==='row'?'row':'elbow-isolation');
+    assert.ok(!base.candidates.some(candidate=>candidate.exerciseId==='bench'));
+    assert.equal(hinted.score,null);assert.ok(hinted.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+  }
+  // A visible folded hip and standing legs still provide a pulling stance even
+  // when the torso is horizontal. This is geometry, not labelled video data.
+  const bent=clip('row');
+  for(const frame of bent.frames){
+    for(const index of [7,8,11,12,13,14,15,16])frame.landmarks[index]={...frame.landmarks[index],x:frame.landmarks[index].x+0.22,y:frame.landmarks[index].y+0.22};
+    for(const side of [0,1]){
+      frame.landmarks[25+side]={...frame.landmarks[25+side],x:0.35+(side?0.003:-0.003),y:0.625};
+      frame.landmarks[27+side]={...frame.landmarks[27+side],x:0.35+(side?0.003:-0.003),y:0.8};
+    }
+  }
+  const base=analyzeMotion(bent.frames,bent.options),hinted=analyzeMotion(bent.frames,{...bent.options,exerciseHint:'bench'});
+  assert.equal(base.exerciseFamily,'row');assert.equal(base.attemptCount,2);
+  assert.ok(!base.candidates.some(candidate=>candidate.exerciseId==='bench'));
+  assert.equal(hinted.score,null);assert.ok(hinted.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
 });
 
 test('horizontal presses count each complete cycle from either extended or flexed starting position',()=>{

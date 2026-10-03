@@ -2,7 +2,7 @@ import { analyzeVideo, validateVideoFile, scaledVideoSize, MOTION_VIDEO_LIMITS }
 import { analyzeMotion } from './motion-analysis.js';
 import { motionExercises, motionFamilies, getMotionExercise } from './motion-catalog.js';
 import { buildMotionEvidence, summarizeMotionAnalysis } from './motion-evidence.js';
-import { mergeCoachAssessment } from './motion-contract.js';
+import { mergeCoachAssessment, confirmedMotionAction } from './motion-contract.js';
 
 const exerciseNames = Object.fromEntries(motionExercises.map(item=>[item.id,item.name]));
 const checkLabels = Object.fromEntries(motionExercises.flatMap(item=>(item.checks||[]).map(check=>[check.code,check.label])));
@@ -24,8 +24,10 @@ const metricLabels = {
 const componentLabels={rangeOfMotion:'动作幅度',trunk:'躯干倾斜',alignment:'身体连线',control:'轨迹控制'};
 const checkStatus={pass:'通过',fail:'需要纠正',unobservable:'未能判断',uncertain:'未能判断'};
 const viewNames={side:'侧面',front:'正面',oblique:'斜侧面','front-or-oblique':'正面或斜侧面',uncertain:'待确认',mixed:'多个视角'};
-const equipmentNames={dumbbell:'哑铃',barbell:'杠铃','smith-machine':'史密斯机',machine:'固定器械',cable:'绳索'};
-const supportNames={'flat-bench':'平凳','incline-bench':'上斜凳',seated:'坐姿','bent-over':'俯身','single-arm-supported':'单臂支撑','chest-supported':'胸部支撑'};
+const equipmentNames={dumbbell:'哑铃',barbell:'杠铃','smith-machine':'史密斯机',machine:'固定器械',cable:'绳索','pullup-bar':'单杠','assisted-pullup-machine':'辅助引体器械',kettlebell:'壶铃','parallel-bars':'双杠'};
+const supportNames={'flat-bench':'平凳','incline-bench':'上斜凳',seated:'坐姿','bent-over':'俯身','single-arm-supported':'单臂支撑','chest-supported':'胸部支撑',hanging:'悬垂',standing:'站姿',suspended:'悬空支撑'};
+const assistanceNames={none:'无辅助',machine:'器械助力',band:'弹力带助力',partner:'他人助力',unknown:'辅助情况待确认'};
+const observedLabel = (labels,key) => Object.hasOwn(labels,key)?labels[key]:null;
 function metricsHtml(metrics,exerciseId,familyHint) {
   const family=getMotionExercise(exerciseId)?.family||familyHint;
   const joint=['squat','lunge','knee-isolation'].includes(family)?'膝':(['hinge','bridge','crunch'].includes(family)?'髋':(['lateral-raise','reverse-fly'].includes(family)?'抬臂':'肘'));
@@ -40,10 +42,14 @@ function metricsHtml(metrics,exerciseId,familyHint) {
 function dateLabel(value) { const date=new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '已保存'; }
 function normalizedReport(value) { return value?.data && typeof value.data==='object' ? {...value.data,id:value.id} : value; }
 function reportName(report) {
+  if(report.recognitionConflict)return '动作名称待确认';
+  if(report.recognitionSource==='visual'&&typeof report.exerciseName==='string'&&report.exerciseName.trim())return report.exerciseName;
   const family=motionFamilies[report.exerciseFamily];
   return report.requiresVisualConfirmation&&family?`${family}（变式待确认）`:exerciseNames[report.exerciseId]||report.exerciseFamilyName||family||'动作评估';
 }
-function repetitionUnit(report) {return report.exerciseId==='plank'?'段':'次';}
+const isHold = report => report.exerciseId==='plank'||report.exerciseFamily==='plank';
+const hasCount = report => !report.recognitionConflict&&!(report.recognitionSource==='visual'&&report.exerciseName&&!report.exerciseId&&!Object.hasOwn(motionFamilies,report.exerciseFamily));
+function repetitionUnit(report) {return report.recognitionConflict||isHold(report)?'段':'次';}
 
 export const MAX_MOTION_ASSESSMENT_BYTES = 1024 * 1024;
 export function validateMotionAssessmentSize(report) {
@@ -89,7 +95,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
         <div class="motion-error" data-motion-error role="alert" hidden></div>
         <p class="motion-privacy">本机姿态分析不上传视频、无需 API Key。AI 点评按上方说明发送检测摘要与关键画面，原视频不上传；保存报告也不保存画面。</p>
       </section>
-      <aside class="motion-guide" aria-labelledby="motion-guide-title"><span class="motion-step">动作与拍摄</span><h2 id="motion-guide-title">看具体问题，<br>再给动作评价。</h2><div class="motion-supported"><span>蹲与髋铰链</span><span>上肢推拉</span><span>肩臂训练</span><span>腿部与核心</span></div><details class="motion-catalog"><summary>查看 ${motionExercises.length} 个动作与检查范围</summary><ul>${motionExercises.map(item=>`<li><strong>${escapeHtml(item.name)}</strong><span>${item.localRecognition==='visual'?'结合关键画面识别':'姿态轨迹识别，变式由 AI 复核'}</span></li>`).join('')}</ul></details><ol><li><span>01</span><div><strong>根据检查项选择视角</strong><p>前倾、身体连线优先侧面；耸肩与左右对称需肩颈清楚可见。器械也应入镜。</p></div></li><li><span>02</span><div><strong>全身与训练者都清楚</strong><p>固定手机，让训练者清楚入镜。多人时默认跟踪中央人物，也可先点选自己；尽量避免相互遮挡和镜面。</p></div></li><li><span>03</span><div><strong>保留起始与完整回程</strong><p>建议录下 3–8 次，先保留自然起始姿态，便于比较肩部上提和躯干摆动。</p></div></li></ol><p class="motion-guide-foot">严格评分按检查项扣分与限制上限。“未能判断”不算通过；姿态点不能直接证明腰椎中立，需结合可见画面复核。</p></aside>
+      <aside class="motion-guide" aria-labelledby="motion-guide-title"><span class="motion-step">动作与拍摄</span><h2 id="motion-guide-title">看具体问题，<br>再给动作评价。</h2><div class="motion-supported"><span>蹲与髋铰链</span><span>上肢推拉</span><span>肩臂训练</span><span>腿部与核心</span></div><details class="motion-catalog"><summary>查看 ${motionExercises.length} 个已有检查规则的动作</summary><ul>${motionExercises.map(item=>`<li><strong>${escapeHtml(item.name)}</strong><span>${item.localRecognition==='visual'?'结合关键画面识别':'姿态轨迹识别，变式由 AI 复核'}</span></li>`).join('')}</ul></details><ol><li><span>01</span><div><strong>根据检查项选择视角</strong><p>前倾、身体连线优先侧面；耸肩与左右对称需肩颈清楚可见。器械也应入镜。</p></div></li><li><span>02</span><div><strong>全身与训练者都清楚</strong><p>固定手机，让训练者清楚入镜。多人时默认跟踪中央人物，也可先点选自己；尽量避免相互遮挡和镜面。</p></div></li><li><span>03</span><div><strong>保留起始与完整回程</strong><p>建议录下 3–8 次，先保留自然起始姿态，便于比较肩部上提和躯干摆动。</p></div></li></ol><p class="motion-guide-foot">视觉识别也支持动作大全之外的名称。是否计次和评分取决于完整动作是否有适用检查；看不清的细节保留待确认。</p></aside>
     </div>
     <section class="motion-results" data-motion-results aria-labelledby="motion-result-title" hidden></section>
     <section class="motion-history" aria-labelledby="motion-history-title"><div class="motion-section-head"><div><span class="motion-step">你的记录</span><h2 id="motion-history-title">动作评估记录</h2></div><span data-motion-history-count></span></div><div data-motion-history><p class="motion-empty">正在读取已保存的报告…</p></div></section>
@@ -226,9 +232,9 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       // Recompute with the original local observations. Do not persist the
       // server's duplicate assessment inside the saved coach response.
       const {assessment:serverAssessment,...coach}=response;
-      const action=coach.action;
-      const selected=coach.mode==='visual'&&action?.status==='identified'&&action.confidence==='high'&&getMotionExercise(action.exerciseId);
-      const assessed=selected?analyzeMotion(pipeline.frames,{width:pipeline.width,height:pipeline.height,duration:pipeline.duration,sourceFps:pipeline.sourceFps,exerciseHint:selected.id}):base;
+      const action=confirmedMotionAction(coach);
+      const hint=action?.exerciseId||(action?.family?{family:action.family}:null);
+      const assessed=hint?analyzeMotion(pipeline.frames,{width:pipeline.width,height:pipeline.height,duration:pipeline.duration,sourceFps:pipeline.sourceFps,exerciseHint:hint}):base;
       result=mergeCoachAssessment(assessed,coach,{originalAnalysis:base});
       result.targetTracking=pipeline.targetTracking;
       result.coachEvidence={frameTimes:keyframes.map(({time})=>time),includesImages:keyframes.length>0};
@@ -291,22 +297,26 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     if(fromHistory&&!coach)return '';
     const available=!fromHistory&&!!pipeline;
     return `<section class="motion-coach" aria-label="AI 动作评价"><div class="motion-section-head"><div><span class="motion-step">AI / 识别与纠正</span><h3>动作评价与下一组建议</h3></div>${coach?`<span class="badge neutral">${coach.mode==='visual'?'关键画面 + 检测证据':'检测证据点评'}</span>`:''}</div>
-      ${coach?`${identificationHtml(coach,canSeek)}<p class="motion-coach-evaluation">${escapeHtml(coach.overallEvaluation)}</p>${Array.isArray(coach.checks)&&coach.checks.length?checksHtml(coach.checks,canSeek):''}${coach.limitations?.length?`<ul class="motion-coach-limitations">${coach.limitations.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul>`:''}<small class="motion-coach-source">${escapeHtml(coach.provider||'')} · ${escapeHtml(coach.model||'')}。AI 只针对已提供的证据点评，未观察到的阶段不算通过。</small>`:!coachRunning?'<p>AI 可核对器械、动作变式与可见姿态，按问题时间点给出纠正建议。关键画面之外的动作细节仍可能无法判断。</p>':''}
+      ${coach?`${identificationHtml(coach,canSeek,report.recognitionConflict)}<p class="motion-coach-evaluation">${escapeHtml(coach.overallEvaluation)}</p>${Array.isArray(coach.checks)&&coach.checks.length?checksHtml(coach.checks,canSeek):''}${coach.limitations?.length?`<ul class="motion-coach-limitations">${coach.limitations.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul>`:''}<small class="motion-coach-source">${escapeHtml(coach.provider||'')} · ${escapeHtml(coach.model||'')}。AI 只针对已提供的证据点评，未观察到的阶段不算通过。</small>`:!coachRunning?'<p>AI 可核对器械、动作变式与可见姿态，按问题时间点给出纠正建议。关键画面之外的动作细节仍可能无法判断。</p>':''}
       ${coachRunning&&!fromHistory?`<p role="status" aria-live="polite">${escapeHtml(coachMessage)}</p><button type="button" class="button small" data-motion-action="cancel-coach">取消 AI 点评</button>`:''}
       ${coachError&&!fromHistory?`<p class="motion-coach-error" role="alert">${escapeHtml(coachError)}</p>`:''}
       ${available&&!coachRunning?`<div class="motion-coach-actions">${coachConfig.configured?`<button type="button" class="button" data-motion-action="coach">${coach? '重新获取 AI 点评':coachConfig.vision?'AI 识别与点评（含关键画面）':'AI 根据检测证据点评'}</button>`:typeof openCoachSettings==='function'?'<button type="button" class="button" data-motion-action="coach-settings">配置动作点评模型</button>':''}<small>${coachConfig.vision?'会发送最多 6 张缩小的关键画面和检测摘要，原视频不上传。':'当前只发送检测摘要，不发送画面。'}</small></div>`:''}
     </section>`;
   }
-  function identificationHtml(coach,canSeek){
+  function identificationHtml(coach,canSeek,recognitionConflict=false){
     if(coach.mode!=='visual')return '';
-    const identified=coach.action?.status==='identified'?getMotionExercise(coach.action.exerciseId):null;
+    const identified=confirmedMotionAction(coach);
+    if(recognitionConflict)return `<p class="motion-coach-identification"><strong>动作识别：尚待确认</strong>${identified?`<span>视觉候选：${escapeHtml(identified.name)}</span>`:''}<span>画面识别与连续动作轨迹不一致，暂不确认名称和评分。请补充清楚的完整动作画面。</span></p>`;
     if(!identified){
-      const candidates=(coach.candidates||[]).map(item=>getMotionExercise(item.exerciseId)?.name).filter(Boolean);
+      const candidates=(coach.candidates||[]).map(item=>typeof item.name==='string'?item.name:getMotionExercise(item.exerciseId)?.name).filter(Boolean);
       return `<p class="motion-coach-identification"><strong>动作识别：尚待确认</strong>${candidates.length?`<span>候选：${candidates.map(escapeHtml).join('、')}。器械或动作证据仍不足。</span>`:''}</p>`;
     }
-    const observed=coach.action.observations;
-    const details=observed?[equipmentNames[observed.equipment],supportNames[observed.support],{unilateral:'单侧动作',bilateral:'双侧动作'}[observed.laterality]].filter(Boolean):[];
-    return `<p class="motion-coach-identification"><strong>动作识别：${escapeHtml(identified.name)}</strong>${details.length?`<span>${details.map(escapeHtml).join(' · ')}</span>`:''}${typeof observed?.evidence==='string'?`<span>依据：${escapeHtml(observed.evidence)}</span>`:''}${(coach.action.evidenceTimes||[]).filter(finite).map(time=>timestampButton(time,'动作识别依据',canSeek)).join(' ')}</p>`;
+    const observed=identified.observations;
+    const details=observed?[observedLabel(equipmentNames,observed.equipment),observedLabel(supportNames,observed.support),observed.laterality==='unilateral'?'单侧动作':observed.laterality==='bilateral'?'双侧动作':null].filter(Boolean):[];
+    const assistance=observedLabel(assistanceNames,observed?.assistance);
+    if(observed?.support==='hanging'&&assistance)details.push(assistance);
+    const evidence=identified.evidence||observed?.evidence;
+    return `<p class="motion-coach-identification"><strong>动作识别：${escapeHtml(identified.name)}</strong>${details.length?`<span>${details.map(escapeHtml).join(' · ')}</span>`:''}${typeof evidence==='string'&&evidence?`<span>依据：${escapeHtml(evidence)}</span>`:''}${(identified.evidenceTimes||[]).filter(finite).map(time=>timestampButton(time,'动作识别依据',canSeek)).join(' ')}</p>`;
   }
   function trackingHtml(report) {
     const tracking=report.targetTracking;if(!tracking)return '';
@@ -319,10 +329,13 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     find('[data-motion-coach-status]').textContent=coachMessage;
     const section=find('[data-motion-results]');section.hidden=false;
     const complete=report.status==='complete',canSeek=!fromHistory&&!!pipeline;
-    const repSectionLabel=report.exerciseId==='plank'?'分段查看':'逐次查看';
+    const repSectionLabel=report.recognitionConflict?'轨迹片段':isHold(report)?'分段查看':'逐次查看';
     const reps=Array.isArray(report.reps)?report.reps:[],issues=Array.isArray(report.issues)?report.issues:[];
     const quality=report.quality||{},name=reportName(report);
-    const title=report.exerciseId||report.exerciseFamily?name:report.status==='unsupported'?'这段动作需要进一步确认':'这段视频还不足以评分';
+    const title=report.exerciseName||report.exerciseId||report.exerciseFamily?name:report.status==='unsupported'?'这段动作需要进一步确认':'这段视频还不足以评分';
+    const openAction=report.recognitionSource==='visual'&&!!report.exerciseName&&!report.exerciseId;
+    const countKnown=hasCount(report);
+    const countValue=!countKnown?'未计次':isHold(report)?number(report.holdDuration??report.duration,1):reps.length;
     const reasons=(Array.isArray(quality.reasons)?quality.reasons:[]).map(reason=>issues.find(issue=>issue.code===reason)?.message||(/^[A-Z_]+$/.test(reason)?report.summary:reason)).filter(Boolean);
     if(complete&&!finite(quality.sourceFps))reasons.push('未能确认原视频帧率，低帧率视频的计次可靠性有限。');
     const overallMetrics={};
@@ -331,7 +344,8 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     section.innerHTML=`<div class="motion-section-head"><div><span class="motion-step">${fromHistory?'已保存的分析摘要':'02 / 评估结果'}</span><h2 id="motion-result-title">${escapeHtml(title)}</h2></div>${fromHistory&&result?'<button type="button" class="button small" data-motion-action="live-result">返回本次结果</button>':''}</div>
       ${fromHistory?'<p class="motion-history-notice">这是已保存的摘要，未保存原视频或骨架轨迹。重新选择视频并分析后可查看回放。</p>':''}
       ${trackingHtml(report)}
-      <div class="motion-result-overview${complete?'':' is-unscored'}"><div class="motion-score"><span>严格检查参考分</span><strong>${scoreText(report.score)}${finite(report.score)?'<small>/ 100</small>':''}</strong><p>${report.scoreStatus==='provisional'||report.checks?.some(check=>['unobservable','uncertain'].includes(check.status))?'含待核验项目':'按已观察证据评估'}</p></div><div class="motion-result-summary"><p>${escapeHtml(report.summary||'请查看下方逐次反馈。')}</p><div class="motion-result-facts"><div><span>${report.exerciseId==='plank'?'有效支撑':'完整次数'}</span><strong>${report.exerciseId==='plank'?number(report.holdDuration??report.duration,1):reps.length}<small> ${report.exerciseId==='plank'?'秒':'次'}</small></strong></div><div><span>${finite(report.scoreCoverage)?'检查覆盖':'可用画面'}</span><strong>${percent(finite(report.scoreCoverage)?report.scoreCoverage:quality.usableRatio)}<small>%</small></strong></div><div><span>拍摄视角</span><strong>${viewNames[quality.view]||'待确认'}</strong></div></div></div></div>
+      <div class="motion-result-overview${complete?'':' is-unscored'}"><div class="motion-score"><span>严格检查参考分</span><strong>${scoreText(report.score)}${finite(report.score)?'<small>/ 100</small>':''}</strong><p>${report.scoreStatus==='provisional'||report.checks?.some(check=>['unobservable','uncertain'].includes(check.status))?'含待核验项目':'按已观察证据评估'}</p></div><div class="motion-result-summary"><p>${escapeHtml(report.summary||'请查看下方逐次反馈。')}</p><div class="motion-result-facts"><div><span>${isHold(report)?'有效支撑':'完整次数'}</span><strong>${countValue}${countKnown?`<small> ${isHold(report)?'秒':'次'}</small>`:''}</strong></div><div><span>${finite(report.scoreCoverage)?'检查覆盖':'可用画面'}</span><strong>${percent(finite(report.scoreCoverage)?report.scoreCoverage:quality.usableRatio)}<small>%</small></strong></div><div><span>拍摄视角</span><strong>${viewNames[quality.view]||'待确认'}</strong></div></div></div></div>
+      ${openAction&&!report.recognitionConflict?`<p class="motion-quality-notes">${countKnown?`动作名称已由画面确认，使用「${escapeHtml(motionFamilies[report.exerciseFamily])}」通用检查评估；具体变式仍有未核验细节。`:'已识别动作名称，暂未提供适用的连续计次和评分检查。请查看下方关键画面评价。'}</p>`:''}
       ${reasons.length?`<ul class="motion-quality-notes">${reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:''}
       ${report.requiresVisualConfirmation?`<p class="motion-quality-notes">动作变式或器械尚待确认${report.candidates?.length?'：'+report.candidates.map(item=>escapeHtml(exerciseNames[item.exerciseId]||item.exerciseId)).join('、'):''}。可通过 AI 关键画面识别进一步区分。</p>`:''}
       <p class="motion-score-note">重要问题会限制分数上限；看不清的项目不会算作通过。前倾、躯干稳定、头颈位置与脊柱中立分别检查，评分仍需真实视频持续校准。</p>
@@ -354,7 +368,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   }
   function renderHistory() {
     find('[data-motion-history-count]').textContent=history.length?`${history.length} 份报告`:'';
-    find('[data-motion-history]').innerHTML=history.length?`<div class="motion-history-list">${history.map((report,index)=>`<article class="motion-history-item"><span class="motion-history-score">${scoreText(report.score)}<small>分</small></span><div><strong>${escapeHtml(reportName(report))}</strong><p>${escapeHtml(dateLabel(report.createdAt))} · ${Array.isArray(report.reps)?report.reps.length:0} ${repetitionUnit(report)} · ${clock(report.video?.duration)}</p></div><button type="button" class="button small" data-motion-action="history" data-history="${index}">查看报告</button>${typeof deleteAssessment==='function'?`<button type="button" class="motion-delete" data-motion-action="delete" data-history="${index}" ${deletionId===report.id?'disabled':''} aria-label="删除 ${escapeHtml(dateLabel(report.createdAt))} 的${escapeHtml(reportName(report))}报告">${deletionId===report.id?'删除中…':'删除'}</button>`:''}</article>`).join('')}</div>`:'<p class="motion-empty">还没有保存的报告。完成一次评估后，可以在这里回看。</p>';
+    find('[data-motion-history]').innerHTML=history.length?`<div class="motion-history-list">${history.map((report,index)=>`<article class="motion-history-item"><span class="motion-history-score">${scoreText(report.score)}<small>分</small></span><div><strong>${escapeHtml(reportName(report))}</strong><p>${escapeHtml(dateLabel(report.createdAt))} · ${hasCount(report)?`${Array.isArray(report.reps)?report.reps.length:0} ${repetitionUnit(report)}`:'未计次'} · ${clock(report.video?.duration)}</p></div><button type="button" class="button small" data-motion-action="history" data-history="${index}">查看报告</button>${typeof deleteAssessment==='function'?`<button type="button" class="motion-delete" data-motion-action="delete" data-history="${index}" ${deletionId===report.id?'disabled':''} aria-label="删除 ${escapeHtml(dateLabel(report.createdAt))} 的${escapeHtml(reportName(report))}报告">${deletionId===report.id?'删除中…':'删除'}</button>`:''}</article>`).join('')}</div>`:'<p class="motion-empty">还没有保存的报告。完成一次评估后，可以在这里回看。</p>';
   }
   async function save() {
     if(!result||!pipeline||coachRunning||saved||saving||typeof saveAssessment!=='function')return;

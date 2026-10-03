@@ -1,6 +1,6 @@
 /** Versioned evaluation catalogue. Thresholds are application screening rules,
  * not clinical cut-offs. Equipment and grip cannot be inferred from 33 points. */
-export const MOTION_CATALOG_VERSION = 'motion-catalog-2.1.0';
+export const MOTION_CATALOG_VERSION = 'motion-catalog-2.2.0';
 const definitions = [
   ['SQUAT_DEPTH', '下蹲幅度', false, true, 'side'],
   ['SQUAT_TORSO_LEAN', '下降与起身过程的躯干前倾', false, true, 'side'],
@@ -92,6 +92,7 @@ const recognitionEntries = [
 const teachingIds = new Set(entries.map(([id]) => id));
 // These describe required image observations, never facts inferred from poses.
 const recognitionDefinitions = {
+  pullup: [['pullup-bar', 'assisted-pullup-machine'], ['hanging'], ['bilateral'], ['machine', 'band', 'partner']],
   bench: [['dumbbell'], ['flat-bench'], ['bilateral']],
   'incline-bench': [['dumbbell'], ['incline-bench'], ['bilateral']],
   'chest-press': [['machine'], ['seated'], ['bilateral']],
@@ -108,7 +109,7 @@ const recognitionDefinitions = {
 export const motionExercises = Object.freeze([...entries, ...recognitionEntries].map(([id, name, family, localRecognition]) => {
   const checks = Object.freeze(recipes[family].map(([code, weight]) => Object.freeze({...motionCheckDefinitions[code], weight})));
   const description = recognitionDefinitions[id];
-  const recognitionRules = description ? Object.freeze({equipment: Object.freeze(description[0]), support: Object.freeze(description[1]), movement: family, laterality: Object.freeze(description[2])}) : undefined;
+  const recognitionRules = description ? Object.freeze({equipment: Object.freeze(description[0]), support: Object.freeze(description[1]), movement: family, laterality: Object.freeze(description[2]), ...(description[3] ? {assistance: Object.freeze(description[3])} : {})}) : undefined;
   return Object.freeze({id, name, family, familyName: motionFamilies[family], localRecognition, hasTeaching: teachingIds.has(id), ...(recognitionRules ? {recognitionRules} : {}), requiredView: 'per-check', checks, requiredChecks: Object.freeze(checks.map(check => check.code))});
 }));
 export const getMotionExercise = id => motionExercises.find(exercise => exercise.id === id) || null;
