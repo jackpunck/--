@@ -137,6 +137,66 @@ test('a cropped seated row retains continuous pull evidence without inventing vi
   }
 });
 
+test('directional pulling evidence recognizes a seated row with visible extended legs',()=>{
+  for(const mirror of [false,true]){
+    const c=clip('row',{mirror});
+    for(const frame of c.frames)for(const side of [0,1]){
+      const shift=side?3:-3;
+      frame.landmarks[27+side]={...frame.landmarks[27+side],x:(mirror?1000-690-shift:690+shift)/1000,y:0.57};
+      frame.landmarks[29+side]={...frame.landmarks[29+side],x:(mirror?1000-675-shift:675+shift)/1000,y:0.58};
+      frame.landmarks[31+side]={...frame.landmarks[31+side],x:(mirror?1000-755-shift:755+shift)/1000,y:0.58};
+    }
+    const r=analyzeMotion(c.frames,c.options);
+    assert.equal(r.exerciseFamily,'row');assert.equal(r.exerciseId,null);assert.equal(r.attemptCount,2);
+    assert.ok(r.candidates.some(candidate=>candidate.exerciseId==='row'));
+    assert.ok(!r.candidates.some(candidate=>candidate.exerciseId==='calf-raise'));
+  }
+});
+
+test('standing upper-arm retraction preserves drag-curl candidates rather than excluding a curl hint',()=>{
+  const c=clip('curl');
+  for(const frame of c.frames){
+    const p=(1-Math.cos(frame.time%4*Math.PI/2))/2,theta=(20-30*p)*Math.PI/180,elbowAngle=(170-110*p)*Math.PI/180;
+    for(const side of [0,1]){
+      const shoulder=frame.landmarks[11+side],elbow={...frame.landmarks[13+side],x:shoulder.x+0.11*Math.sin(theta),y:shoulder.y+0.11*Math.cos(theta)};
+      frame.landmarks[13+side]=elbow;
+      frame.landmarks[15+side]={...frame.landmarks[15+side],x:elbow.x+0.11*Math.sin(theta+Math.PI-elbowAngle),y:elbow.y+0.11*Math.cos(theta+Math.PI-elbowAngle)};
+    }
+  }
+  const base=analyzeMotion(c.frames,c.options);
+  assert.equal(base.exerciseFamily,'ambiguous');assert.equal(base.exerciseId,null);assert.equal(base.score,null);
+  assert.ok(base.candidates.some(candidate=>candidate.exerciseId==='curl'));
+  assert.ok(base.candidates.some(candidate=>candidate.exerciseId==='row'));
+  const curl=analyzeMotion(c.frames,{...c.options,exerciseHint:'curl'});
+  assert.equal(curl.exerciseId,'curl');assert.equal(curl.attemptCount,2);
+  assert.ok(!curl.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+});
+
+test('unclassified active arms with heel and hip motion cannot fall back to exclusive calf recognition',()=>{
+  const c=clip('curl');
+  for(const frame of c.frames){
+    const p=(1-Math.cos(frame.time%4*Math.PI/2))/2,radians=60*p*Math.PI/180;
+    for(const side of [0,1])for(const index of [13+side,15+side]){
+      const shoulder=frame.landmarks[11+side],point=frame.landmarks[index],x=point.x-shoulder.x,y=point.y-shoulder.y;
+      frame.landmarks[index]={...point,x:shoulder.x+x*Math.cos(radians)+y*Math.sin(radians),y:shoulder.y-x*Math.sin(radians)+y*Math.cos(radians)};
+    }
+    for(const index of [7,8,11,12,13,14,15,16,23,24,25,26,27,28,29,30])frame.landmarks[index]={...frame.landmarks[index],y:frame.landmarks[index].y-0.035*p};
+  }
+  const r=analyzeMotion(c.frames,c.options);
+  assert.notEqual(r.exerciseFamily,'calf');assert.equal(r.exerciseId,null);assert.equal(r.score,null);
+  assert.ok(!r.candidates.some(candidate=>candidate.exerciseId==='calf-raise'));
+});
+
+test('ordinary calf repetitions remain recognizable with modest hip and arm landmark noise',()=>{
+  const c=clip('calf');
+  for(const frame of c.frames){
+    const jitter=Math.sin(frame.time*3)*0.002;
+    for(const index of [13,14,15,16,23,24])frame.landmarks[index]={...frame.landmarks[index],x:frame.landmarks[index].x+jitter};
+  }
+  const r=analyzeMotion(c.frames,c.options);
+  assert.equal(r.exerciseFamily,'calf');assert.equal(r.exerciseId,'calf-raise');assert.equal(r.attemptCount,2);
+});
+
 test('cropping a curl with forward upper-arm drift does not turn elbow flexion into a row',()=>{
   for(const mirror of [false,true])for(const cropped of [false,true]){
     const c=clip('drifting-curl',{mirror});

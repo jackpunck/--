@@ -46,3 +46,9 @@ test('visual request separates bench pressing from rowing when projected arm mot
   assert.match(system.content, /手腕.*画面.*上下.*不能/s);
   assert.match(system.content, /推拉.*无法确认.*unknown/s);
 });
+
+test('observation movements use the application family rather than a broader physical description', () => {
+  const [system] = buildMotionCoachMessages(input, {visual:true});
+  assert.match(system.content, /observations\.movement.*action\.family/);
+  assert.match(system.content, /俯卧撑.*pushup.*horizontal-press/);
+});

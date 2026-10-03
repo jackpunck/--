@@ -202,18 +202,32 @@ function checkScores(checks,baseline,{familyOnly=false}={}) {
 }
 function issuesFromChecks(checks) {return checks.filter(check=>check.status==='fail'&&(check.source==='visual'||check.visualEvidence)).map(check=>({code:check.code,time:check.visualEvidence?.time??check.time,message:check.visualEvidence?.message??check.message,severity:check.severity,source:'visual'}));}
 const unscoredRep = rep => ({...rep,score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false});
+const unreliablePoseClassifications = new Set(['INVALID_DIMENSIONS','NO_POSE','TOO_FEW_FRAMES','MULTIPLE_PEOPLE','LOW_POSE_COVERAGE','LOW_TARGET_COVERAGE','LOW_SOURCE_FRAME_RATE','LOW_SOURCE_RATE','LOW_SAMPLE_RATE','TARGET_ID_CHANGED']);
+function measuredPoseFailures(analysis) {
+  const quality=analysis?.quality,failures=[];
+  if(finite(quality?.usableRatio)&&quality.usableRatio<0.7||finite(quality?.validFrames)&&quality.validFrames<8)failures.push('LOW_POSE_COVERAGE');
+  if(finite(quality?.targetCoverage)&&quality.targetCoverage<0.7)failures.push('LOW_TARGET_COVERAGE');
+  if(finite(quality?.sourceFps)&&quality.sourceFps<5)failures.push('LOW_SOURCE_FRAME_RATE');
+  return failures;
+}
+function poseClassificationTrustworthy(analysis) {
+  if(!analysis||typeof analysis!=='object')return false;
+  return !measuredPoseFailures(analysis).length&&!(Array.isArray(analysis.quality?.reasons)?analysis.quality.reasons:[]).some(code=>unreliablePoseClassifications.has(code));
+}
 
 /** Keep local failures; a family recipe never becomes an exact exercise label. */
 export function mergeCoachAssessment(analysis,coach,{originalAnalysis}={}) {
   let base=analysis&&typeof analysis==='object'?analysis:{};
   const original=originalAnalysis&&typeof originalAnalysis==='object'?originalAnalysis:null;
-  const originalHard=(Array.isArray(original?.quality?.reasons)?original.quality.reasons:[]).filter(code=>MOTION_HARD_QUALITY_FAILURES.includes(code));
-  if(originalHard.length)base={...base,quality:{...base.quality,reasons:[...new Set([...(base.quality?.reasons||[]),...originalHard])]}};
+  const originalHard=[...(Array.isArray(original?.quality?.reasons)?original.quality.reasons:[]),...measuredPoseFailures(original)].filter(code=>MOTION_HARD_QUALITY_FAILURES.includes(code));
+  const measuredFailures=measuredPoseFailures(base);
+  if(originalHard.length||measuredFailures.length)base={...base,quality:{...base.quality,reasons:[...new Set([...(base.quality?.reasons||[]),...originalHard,...measuredFailures])]}};
   const localExercise=exercise(base.exerciseId),localFamily=localExercise||familyTemplate(base.exerciseFamily);
   const identified=confirmedMotionAction(coach),identifiedExercise=exercise(identified?.exerciseId),identifiedFamily=identifiedExercise||familyTemplate(identified?.family);
   const originalFamily=exercise(original?.exerciseId)?.family||supportedFamily(original?.exerciseFamily);
-  const hintConflict=(Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).includes('EXERCISE_HINT_CONFLICT');
-  const conflict=!!identified&&(hintConflict||!!identified.family&&[localFamily?.family,originalFamily].some(family=>family&&family!==identified.family));
+  const hintConflict=(Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).includes('EXERCISE_HINT_CONFLICT')&&poseClassificationTrustworthy(original||base)&&poseClassificationTrustworthy(base);
+  const reliableFamilies=[poseClassificationTrustworthy(base)?localFamily?.family:null,poseClassificationTrustworthy(original)?originalFamily:null];
+  const conflict=!!identified&&(hintConflict||!!identified.family&&reliableFamilies.some(family=>family&&family!==identified.family));
   const identity=identified?{exerciseId:conflict?null:identified.exerciseId,exerciseName:identified.name,exerciseFamily:identified.family,familyName:motionFamilies[identified.family]||null,exerciseFamilyName:motionFamilies[identified.family]||null,requiresVisualConfirmation:conflict,recognitionSource:'visual',recognitionConflict:conflict}:{};
   if(identified&&!identifiedFamily)return {...base,...identity,status:'unsupported',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,attemptCount:0,incompleteAttemptCount:0,reps:[],checks:(Array.isArray(coach.checks)?coach.checks:[]).filter(check=>check.source==='visual'&&generalVisualCodes.has(check.code)).slice(0,3),issues:[],visualReviewRequests:[],coach,summary:`已识别${identified.name}；暂无对应的本地检查规则，仅提供关键画面反馈，不计算分数或次数。`};
   if((Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).some(code=>MOTION_HARD_QUALITY_FAILURES.includes(code)))return {...base,...identity,status:base.status==='unsupported'?'unsupported':'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(unscoredRep),coach,...(conflict?{summary:'本地分析与视觉识别的动作类别不一致，请补充更清晰的完整动作视频。'}:{})};

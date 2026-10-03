@@ -128,7 +128,16 @@ test('a hard quality failure retains a confirmed equipment name without permitti
   assert.equal(result.qualifiedRepCount,0);
   assert.deepEqual(result.reps,[{...rep,score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false}]);
   const conflict=mergeCoachAssessment({...base,exerciseFamily:'row'},coach);
-  assert.notEqual(conflict.exerciseId,'barbell-bench','quality failure cannot hide a family conflict');
+  assert.equal(conflict.exerciseId,'barbell-bench','Sparse target tracking cannot establish a conflicting pose family');
+  assert.equal(conflict.recognitionConflict,false);
+  assert.equal(conflict.requiresVisualConfirmation,false);
+  assert.equal(conflict.score,null);
+  assert.ok(conflict.reps.every(rep=>rep.score===null&&rep.qualified===false));
+  const reliableConflict=mergeCoachAssessment({...base,exerciseFamily:'row',quality:{reasons:[]}},coach);
+  assert.equal(reliableConflict.exerciseId,null);
+  assert.equal(reliableConflict.recognitionConflict,true);
+  assert.equal(reliableConflict.requiresVisualConfirmation,true);
+  assert.equal(reliableConflict.score,null);
 });
 
 test('a family conflict removes each repetition score while preserving its measured evidence and times', () => {

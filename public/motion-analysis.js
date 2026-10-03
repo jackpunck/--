@@ -187,7 +187,7 @@ function identifyPatterns(features) {
   const wristUp = ratio(features, f => f.wrist && f.wrist.y < f.shoulder.y - torso * 0.15);
   const wristLow = ratio(features, f => f.wrist && f.wrist.y > f.shoulder.y + torso * 0.35);
   const elbowShift = range(features.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null));
-  // A crop can hide the seated legs while preserving the entire pulling arm.
+  // Extended or unseen legs need not establish the bent-knee seated posture.
   // Require the elbow to move back against the extended wrist's projected
   // direction. Wrist-to-shoulder shortening alone also occurs in a curl.
   const extendedAngle = qField(features, 'elbowAngle', 0.75), flexedAngle = qField(features, 'elbowAngle', 0.25);
@@ -196,7 +196,11 @@ function identifyPatterns(features) {
   const wristRetraction = quantile(extendedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5) - quantile(flexedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5);
   const wristForward = quantile(extendedArm.map(f => f.wrist ? (f.wrist.x - f.shoulder.x) / torso : null), 0.5);
   const elbowRetraction = (quantile(extendedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5) - quantile(flexedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5)) * Math.sign(wristForward);
-  const croppedPull = finiteRatio(features, 'kneeAngle') < 0.5 && Math.abs(wristForward) > 0.25 && elbowRetraction > 0.18 && wristRetraction > 0.18 && shoulderMove < 0.25;
+  const directionalPull = Math.abs(wristForward) > 0.25 && elbowRetraction > 0.18 && wristRetraction > 0.18 && shoulderMove < 0.25;
+  const directionalSupport = finiteRatio(features, 'kneeAngle') < 0.5 || ratio(features, f => f.knee && Math.abs(f.knee.y - f.hip.y) < torso * 0.6) > 0.6;
+  // Standing upper-arm retraction can also be a drag curl. Keep both families
+  // when no seated support is observable and the upper arm remains low/stable.
+  const standingPullOverlap = directionalPull && !directionalSupport && vertical > 0.7 && ratio(features, f => f.upright) > 0.6 && qField(features, 'armElevation') < 65 && a < 35;
   // A tilted, supported torso with extended hips can be a lying press or a
   // supported row. Camera projection can put a pressing wrist below the
   // shoulder; unseen legs cannot establish the bent-over pulling stance.
@@ -213,8 +217,9 @@ function identifyPatterns(features) {
   }
   if (legacy.id === 'pushup') add('pushup', '水平身体、手脚支撑、肩部升降与屈肘共同变化', legacy.confidence);
   if (!patterns.length && e >= 18 && finiteRatio(features, 'elbowAngle') >= 0.65) {
-    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent || croppedPull) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) {
+    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent || directionalPull && directionalSupport || standingPullOverlap) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) {
       add('row', '屈肘拉回，肘部相对躯干前后移动');
+      if (standingPullOverlap) add('elbow-isolation', '站姿屈肘与小幅上臂后撤也符合拖弯举，需要器械和受力方向证据');
       if (supportedPressOverlap) add('horizontal-press', '倾斜躯干与屈伸肘的投影也符合支撑卧推动作，需确认器械、支撑面与受力方向');
     }
     else if (qField(features, 'armElevation', 0.25) > 120 && a < 25) add('overhead-extension', '上臂保持过顶，肘部反复屈伸');
@@ -224,14 +229,17 @@ function identifyPatterns(features) {
     } else if ((bent && wristUp > 0.55 && shoulderMove < 0.25) || (vertical > 0.7 && seated && wristLow < 0.4 && elbowShift > 0.15)) add('horizontal-press', '手臂在胸部附近伸展，需确认凳面或器械');
     else if (vertical > 0.7 && qField(features, 'armElevation') < 65 && a < 35 && hipMove < 0.25) add('elbow-isolation', '上臂相对稳定、肘关节反复屈伸；握法和受力方向未知');
   }
-  if (patterns.some(p => p.family === 'elbow-isolation') && qField(features, 'viewRatio') > 0.38 && elbowShift > 0.18) add('row', '斜前方视角下屈肘与拉回投影相近，需要器械与支撑证据');
+  if (patterns.some(p => p.family === 'elbow-isolation') && !patterns.some(p => p.family === 'row') && qField(features, 'viewRatio') > 0.38 && elbowShift > 0.18) add('row', '斜前方视角下屈肘与拉回投影相近，需要器械与支撑证据');
   if (!patterns.length && a >= 25 && (e < 25 || a > e * 0.8) && finiteRatio(features, 'armElevation') >= 0.65) add(bent ? 'reverse-fly' : 'lateral-raise', '肘部变化较小，手臂相对躯干抬起');
   if (!patterns.length && k >= 25 && hipMove < 0.12 && shoulderMove < 0.12) add('knee-isolation', '髋部稳定、膝部反复屈伸，需确认器械与受力方向');
   if (!patterns.length && qField(features, 'kneeAngle') < 135 && bent) {
     if (hipMove > 0.12 && hipMove > shoulderMove * 1.6 && h > 15) add('bridge', '屈膝支撑、肩部相对固定而髋部升降');
     else if (shoulderMove > 0.1 && shoulderMove > hipMove * 1.5 && h > 15) add('crunch', '髋部相对稳定，上躯干反复卷起');
   }
-  if (!patterns.length && vertical > 0.75 && k < 15 && fieldRange(features, 'heelLift') >= 0.045 && hipMove > 0.02) add('calf', '膝部变化较小，脚跟相对前脚掌升降');
+  const activeUpperBody = e >= 18 && finiteRatio(features, 'elbowAngle') >= 0.65 || a >= 25 && finiteRatio(features, 'armElevation') >= 0.65;
+  // Foot and hip projection noise must not turn an unresolved arm movement
+  // into an exclusive lower-body label.
+  if (!patterns.length && !activeUpperBody && vertical > 0.75 && k < 15 && fieldRange(features, 'heelLift') >= 0.045 && hipMove > 0.02) add('calf', '膝部变化较小，脚跟相对前脚掌升降');
   const stableSupport = ratio(features, f => f.horizontal) > 0.8 && e < 12 && k < 15 && fieldRange(features, 'bodyAngle') < 15;
   if (!patterns.length && stableSupport && features.at(-1).time - features[0].time >= 3 && qField(features, 'elbowAngle') < 125) add('plank', '持续的前臂支撑姿态，未观察到重复屈伸');
   return patterns;

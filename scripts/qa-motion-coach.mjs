@@ -20,7 +20,9 @@ const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:fixtur
  return {time,landmarks,personCount:1};
 })};
 const source=await readFile(join(root,'public/motion-video.js'),'utf8');
-const replay=source.replace('export async function analyzeVideo(', 'async function unusedAnalyzeVideo(')+`\nexport async function analyzeVideo(file,{signal,onProgress,targetPoint}={}){window.__qaMotionTarget=targetPoint;if(signal?.aborted)throw new DOMException('Aborted','AbortError');onProgress?.({progress:1});return ${JSON.stringify(pipeline)};}`;
+const replay=source.replace('export async function analyzeVideo(', 'async function unusedAnalyzeVideo(')+`\nexport async function analyzeVideo(file,{signal,onProgress,targetPoint}={}){window.__qaMotionTarget=targetPoint;if(window.__qaHoldPose)await new Promise(resolve=>{window.__qaReleasePose=resolve;});if(signal?.aborted)throw new DOMException('Aborted','AbortError');onProgress?.({progress:1});return ${JSON.stringify(pipeline)};}`;
+const evidenceSource=await readFile(join(root,'public/motion-evidence.js'),'utf8');
+const heldEvidence=evidenceSource.replace('export async function buildMotionEvidence(', 'async function actualBuildMotionEvidence(')+`\nexport async function buildMotionEvidence(...args){if(window.__qaHoldEvidence)await new Promise(resolve=>{window.__qaReleaseEvidence=resolve;});return actualBuildMotionEvidence(...args);}`;
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'精细模型与动作开发/node_modules/playwright/index.mjs'))));
 const calls=[],errors=[],external=[],browserRequests=[];let upstreamMode='success',pendingRelease=null,equipmentAction=null;
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -42,12 +44,13 @@ const base=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.QA_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',serviceWorkers:'block'});
 await context.route('**/motion-video.js',route=>route.fulfill({contentType:'text/javascript',body:replay}));
+await context.route('**/motion-evidence.js',route=>route.fulfill({contentType:'text/javascript',body:heldEvidence}));
 const page=await context.newPage();page.setDefaultTimeout(15000);
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{browserRequests.push({url:r.url(),method:r.method()});if(/^https?:/.test(r.url())&&!r.url().startsWith(base))external.push(r.url());});
 const nav=async name=>{if(await page.locator('.mobile-menu').isVisible())await page.locator('.mobile-menu').click();await page.locator(`.nav [data-page="${name}"]`).click();};
 const shot=name=>page.screenshot({path:join(dataDir,`${name}.png`),fullPage:true});
 const reports=async()=>{const r=await context.request.get(base+'/api/state');assert.equal(r.status(),200);return(await r.json()).records.filter(r=>r.kind==='motion-assessment'&&!r.deleted);};
-const analyze=async({selectTarget=false}={})=>{
+const analyze=async({selectTarget=false,waitForCoach=true}={})=>{
  await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
  if(selectTarget){
   await page.locator('[data-motion-video]').evaluate(v=>{v.currentTime=3;});await page.waitForFunction(()=>!document.querySelector('[data-motion-video]').seeking);
@@ -58,10 +61,22 @@ const analyze=async({selectTarget=false}={})=>{
   await page.mouse.click(box.x+box.width*.6,box.y+box.height*.3);
   await page.locator('[data-motion-target-picker]').waitFor({state:'hidden'});assert.match(await page.locator('[data-motion-target-label]').textContent(),/已指定/);
  }
- await page.locator('[data-motion-action="analyze"]').click();await page.locator('.motion-coach-evaluation').waitFor({timeout:60000});await page.waitForFunction(()=>!document.querySelector('[data-motion-action="save"]')?.disabled);
+ await page.locator('[data-motion-action="analyze"]').click();
+ if(!waitForCoach)return;
+ await page.locator('.motion-coach-evaluation').waitFor({timeout:60000});await page.waitForFunction(()=>!document.querySelector('[data-motion-action="save"]')?.disabled);
  if(selectTarget){const point=await page.evaluate(()=>window.__qaMotionTarget);assert(Math.abs(point.x-.6)<.01&&Math.abs(point.y-.3)<.01);}
 };
 const save=async()=>{await page.locator('[data-motion-action="save"]').click();await page.waitForFunction(()=>document.querySelector('[data-motion-action="save"]')?.textContent==='已保存报告');await page.locator('#sync-status').click();};
+const unpublished=async()=>{
+ assert.equal(await page.locator('[data-motion-results]').isVisible(),false,'Results wait for AI review');
+ assert.equal(await page.locator('[data-motion-results] .motion-score').count(),0,'No provisional scores are published');
+ assert.equal(await page.locator('[data-motion-action="save"]').count(),0,'Unreviewed results cannot be saved');
+};
+const waitPending=async()=>{
+ await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('AI 正在核对'),{},{timeout:60000});
+ for(let i=0;i<100&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
+};
+const releasePending=()=>{upstreamMode='success';pendingRelease();pendingRelease=null;};
 const checks=[];
 try{
  const reg=await context.request.post(base+'/api/auth/register',{data:{name:'动作AI验证',email:`motion-coach-${Date.now()}@example.test`,password:'motion-qa-password-123'}});assert.equal(reg.status(),201);const {user}=await reg.json();
@@ -72,7 +87,16 @@ try{
  assert.equal(await page.locator('.motion-catalog li').count(),motionExercises.length);
  assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),true);
  if(!reportsOnly){
- await analyze();await shot('desktop-visual');
+ upstreamMode='pending';await page.evaluate(()=>{window.__qaHoldEvidence=true;});
+ await analyze({waitForCoach:false});await page.waitForFunction(()=>typeof window.__qaReleaseEvidence==='function');
+ await unpublished();assert.equal(calls.length,0);assert.equal(await page.locator('[data-motion-action="cancel-coach"]').isVisible(),true);
+ await page.evaluate(()=>{window.__qaHoldEvidence=false;window.__qaReleaseEvidence();window.__qaReleaseEvidence=null;});
+ await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('AI 正在核对'),{},{timeout:60000});
+ for(let i=0;i<100&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
+ await unpublished();assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);await shot('waiting-for-ai');
+ pendingRelease();pendingRelease=null;upstreamMode='success';
+ await page.locator('.motion-coach-evaluation').waitFor();await shot('desktop-visual');
+ checks.push('no-result-during-evidence-preparation','no-result-before-ai-review','unreviewed-report-not-saveable');
  assert.equal(calls.length,1);assert.equal(calls[0].model,'qa-motion-vision');assert(calls[0].imageCount>=2&&calls[0].imageCount<=6);assert(calls[0].imageBytes<=2*1024*1024);
  assert(calls[0].input.analysis.checks.length>0);assert(!JSON.stringify(calls[0].input.analysis).includes('landmarks'));
  const contextFrames=calls[0].input.analysis.evidenceFrames.filter(frame=>frame.framing==='equipment-context');
@@ -85,17 +109,34 @@ try{
  await save();let stored=(await reports())[0];assert(stored.data.score<=49);assert.equal(stored.data.coach.mode,'visual');assert.equal(stored.data.coach.action.exerciseId,'squat');assert(stored.data.checks.some(c=>c.code==='SPINE_NEUTRAL'&&c.status==='fail'));
  const serialized=JSON.stringify(stored.data);assert(!/data:image|base64|blob:|landmarks/.test(serialized));assert(serialized.length<200*1024);checks.push('real-keyframe-extraction','dedicated-vision-route','strict-ai-failure-cap','escaped-model-prose','timestamp-replay','mobile-layout','save-without-images');
  // A pending response must not steal focus from a saved report.
- upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('AI 正在核对'),{},{timeout:60000});
+ upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();await unpublished();
  await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-history-notice').waitFor();
- for(let i=0;i<100&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);pendingRelease();pendingRelease=null;upstreamMode='success';
+ await page.locator('[data-motion-action="live-result"]').click();await unpublished();
+ await page.locator('[data-motion-action="history"]').first().click();releasePending();
  await page.locator('[data-motion-coach-status]').waitFor({state:'hidden'});assert.equal(await page.locator('.motion-history-notice').isVisible(),true);await page.locator('[data-motion-action="live-result"]').click();checks.push('history-keeps-focus-during-response');
- // Failed retries preserve local results and allow another attempt.
- upstreamMode='error';await page.locator('[data-motion-action="coach"]').click();await page.locator('.motion-coach-error').waitFor({timeout:60000});assert.equal(await page.locator('[data-motion-action="save"]').isDisabled(),false);upstreamMode='success';checks.push('upstream-error-recovery');
+ // Failures keep results private until a successful retry or explicit local fallback.
+ upstreamMode='error';await page.locator('[data-motion-action="coach"]').click();await page.locator('.motion-coach-error').waitFor({timeout:60000});await unpublished();assert.equal(await page.locator('[data-motion-coach-retry]').isVisible(),true);
+ // Even a stale save event cannot persist an unreviewed candidate.
+ await page.locator('.motion-page').evaluate(root=>{const button=document.createElement('button');button.dataset.motionAction='save';button.dataset.qaStaleSave='';root.append(button);button.click();button.remove();});assert.equal((await reports()).length,1);
+ upstreamMode='success';await page.locator('[data-motion-coach-retry]').click();await page.locator('.motion-coach-evaluation').waitFor({timeout:60000});checks.push('failure-does-not-publish','upstream-error-retry','save-handler-blocks-unreviewed-report');
  // Cancellation aborts the browser request and ignores a late model response.
- upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();for(let i=0;i<600&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
- await page.locator('[data-motion-action="cancel-coach"]').click();pendingRelease();pendingRelease=null;upstreamMode='success';assert.match(await page.locator('.motion-coach-error').textContent(),/取消/);checks.push('cancel-ignores-late-result');
+ upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();
+ await page.locator('[data-motion-action="cancel-coach"]').click();assert.match(await page.locator('.motion-coach-error').textContent(),/取消/);await unpublished();releasePending();
+ await page.locator('[data-motion-action="local-result"]').click();assert.equal(await page.locator('[data-motion-results]').isVisible(),true);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),false);assert.equal(await page.locator('[data-motion-action="save"]').isDisabled(),false);checks.push('cancel-ignores-late-result','explicit-local-fallback');
+ // A local-only run publishes immediately and never contacts the model.
+ const localCalls=calls.length;await analyze({waitForCoach:false});await page.locator('[data-motion-results]').waitFor();assert.equal(calls.length,localCalls);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);checks.push('local-only-remains-available');
+ // Enabling AI while reading history still reviews the current local candidate.
+ await page.locator('[data-motion-action="history"]').first().click();upstreamMode='pending';await page.locator('[data-motion-ai-mode]').check();await waitPending();assert.equal(await page.locator('.motion-history-notice').isVisible(),true);
+ await page.locator('[data-motion-action="live-result"]').click();await unpublished();releasePending();await page.locator('.motion-coach-evaluation').waitFor();checks.push('enable-ai-on-local-result-even-in-history');
+ // A history selected during pose analysis remains selected throughout AI review.
+ upstreamMode='pending';await page.evaluate(()=>{window.__qaHoldPose=true;});await analyze({waitForCoach:false});await page.waitForFunction(()=>typeof window.__qaReleasePose==='function');await page.locator('[data-motion-action="history"]').first().click();
+ await page.evaluate(()=>{window.__qaHoldPose=false;window.__qaReleasePose();window.__qaReleasePose=null;});await waitPending();assert.equal(await page.locator('.motion-history-notice').isVisible(),true);releasePending();await page.locator('[data-motion-coach-status]').waitFor({state:'hidden'});assert.equal(await page.locator('.motion-history-notice').isVisible(),true);await page.locator('[data-motion-action="live-result"]').click();checks.push('history-selected-during-pose-keeps-focus');
+ // A replacement file invalidates the old review, including its late response.
+ upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();await page.locator('[data-motion-file]').setInputFiles(clip);releasePending();await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);await unpublished();assert.equal(await page.locator('[data-motion-review-wait]').isVisible(),false);checks.push('replacement-file-ignores-old-review');
+ // Leaving the view destroys the pending review without publishing into the next page.
+ upstreamMode='pending';await analyze({waitForCoach:false});await waitPending();await nav('settings');releasePending();await page.locator('[data-action="settings-tab"][data-tab="ai"]').click();await page.locator('#task-motion').waitFor();assert.equal(await page.locator('[data-motion-results]').count(),0);checks.push('destroy-ignores-late-review');
  // Actual settings UI switches the dedicated task to text-only, leaving other tasks alone.
- await nav('settings');await page.locator('[data-action="settings-tab"][data-tab="ai"]').click();await page.locator('#task-motion').waitFor();assert.equal(await page.locator('#tasks-form select').count(),4);
+ assert.equal(await page.locator('#tasks-form select').count(),4);
  await page.locator('#task-motion').selectOption(JSON.stringify({providerId:provider.id,modelId:'qa-motion-text'}));await page.locator('#tasks-form button').click();
  await page.waitForTimeout(150);await nav('motion');assert.match(await page.locator('.motion-coach-mode').textContent(),/只接收检测摘要/);
  await analyze({selectTarget:true});assert.equal(calls.at(-1).model,'qa-motion-text');assert.equal(calls.at(-1).imageCount,0);await save();checks.push('manual-target-first-frame-letterbox-coordinates');

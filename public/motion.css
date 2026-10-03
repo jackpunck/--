@@ -183,6 +183,6 @@ button.motion-time:hover{border-color:#aebdf2;background:#e7edff;color:var(--mot
 .motion-coach-source{font-size:10px;color:#939ab0;line-height:1.8;display:block;margin-top:14px;overflow-wrap:anywhere}
 .motion-coach-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
 .motion-coach-actions>small{color:#9098af;font-size:10px;line-height:1.8}
-.motion-coach .motion-coach-error{color:#a85c47;background:#fff1ec;padding:11px;border-radius:8px}
+.motion-coach-error{color:#a85c47;background:#fff1ec;padding:11px;border-radius:8px;font-size:12px;line-height:1.8}
 .motion-coach-status{color:#5b6cb2;background:#eef1ff;font-size:12px;line-height:1.8;border-radius:9px;padding:12px 14px;margin:16px 0 0}
 @media(max-width:560px){.motion-coach{padding:15px}.motion-coach .motion-section-head{flex-wrap:wrap}.motion-check-grid{grid-template-columns:1fr}.motion-check{padding:13px}.motion-coach-actions>.button{width:100%}.motion-coach-mode p{font-size:10px}}

@@ -243,3 +243,44 @@ test('open presses and rows accept new apparatus or support values when consiste
     for(const patch of [{movement:family==='row'?'horizontal-press':'row'},{laterality:null},{evidenceTimes:[1]}])assert.equal(sanitize(open({name,family,observations:{...observed,...patch}})).action.status,'unknown',name);
   }
 });
+
+test('unreliable pose classifications cannot contradict a structured two-frame visual bench confirmation',()=>{
+  const observed={equipment:'barbell',support:'flat-bench',movement:'horizontal-press',laterality:'bilateral',evidence:'两帧清楚显示杠铃、平凳支撑与双臂推起过程。',evidenceTimes:[1,2]};
+  const coach=sanitize(open({exerciseId:'barbell-bench',name:'杠铃卧推',family:'horizontal-press',observations:observed}));
+  for(const code of ['NO_POSE','TOO_FEW_FRAMES','LOW_POSE_COVERAGE','LOW_TARGET_COVERAGE','TARGET_ID_CHANGED','MULTIPLE_PEOPLE','INVALID_DIMENSIONS','LOW_SAMPLE_RATE','LOW_SOURCE_FRAME_RATE']){
+    const merged=contract.mergeCoachAssessment({...base('row'),quality:{reasons:[code]}},coach);
+    assert.equal(merged.exerciseName,'杠铃卧推',code);
+    assert.equal(merged.exerciseId,'barbell-bench',code);
+    assert.equal(merged.recognitionConflict,false,code);
+    assert.equal(merged.requiresVisualConfirmation,false,code);
+    assert.equal(merged.score,null,code);
+    assert.equal(merged.qualifiedRepCount,0,code);
+    assert.ok(merged.reps.every(rep=>rep.score===null&&rep.qualified===false),code);
+  }
+});
+
+test('a hint conflict inherited from sparse original poses cannot veto a visual action name',()=>{
+  const observed={equipment:'cable',support:'seated',movement:'row',laterality:'bilateral',evidence:'目标坐在划船座椅，双手拉动连接低位绳索的把手。',evidenceTimes:[1,2]};
+  const coach=sanitize(open({exerciseId:'row',name:'坐姿绳索划船',family:'row',observations:observed}));
+  const original={...base(),exerciseFamily:'calf',quality:{usableRatio:0.434,targetCoverage:0.434,validFrames:50,reasons:['LOW_TARGET_COVERAGE']}};
+  const assessed={...base(),exerciseFamily:null,quality:{usableRatio:0.434,targetCoverage:0.434,validFrames:50,reasons:['EXERCISE_HINT_CONFLICT']}};
+  const merged=contract.mergeCoachAssessment(assessed,coach,{originalAnalysis:original});
+  assert.equal(merged.exerciseName,'坐姿绳索划船');
+  assert.equal(merged.exerciseId,'row');
+  assert.equal(merged.recognitionConflict,false);
+  assert.equal(merged.requiresVisualConfirmation,false);
+  assert.equal(merged.score,null);
+  assert.equal(merged.qualifiedRepCount,0);
+});
+
+test('explicitly sparse pose quality prevents name conflicts and numerical evaluation even in old incomplete summaries',()=>{
+  const observed={equipment:'barbell',support:'flat-bench',movement:'horizontal-press',laterality:'bilateral',evidence:'两帧清楚显示杠铃、平凳支撑与双臂推起过程。',evidenceTimes:[1,2]};
+  const coach=sanitize(open({exerciseId:'barbell-bench',name:'杠铃卧推',family:'horizontal-press',observations:observed}));
+  for(const quality of [{usableRatio:0.272,reasons:[]},{targetCoverage:0.272,reasons:[]},{validFrames:7,reasons:[]}]){
+    const merged=contract.mergeCoachAssessment({...base('row'),quality},coach);
+    assert.equal(merged.exerciseId,'barbell-bench');
+    assert.equal(merged.recognitionConflict,false);
+    assert.equal(merged.requiresVisualConfirmation,false);
+    assert.equal(merged.score,null);
+  }
+});
