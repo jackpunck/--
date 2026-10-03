@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, foodPortions} from '../public/knowledge-tools.js';
+import {calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, foodPortions, calculateRMConversion} from '../public/knowledge-tools.js';
+import {estimate1RM} from '../public/domain.js';
 
 test('REE formula uses kg/cm and both sex constants, with activity applied once', () => {
   const profile = {sex:'male',age:30,height:180,weight:80,activity:1.5};
@@ -29,4 +30,63 @@ test('portion examples expose assumptions and scale edible grams and fractions c
   for (const p of foodPortions) assert.ok(calculateFoodPortion(p.id).kcal >= 0);
   assert.throws(()=>calculateFoodPortion('unknown'));
   for (const options of [{count:0},{count:NaN},{grams:-1},{grams:''},{grams:5000,count:100}]) assert.throws(()=>calculateFoodPortion('egg',options));
+});
+
+test('a 12-rep set estimates 1RM first and supplies the full RM conversion table', () => {
+  const input={weight:40,currentReps:12,targetReps:5,increment:2.5};
+  const result=calculateRMConversion(input);
+  assert.equal(result.estimatedMax,56);
+  assert.deepEqual(result.estimates,{epley:56,brzycki:57.6});
+  assert.deepEqual(result.target,{reps:5,label:'5RM',weight:48,percent:85.7,equipmentWeight:47.5});
+  assert.equal(result.rows.find(row=>row.reps===1).weight,56);
+  assert.equal(result.rows.find(row=>row.reps===12).weight,40);
+  assert.equal(result.rows.find(row=>row.reps===8).weight,44.2);
+  assert.equal(result.rows.find(row=>row.reps===15).weight,37.3);
+  assert.deepEqual(result.rows.map(row=>row.reps),Array.from({length:15},(_,index)=>index+1));
+  assert.equal(result.rows[0].percent,100);
+  assert.match(result.note,/超过 10 次/);
+  assert.deepEqual(input,{weight:40,currentReps:12,targetReps:5,increment:2.5});
+  const custom=calculateRMConversion({weight:'60',currentReps:'8',targetReps:'10',increment:'1'});
+  assert.equal(custom.target.weight,57);
+  assert.equal(custom.target.equipmentWeight,57);
+  assert.equal(calculateRMConversion({weight:40}).target.reps,1);
+});
+
+test('both formulas match the existing strength estimator and retain measured single-rep weight', () => {
+  for (const method of ['epley','brzycki']) {
+    for (let reps=1;reps<=15;reps++) {
+      const result=calculateRMConversion({weight:60,currentReps:reps,targetReps:reps,method});
+      assert.equal(result.estimatedMax,estimate1RM(60,reps)[method]);
+      assert.equal(result.target.weight,60);
+      assert.equal(result.rows[0].weight,result.estimatedMax);
+      assert.equal(result.rows[0].percent,100);
+      assert(result.rows.every((row,index,rows)=>!index||row.weight<rows[index-1].weight));
+    }
+    assert.deepEqual(calculateRMConversion({weight:80,currentReps:1,method}).estimates,{epley:80,brzycki:80});
+    assert.equal(calculateRMConversion({weight:80,currentReps:1,method}).estimatedMax,80);
+  }
+  const brzycki=calculateRMConversion({weight:40,currentReps:12,targetReps:5,method:'brzycki'});
+  assert.equal(brzycki.estimatedMax,57.6);
+  assert.equal(brzycki.target.weight,51.2);
+  assert.equal(calculateRMConversion({weight:80,currentReps:1,targetReps:5}).target.weight,68.6);
+});
+
+test('RM conversion avoids intermediate rounding and rounds equipment loads down', () => {
+  // A rounded 1RM would change 0.4 kg to 0.5 kg on the round trip.
+  for (const method of ['epley','brzycki']) {
+    assert.equal(calculateRMConversion({weight:0.4,currentReps:8,targetReps:8,increment:0.1,method}).target.weight,0.4);
+    assert.equal(calculateRMConversion({weight:0.4,currentReps:8,targetReps:8,increment:0.1,method}).target.equipmentWeight,0.4);
+  }
+  // Display rounding must not round a load up across the equipment boundary.
+  assert.equal(calculateRMConversion({weight:39.99,currentReps:12,targetReps:12}).target.equipmentWeight,37.5);
+  assert.equal(calculateRMConversion({weight:0.1}).target.equipmentWeight,null);
+});
+
+test('RM conversions reject invalid weights, rep counts, formulas and equipment steps', () => {
+  for (const weight of ['',null,false,0,-1,Infinity,NaN,1001,'no']) assert.throws(()=>calculateRMConversion({weight}));
+  for (const key of ['currentReps','targetReps']) {
+    for (const value of ['',null,false,0,-1,1.5,Infinity,NaN,16]) assert.throws(()=>calculateRMConversion({weight:40,[key]:value}));
+  }
+  for (const increment of ['',null,false,0,-1,Infinity,NaN,21]) assert.throws(()=>calculateRMConversion({weight:40,increment}));
+  for (const method of ['',null,false,'unknown']) assert.throws(()=>calculateRMConversion({weight:40,method}));
 });

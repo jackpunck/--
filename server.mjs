@@ -1,3 +1,5 @@
+import {reconcileAchievements} from './server/achievements.mjs';
+import {beijingDate,validTrainingCompletion} from './public/achievements.js';
 import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
 import { loadEnvFile } from 'node:process';
@@ -20,6 +22,7 @@ import {prepareChatHistory,historyTools} from './server/chat-history.mjs';
 import { createCommunity } from './server/community.mjs';
 import { communityTransaction } from './server/community-storage.mjs';
 import { createCommunityMedia } from './server/community-media.mjs';
+import {completeMotionCoach, validateMotionCoachRequest, MOTION_COACH_REQUEST_BYTES} from './server/motion-coach.mjs';
 
 const scrypt = promisify(scryptCallback);
 const root = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +30,7 @@ const DAY = 86400000;
 const MAX_FILE = 8 * 1024 * 1024;
 const ID = /^[\w:-]{1,100}$/;
 const FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
-const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
+const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.task': 'application/octet-stream' };
 const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'demo.offline.js', 'atlas.worker.js', 'assets/anatomy-data.bin', 'model-loader.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
 
 async function passwordHash(password) {
@@ -200,7 +203,7 @@ export function createServer(options = {}) {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; media-src 'self' blob:; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
     try {
       let pathname;
       try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { throw new HttpError(400, '请求路径无效。'); }
@@ -251,6 +254,7 @@ export function createServer(options = {}) {
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');
           if (expectedUser && expectedUser !== user.id) throw new HttpError(409, '当前登录账号已变更，请重新登录后同步。');
+          reconcileAchievements(db,user.id,currentTime());
           send(res, 200, { userId: user.id, records: getRecords(db, user.id) }); return;
         }
         if (pathname === '/api/sync' && method === 'POST') {
@@ -260,13 +264,16 @@ export function createServer(options = {}) {
           const seen = new Set();
           for (const change of changes) {
             if (!change || typeof change.id !== 'string' || !ID.test(change.id) || typeof change.kind !== 'string' || !/^[\w-]{1,40}$/.test(change.kind) || !Number.isSafeInteger(change.baseVersion) || change.baseVersion < 0 || (change.deleted !== undefined && typeof change.deleted !== 'boolean') || change.data === undefined || (!change.deleted && (!change.data || typeof change.data !== 'object' || Array.isArray(change.data))) || seen.has(change.id)) throw new HttpError(400, '同步记录格式无效或重复。');
-            if (Buffer.byteLength(JSON.stringify(change.data)) > (change.kind === 'conversation' ? 2 * 1024 * 1024 : 256 * 1024)) throw new HttpError(413, change.kind === 'conversation' ? '单个会话已超过 2 MB，请新建会话后继续。' : '单条记录已超过 256 KB，请缩短内容。');
+            if (Buffer.byteLength(JSON.stringify(change.data)) > (change.kind === 'conversation' ? 2 * 1024 * 1024 : change.kind === 'motion-assessment' ? 1024 * 1024 : 256 * 1024)) throw new HttpError(413, change.kind === 'conversation' ? '单个会话已超过 2 MB，请新建会话后继续。' : change.kind === 'motion-assessment' ? '单份动作评估报告已超过 1 MB，无法同步。' : '单条记录已超过 256 KB，请缩短内容。');
+            if(['achievement','achievement-summary'].includes(change.kind)||change.id.startsWith('achievement:')||change.id==='achievement-summary')throw new HttpError(400,'成就由系统根据训练记录核算，不能直接修改。');
+            if(!change.deleted&&validTrainingCompletion(change)&&change.data.date>beijingDate(currentTime()))throw new HttpError(400,'未来日期的训练不能提前完成。');
             seen.add(change.id);
           }
           const conflicts = [];
           const removedAttachments = new Set();
           db.exec('BEGIN IMMEDIATE');
           try {
+            reconcileAchievements(db,user.id,currentTime());
             for (const change of changes) {
               const existing = db.prepare('SELECT * FROM records WHERE user_id = ? AND id = ?').get(user.id, change.id);
               if ((existing?.version ?? 0) !== change.baseVersion || existing && existing.kind !== change.kind) { conflicts.push({ id: change.id, server: recordFromRow(existing) ?? null }); continue; }
@@ -281,6 +288,7 @@ export function createServer(options = {}) {
             for (const id of removedAttachments) {
               if (!db.prepare('SELECT 1 FROM records WHERE user_id = ? AND deleted = 0 AND instr(data, ?) > 0 LIMIT 1').get(user.id, id)) db.prepare('DELETE FROM attachments WHERE id = ? AND user_id = ?').run(id, user.id);
             }
+            reconcileAchievements(db,user.id,currentTime());
             db.exec('COMMIT');
           } catch (error) { db.exec('ROLLBACK'); throw error; }
           send(res, 200, { userId: user.id, ...getRecordChanges(db,user.id,cursor), conflicts }); return;
@@ -299,7 +307,7 @@ export function createServer(options = {}) {
             const providers = body.providers.map(value => resolveProvider(user.id, value));
             if (new Set(providers.map(item => item.id)).size !== providers.length) throw new HttpError(400, '供应商 ID 不能重复。');
             const tasks = {}, taskModels = {};
-            for (const task of ['chat', 'meal', 'planning']) {
+            for (const task of ['chat', 'meal', 'planning', ...(Object.hasOwn(body.tasks || {}, 'motion') || Object.hasOwn(body.taskModels || {}, 'motion') || Object.hasOwn(previous.tasks, 'motion') ? ['motion'] : [])]) {
               const id = body.tasks?.[task] ?? (providers.some(item => item.id === previous.tasks[task]) ? previous.tasks[task] : '');
               if (typeof id !== 'string' || id && !providers.some(item => item.id === id)) throw new HttpError(400, '任务选择了不存在的供应商。');
               tasks[task] = id;
@@ -332,6 +340,23 @@ export function createServer(options = {}) {
           provider = selectProviderModel(provider, body.model);
           await callAi(user.id, provider, [{ role: 'user', content: 'Reply briefly with OK.' }]);
           send(res, 200, { ok: true, message: '连接成功，模型已返回有效回复。' }); return;
+        }
+        if (pathname === '/api/motion/coach' && method === 'POST') {
+          const body = validateMotionCoachRequest(await readBody(req, MOTION_COACH_REQUEST_BYTES));
+          const settings = getProviders(db, user.id);
+          const id = settings.tasks.motion, model = settings.taskModels.motion;
+          if (!id || !model) throw new HttpError(400, '尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
+          const provider = selectProviderModel(providerWithKey(user.id, id), model);
+          const controller = new AbortController();
+          const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
+          res.once('close', disconnect);
+          try {
+            if (req.aborted || res.destroyed) return;
+            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal}));
+            if (!controller.signal.aborted && !res.destroyed) send(res, 200, result);
+          } catch (error) { if (!controller.signal.aborted && !res.destroyed) throw error; }
+          finally { res.off('close', disconnect); }
+          return;
         }
         if (pathname === '/api/ai' && method === 'POST') {
           const body = await readBody(req);
@@ -421,6 +446,7 @@ export function createServer(options = {}) {
           send(res, 200, { ok: true }); return;
         }
         if (pathname === '/api/export' && method === 'GET') {
+          reconcileAchievements(db,user.id,currentTime());
           const attachments = db.prepare('SELECT * FROM attachments WHERE user_id = ? ORDER BY created_at').all(user.id).map(item => ({ id: item.id, name: item.name, type: item.type, size: item.size, createdAt: item.created_at, data: Buffer.from(item.data).toString('base64') }));
           res.setHeader('Content-Disposition', 'attachment; filename="fitness-data.json"');
           send(res, 200, { schemaVersion: 2, exportedAt: currentTime(), user: publicUser(user), records: getRecords(db, user.id), ...getProviders(db, user.id), attachments, community: community.exportUser(user.id) }); return;

@@ -304,10 +304,12 @@ export function nativeParts(content, protocol) {
   });
 }
 
-export async function complete({ provider, messages, purpose, fetchImpl, timeoutMs = 60000, allowPrivateProviders = true }) {
+export async function complete({ provider, messages, purpose, fetchImpl, timeoutMs = 60000, allowPrivateProviders = true, signal }) {
   const startedAt=performance.now();
+  signal?.throwIfAborted();
   if (!provider.model) throw new HttpError(400, '请先选择并启用一个模型。');
   const { address } = await validateProviderTarget(provider.baseUrl, allowPrivateProviders);
+  signal?.throwIfAborted();
   const baseUrl = apiBase(provider);
   let endpoint = `${baseUrl}/chat/completions`;
   let body = { model: provider.model, messages, stream: false };
@@ -330,7 +332,8 @@ export async function complete({ provider, messages, purpose, fetchImpl, timeout
     body = { ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents: messages.filter(message => message.role !== 'system').map(message => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: nativeParts(message.content, 'gemini') })) };
   }
   const requestedAt=performance.now();
-  const payload = await requestJson(endpoint, { provider, address, fetchImpl, signal: AbortSignal.timeout(timeoutMs), body });
+  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+  const payload = await requestJson(endpoint, { provider, address, fetchImpl, signal: requestSignal, body });
   const respondedAt=performance.now();
   const textParts = parts => Array.isArray(parts) ? parts.filter(part => part && typeof part.text === 'string' && !part.thought && (!part.type || part.type === 'text')).map(part => part.text).join('\n') : undefined;
   let content = provider.protocol === 'anthropic' ? textParts(payload.content) : provider.protocol === 'gemini' ? textParts(payload.candidates?.[0]?.content?.parts) : payload.choices?.[0]?.message?.content;

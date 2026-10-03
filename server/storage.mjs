@@ -1,3 +1,4 @@
+import {initializeAchievements} from './achievements.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,6 +38,7 @@ export function openStore(dataDir) {
       INSERT INTO record_changes(user_id,record_id) VALUES(new.user_id,new.id)
       ON CONFLICT(user_id,record_id) DO UPDATE SET seq=excluded.seq;
     END;`);
+  initializeAchievements(db);
   // Keep existing encrypted keys and task assignments when upgrading older databases.
   const providerColumns = new Set(db.prepare('PRAGMA table_info(providers)').all().map(column => column.name));
   for (const [name, definition] of Object.entries({ preset_id: "TEXT NOT NULL DEFAULT 'custom'", protocol: "TEXT NOT NULL DEFAULT 'openai'", models: "TEXT NOT NULL DEFAULT '[]'" })) {
@@ -94,7 +96,8 @@ export function getProviders(db, userId) {
   const row = db.prepare('SELECT tasks,task_models,version FROM preferences WHERE user_id = ?').get(userId);
   const tasks = row ? JSON.parse(row.tasks) : { chat: '', meal: '', planning: '' };
   const storedModels = row ? JSON.parse(row.task_models) : {};
-  const taskModels = Object.fromEntries(['chat', 'meal', 'planning'].map(task => [task, storedModels[task] ?? providers.find(provider => provider.id === tasks[task])?.model ?? '']));
+  const taskNames = ['chat', 'meal', 'planning', ...(Object.hasOwn(tasks, 'motion') || Object.hasOwn(storedModels, 'motion') ? ['motion'] : [])];
+  const taskModels = Object.fromEntries(taskNames.map(task => [task, storedModels[task] ?? providers.find(provider => provider.id === tasks[task])?.model ?? '']));
   return { providers, tasks, taskModels, version: row?.version ?? 0 };
 }
 

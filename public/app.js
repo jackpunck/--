@@ -1,9 +1,11 @@
 import {landingMarkup, mountLanding} from './landing.js?v=12';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
+import {getDailyQuote} from './daily-quotes.js?v=1';
 import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
-import {weeklyAchievement, earnedWeeklyAchievements} from './achievements.js?v=1';
+import {beijingDate,validTrainingCompletion,achievementWall} from './achievements.js?v=5';
+import {renderAchievementWall,renderAchievementDetails} from './achievement-view.js?v=4';
 import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=25';
 import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=10';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
@@ -12,18 +14,19 @@ import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
 import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=12';
 import {remainingMealSuggestions, foodCategory, mealWeekContext, mealCategoryInstruction, adjustMealNutrient, mealDishInstruction, parseMealEstimate, nutritionBalance, parseNutritionAdvice, formatMealNotes, mealAdviceTiming} from './meal-contract.js?v=9';
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
-import {formulaCards, foodPortions, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion} from './knowledge-tools.js?v=9';
+import {formulaCards, foodPortions, rmPresets, rmConversionReference, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, calculateRMConversion} from './knowledge-tools.js?v=11';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=2';
 import {providerPresets} from './provider-presets.js?v=9';
-import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=9';
+import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=10';
 import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=12';
 import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = createId;
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const today = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const dateLabel = value => new Date(value+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});
 const numeric = value => Math.round(Number(value)||0);
 const goalLabel = goal => ({lose:'减脂',gain:'增肌',maintain:'保持健康'}[goal] || goal);
@@ -61,6 +64,9 @@ const state = {page:'chat',setting:'home',date:today(),conversation:null,user:nu
 try { state.sidebarCollapsed = localStorage.getItem('fitness:sidebar-collapsed') === 'true'; } catch { state.sidebarCollapsed = false; }
 const knowledgeDrafts = {};
 const modelViewer = new ModelViewer();
+let motionView = null;
+let motionContainer = null;
+function closeMotionView() { motionView?.destroy(); motionView=null; motionContainer=null; }
 let landingCleanup = null;
 let communityController = null;
 let navigationVersion = 0;
@@ -128,10 +134,12 @@ async function boot() {
   }
 }
 async function enter(user,offline=false) {
-  if(state.user?.id!==user.id){await communityController?.destroy();communityController=null;modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
+  if(state.user?.id!==user.id){closeMotionView();await communityController?.destroy();communityController=null;modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.celebratedWeeks=new Set();state.achievementPage=0;state.achievementCategory='all';state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
   state.providersVersion=null;state.providersConflict=false;providersRequest++;
   setApiUser(user.id);
   state.user=user; state.store=await new RecordStore(user).open(); localStorage.setItem('fitness:last-user',JSON.stringify(user));
+  let derivedPending=false;for(const [id,change] of state.store.pending){if(['achievement','achievement-summary'].includes(change.kind)){state.store.pending.delete(id);state.store.records.delete(id);state.store.conflicts=state.store.conflicts.filter(item=>item.id!==id);derivedPending=true;}}
+  if(derivedPending){state.store.cursor=null;await state.store.persist();}
   if(offline)state.store.status='offline';
   const store=state.store;state.scheduleFingerprint=scheduleFingerprint();state.scheduleRefreshPending=false;
   store.addEventListener('change',()=>{if(state.store!==store)return;updateSync();renderSidebarHistory();refreshScheduleViews();});
@@ -143,7 +151,7 @@ async function enter(user,offline=false) {
   if(initialHash!==location.hash)history.replaceState(null,'',initialHash);
   const personal=personalRoute(initialHash);
   if(personal.active){state.page='settings';state.setting=personal.section;}
-  else state.page=initialHash.startsWith('#community')?'community':(['chat','nutrition','training','library'].includes(initialHash.slice(1))?initialHash.slice(1):state.page);
+  else state.page=initialHash.startsWith('#community')?'community':(['chat','nutrition','training','library','motion'].includes(initialHash.slice(1))?initialHash.slice(1):state.page);
   render(); if(!profile()) showProfile(true);
 }
 function applyProviders(result) {
@@ -193,8 +201,14 @@ function authFormMarkup() {
   const register=state.authMode==='register';
   return `<div class="auth-form"><div class="auth-welcome"><span></span> 你的循序空间</div><h2 id="landing-auth-heading" tabindex="-1">${register?'创建账号，开始记录':'欢迎回到循序'}</h2><p>保存你的训练计划、餐食记录和阶段变化。</p><div class="auth-tabs"><button data-action="auth-mode" data-mode="register" class="${register?'active':''}">创建账号</button><button data-action="auth-mode" data-mode="login" class="${!register?'active':''}">登录账号</button></div><form id="auth-form">${register?'<div class="field"><label for="name">怎么称呼你</label><input id="name" name="name" autocomplete="name" placeholder="你的名字" required maxlength="40"></div>':''}<div class="field"><label for="email">邮箱</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><div class="field"><label for="password">密码</label><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" placeholder="至少 8 位密码" minlength="8" maxlength="128" required></div><div id="auth-error"></div><button class="button primary" type="submit">${register?'创建账号，开始使用':'登录我的空间'} ${icon('arrow')}</button></form><p class="auth-hint">使用同一服务地址，可在电脑与手机间同步记录。</p></div>`;
 }
+function setWorkspaceTheme(active) {
+  document.documentElement.dataset.theme=active?'workspace':'landing';
+  document.querySelector('meta[name="theme-color"]').content=active?'#e4e6fa':'#263dff';
+}
 function renderAuth() {
+  closeMotionView();
   rememberCommunityReturn();
+  setWorkspaceTheme(false);
   const panel=$('[data-auth-panel]');
   if(panel){
     const email=$('#email')?.value||'';
@@ -210,11 +224,21 @@ function renderAuth() {
 }
 
 function render() {
+  closeMotionView();
+  setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
-  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',community:'社区',settings:'个人中心'};
-  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}${state.page==='community'?' community-active':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['community','community','社区'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">KEEP YOUR MOMENTUM ${icon("spark")}</span><strong>每一步，都算数。</strong>找到自己的节奏，<br>把坚持变成一种日常。<div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
-  renderSidebarHistory(); updateSync(); renderPage();
+  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',community:'社区',settings:'个人中心'};
+  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}${state.page==='community'?' community-active':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true">循</span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol">循</span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['community','community','社区'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
+  updateSidebarQuote(); renderSidebarHistory(); updateSync(); renderPage();
+}
+function updateSidebarQuote() {
+  const card=$('.side-note'),now=new Date(),date=today(now);
+  if(!card||card.dataset.quoteDate===date)return;
+  const quote=getDailyQuote(now);
+  $('[data-daily-quote-title]',card).textContent=quote.title;
+  quote.lines.forEach((line,index)=>{$(`[data-daily-quote-line="${index}"]`,card).textContent=line;});
+  card.dataset.quoteDate=date;
 }
 function updateSync() {
   const el=$('#sync-status'); if(!el||!state.store)return;
@@ -227,6 +251,7 @@ function renderSidebarHistory() {
   if(el._renderedMarkup!==html){el.innerHTML=html;el._renderedMarkup=html;}
 }
 function renderPage() {
+ if(state.page!=='motion')closeMotionView();
   if(state.page==='community'){
     if(!profile()){$('#page').innerHTML='<div class="empty" role="status">完成基本资料后，即可进入循序社区。</div>';return;}
     communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
@@ -234,7 +259,34 @@ function renderPage() {
     return;
   }
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
-  ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,settings:renderSettings}[state.page])();
+  ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,motion:renderMotion,settings:renderSettings}[state.page])();
+}
+function renderMotion() {
+ const container=$('#page');
+ if(motionView&&motionContainer===container){motionView.refreshHistory?.();return;}
+ closeMotionView();motionContainer=container;
+ const store=state.store;
+ motionView=mountMotionView(container,{
+   saveAssessment:async data=>{
+     if(state.store!==store)throw new Error('账号已切换，请重新分析视频。');
+     validateMotionAssessmentSize(data);
+     const id='motion:'+uid();await store.put('motion-assessment',id,data);return {id,data};
+   },
+   listAssessments:()=>store.list('motion-assessment'),
+   deleteAssessment:async id=>{if(state.store!==store)throw new Error('账号已切换。');if(store.records.get(id)?.kind==='motion-assessment')await store.remove(id);},
+   openExercise:showExercise,
+   getCoachConfiguration:()=>{
+     const provider=state.providers.find(item=>item.id===state.tasks.motion);
+     const model=provider&&enabledModels(provider).find(item=>item.id===currentModel('motion'));
+     return {configured:!!model,vision:model?.vision===true,model:model?.name||model?.id||'',provider:provider?.name||''};
+   },
+   reviewAssessment:async(payload,{signal}={})=>{
+     if(state.store!==store)throw new Error('账号已切换，请重新分析视频。');
+     return api('/motion/coach',{method:'POST',body:payload,signal});
+   },
+   openCoachSettings:()=>{state.setting='ai';void navigate('settings');},
+   notify:toast,
+ });
 }
 function title(name,desc,actions='') { return `<div class="page-title"><div><h1>${name}</h1><p>${desc}</p></div>${actions}</div>`; }
 function macros(current,target,compact=false) {
@@ -876,9 +928,9 @@ function assertTaskCurrent(snapshot) {
  return current;
 }
 function trainingTaskCompleted(record) {
- const items=taskDay(record)?.exercises||[];
- return record.data.completed===true||(items.length>0&&items.every(exercise=>exercise.completed===true));
+ return record.data.date<=beijingDate()&&validTrainingCompletion({...record,data:{...record.data,daySnapshot:taskDay(record)}});
 }
+
 function renderCalendarCard(record) {
  const task=record.data,items=taskDay(record)?.exercises||[],completed=trainingTaskCompleted(record);
  const sets=items.reduce((total,item)=>total+(Number(item.sets)||0),0);
@@ -892,12 +944,12 @@ function renderTraining() {
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
  const busy=new Set(getBusyDates()),days=weekDates(state.date),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
  const completed=weekTasks.filter(trainingTaskCompleted).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
- const achieved=weekTasks.length>0&&completed===weekTasks.length&&earnedWeeklyAchievements(records('achievement')).some(record=>record.data.weekStart===days[0]);
+ const achieved=weekTasks.length>0&&completed===weekTasks.length;
  const rangeLabel=days.map(date=>`${Number(date.slice(5,7))}月${Number(date.slice(8))}日`);
- $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',`<div class="training-page-actions">${button(icon('calendar')+' 繁忙日','busy-days','','busy-days-button')}${button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary')}</div>`)+`<section class="timetable-shell">
+ $('#page').innerHTML=title('把训练，变成自己的节奏。','按天安排训练，记录每一次认真完成的练习。',`<div class="training-page-actions">${button(icon('body')+' 评估动作','motion-open')}${button(icon('calendar')+' 繁忙日','busy-days','','busy-days-button')}${button(icon('plus')+' 添加训练','calendar-add',`data-date="${state.date}"`,'primary')}</div>`)+`<section class="timetable-shell">
   <div class="timetable-toolbar">
    <div class="week-navigation"><div class="calendar-period"><details class="calendar-popover calendar-date-picker"><summary aria-label="选择日期，当前${monthLabel}"><strong>${monthLabel}</strong><span aria-hidden="true">⌄</span></summary><div class="calendar-popover-panel"><label for="training-date">跳转到日期</label><input type="date" id="training-date" value="${state.date}"></div></details><small>${rangeLabel[0]} — ${rangeLabel[6]}${days[0].slice(0,4)!==days[6].slice(0,4)?' · 跨年':''}</small></div><div class="calendar-week-controls"><div class="calendar-week-arrows">${button('‹','calendar-week','data-offset="-7" aria-label="上一周"','small')}${button('›','calendar-week','data-offset="7" aria-label="下一周"','small')}</div>${button('本周','calendar-today','','small')}</div></div>
-   <div class="calendar-toolbar-actions">${achieved?`<div class="weekly-achievement" role="status"><img class="weekly-seal" src="/assets/weekly-achievement.svg" alt=""><div class="calendar-progress"><span><strong>${days.includes(today())?'本周达成':'该周达成'}</strong> ${icon('check')}</span><small>完成 ${completed} 次训练</small><progress value="1" max="1" aria-label="本周训练已全部完成"></progress></div></div>`:`<div class="calendar-progress" role="status" aria-live="polite"><span>本周完成 <strong>${completed} / ${weekTasks.length}</strong></span><progress value="${completed}" max="${weekTasks.length||1}" aria-label="本周训练完成进度"></progress></div>`}<details class="calendar-popover calendar-options"><summary aria-label="日历更多操作"><span aria-hidden="true">···</span></summary><div class="calendar-popover-panel">${button(icon('history')+' 重置日历','calendar-reset','','calendar-reset')}</div></details></div>
+   <div class="calendar-toolbar-actions">${achieved?`<div class="weekly-achievement" role="status"><img class="weekly-seal" src="/assets/achievements/week.svg" alt=""><div class="calendar-progress"><span><strong>${days.includes(beijingDate())?'本周计划已完成':'该周计划已完成'}</strong> ${icon('check')}</span><small>完成 ${completed} 次训练</small><progress value="1" max="1" aria-label="本周训练已全部完成"></progress></div></div>`:`<div class="calendar-progress" role="status" aria-live="polite"><span>本周完成 <strong>${completed} / ${weekTasks.length}</strong></span><progress value="${completed}" max="${weekTasks.length||1}" aria-label="本周训练完成进度"></progress></div>`}<details class="calendar-popover calendar-options"><summary aria-label="日历更多操作"><span aria-hidden="true">···</span></summary><div class="calendar-popover-panel">${button(icon('history')+' 重置日历','calendar-reset','','calendar-reset')}</div></details></div>
   </div>
   ${achieved?`<div class="weekly-complete-note">${icon('check')}<strong>这一周，认真练过了。</strong><small>每一次坚持，都算数</small></div>`:''}
   <div class="timetable-scroll" tabindex="0" aria-label="每周训练表，可横向滚动"><div class="timetable" role="table" aria-label="本周训练计划"><div class="timetable-heading" role="row">${days.map((date,i)=>`<div class="timetable-date ${date===today()?'is-today':''} ${date===state.date?'is-selected':''}" role="columnheader"><button type="button" data-action="training-day" data-date="${date}" aria-label="${dateLabel(date)}${date===today()?'，今天':''}" aria-pressed="${date===state.date}" ${date===today()?'aria-current="date"':''}><span>${['周一','周二','周三','周四','周五','周六','周日'][i]}</span><strong>${Number(date.slice(-2))}</strong></button></div>`).join('')}</div><div class="timetable-days" role="row">${days.map(date=>{const items=weekTasks.filter(r=>r.data.date===date);return `<div class="timetable-cell ${date===today()?'is-today':''} ${busy.has(date)?'is-busy':''}" data-date="${date}" role="cell" aria-label="${dateLabel(date)}训练">${items.length?items.map(renderCalendarCard).join(''):`<div class="calendar-rest">${busy.has(date)?'繁忙':'休息'}</div>`}${busy.has(date)?'':`<button type="button" class="calendar-cell-add" data-action="calendar-add" data-date="${date}" aria-label="添加 ${dateLabel(date)}训练">${icon('plus')}</button>`}</div>`;}).join('')}</div></div></div>
@@ -1007,6 +1059,7 @@ async function addPlanToCalendar(trainingPlan,date,{activate=false}={}) {
 }
 async function resetTrainingCalendar() {
  const store=state.store;
+ await syncBeforeArchiving();
  await store.putMany(calendarResetChanges([...store.records.values()]));
  state.date=today();state.calendarDelete=null;state.calendarDetail=null;state.trainingContentEditor=null;
  closeModal();renderTraining();toast('日历已重置');
@@ -1045,18 +1098,25 @@ function showCalendarTask(id) {
  state.calendarDetail=structuredClone(record);
  modal(esc(data.title),`<div class="training-content-list">${items.length?items.map((exercise,i)=>{
   const name=exercises.find(item=>item.id===exercise.exerciseId)?.name||exercise.exerciseId,done=data.completed?Number(exercise.sets)>0:exercise.completed===true;
-  return `<div class="training-content-exercise${done?' is-completed':''}"><button type="button" class="training-exercise-toggle" data-action="training-exercise-toggle" data-id="${esc(id)}" data-index="${i}" aria-pressed="${done}" aria-label="${done?'取消完成':'标记完成'}：${esc(name)}" ${data.completed?'disabled':''}><span aria-hidden="true"></span></button><strong>${esc(name)}</strong><div class="training-content-amount"><span>${esc(trainingExerciseSummary(exercise))}</span>${data.completed&&Number(exercise.weight)>0?`<small>${esc(exercise.weight)} kg</small>`:''}</div></div>`;
- }).join(''):`<p class="description">${data.completed?'暂无实际训练记录':'暂无训练动作'}</p>`}</div>${data.notes?`<p class="training-content-notes">${esc(data.notes)}</p>`:''}${!data.completed&&day?`<div class="form-footer">${button('记录训练','log-training',`data-id="${esc(id)}"`,'primary')}</div>`:''}`);
+  return `<div class="training-content-exercise${done?' is-completed':''}"><button type="button" class="training-exercise-toggle" data-action="training-exercise-toggle" data-id="${esc(id)}" data-index="${i}" aria-pressed="${done}" aria-label="${done?'取消完成':'标记完成'}：${esc(name)}" ${data.completed||(data.date>beijingDate()&&!done)?'disabled':''}><span aria-hidden="true"></span></button><strong>${esc(name)}</strong><div class="training-content-amount"><span>${esc(trainingExerciseSummary(exercise))}</span>${data.completed&&Number(exercise.weight)>0?`<small>${esc(exercise.weight)} kg</small>`:''}</div></div>`;
+ }).join(''):`<p class="description">${data.completed?'暂无实际训练记录':'暂无训练动作'}</p>`}</div>${data.notes?`<p class="training-content-notes">${esc(data.notes)}</p>`:''}${day?`<div class="form-footer">${data.completed?button('撤销完成','training-reopen',`data-id="${esc(id)}"`):button('记录训练','log-training',`data-id="${esc(id)}" ${data.date>beijingDate()?'disabled':''}`,'primary')}</div>`:''}`);
  trainingContentHeader(record,day?(data.completed?'log-training':'training-content-edit'):null);
 }
 async function saveTrainingProgress(record,data) {
- const store=state.store,updated={id:record.id,kind:record.kind,data};
- const award=weeklyAchievement(allCalendarTasks(),updated,today(),new Date().toISOString());
- if(award&&!store.records.has(award.id)){
-  await store.putMany([updated,award]);
-  if(state.store===store)state.weekCelebration={userId:state.user?.id,weekStart:award.data.weekStart,expiresAt:Date.now()+120000};
- }else await store.put(record.kind,record.id,data);
+ const updated={id:record.id,kind:record.kind,data};
+ if(data.date>beijingDate()&&validTrainingCompletion(updated))throw new Error('未来日期的训练不能提前记录完成。');
+ if((data.completed||data.daySnapshot?.exercises?.length&&data.daySnapshot.exercises.every(exercise=>exercise.completed))&&!validTrainingCompletion(updated))throw new Error('请为每个动作填写有效的完成组数和次数。');
+ const store=state.store,days=weekDates(beijingDate()),tasks=allCalendarTasks().filter(task=>days.includes(task.data.date));
+ const finished=validTrainingCompletion(updated)&&tasks.length&&tasks.every(task=>task.id===record.id?true:validTrainingCompletion(task));
+ await store.put(record.kind,record.id,data);
+ state.celebratedWeeks??=new Set();
+ if(finished&&days.includes(data.date)&&!state.celebratedWeeks.has(days[0])){state.celebratedWeeks.add(days[0]);state.weekCelebration={userId:state.user?.id,weekStart:days[0],expiresAt:Date.now()+120000};}
 }
+async function syncBeforeArchiving() {
+ await state.store.sync();
+ if(state.store.pending.size||state.store.conflicts.length)throw new Error('请先联网同步并处理记录冲突，再清空日程。已完成历史会保留。');
+}
+
 async function toggleTrainingExercise(id,index) {
  const record=assertTaskCurrent(state.calendarDetail);
  if(record.id!==id)throw new Error('请重新打开这项训练。');
@@ -1240,9 +1300,9 @@ function strengthTool() {modal('最大力量估算',`<p class="description">用�
 function sourceLink(name,url) {return url?`<a class="knowledge-source" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name||'查看来源')} ↗</a>`:`<small class="knowledge-source">${esc(name||'')}</small>`;}
 function knowledgeSources() {return `<details class="knowledge-sources"><summary>知识来源与说明</summary><div class="source-grid">${knowledgeCards.map(card=>`<article><strong>${esc(card.title)}</strong><p>${esc(card.summary)}</p>${sourceLink(card.sourceName,card.sourceUrl)}</article>`).join('')}</div></details>`;}
 function renderLibrary() {
- const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
- $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。')+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
- const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
+ const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['weights','RM 换算','估算单次最大重量'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
+ $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。',button(icon('body')+' 视频动作评估','motion-open'))+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
+ const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,weights:renderWeightTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
  (renderPanel[state.knowledgeTab]||renderNutritionTools)();
 }
 function toolField(id,label,name,value,attributes='') {return `<div><label for="${id}">${label}</label><input id="${id}" name="${name}" type="number" value="${esc(value)}" ${attributes} required></div>`;}
@@ -1256,14 +1316,62 @@ function renderPortionTools() {
  $('#knowledge-panel').innerHTML=`<div class="portion-layout"><section class="card tool-card"><div class="card-head"><div><span class="eyebrow">EVERYDAY PORTIONS</span><h2>一份食物，含有多少营养？</h2></div>${icon('food')}</div><p class="tool-intro">盒、个、杯的大小各有不同。选择常见份量，也可以按实际可食重量调整。</p><form id="portion-form" novalidate><div class="form-grid"><div class="full"><label for="portion-food">选择食物份量</label><select id="portion-food" name="foodId">${options(foodPortions.map(item=>[item.id,item.label]),d.foodId)}</select></div>${toolField('portion-count','份数','count',d.count,'min="0.1" max="100" step="0.1"')}${toolField('portion-grams','每份可食重量（g）','grams',d.grams,'min="1" max="5000" step="1"')}</div><div id="portion-error" class="tool-error" role="alert"></div><div class="form-footer"><button class="button primary" type="submit">换算营养</button></div></form><div id="portion-result" class="tool-result-panel" aria-live="polite"></div></section><section class="portion-reference"><h3>常见份量参考</h3><div class="portion-grid">${foodPortions.map(item=>`<button class="portion-preset" type="button" data-action="portion-preset" data-id="${esc(item.id)}"><span>${icon('food')}</span><strong>${esc(item.label)}</strong><small>每份 ${item.grams} g 可食部分</small></button>`).join('')}</div><p>熟饭按熟重计算；鸡蛋按去壳后的重量计算。包装食品优先核对实际营养标签。</p></section></div>`;
  updateKnowledgeTool($('#portion-form'));
 }
+function rmPresetButtons(side,reps) {
+ return `<div class="weight-presets" role="group" aria-label="${side==='current'?'已完成次数':'目标 RM'}快捷选择">${rmPresets.map(count=>`<button type="button" data-action="rm-preset" data-side="${side}" data-reps="${count}" aria-pressed="${Number(reps)===count}">${side==='current'?`${count} 次`:`${count}RM`}</button>`).join('')}</div>`;
+}
+function renderWeightTools() {
+ const d=knowledgeDrafts.weights||{weight:'',currentReps:12,targetReps:1,method:'epley'};
+ $('#knowledge-panel').innerHTML=`<div class="weight-layout">
+  <section class="card tool-card">
+   <div class="card-head"><div><span class="eyebrow">ONE REP MAX</span><h2>估算你的单次最大重量</h2></div>${icon('dumbbell')}</div>
+   <p class="tool-intro">输入动作标准、接近力竭的一组重量与次数，估算 1RM。若平时练 4 × 12，填写单组重量与 12 次即可。</p>
+   <form id="weight-conversion-form" novalidate>
+    <input id="weight-method" type="hidden" name="method" value="${esc(d.method)}">
+    <div class="form-grid">${toolField('weight-known','已知重量（kg）','weight',d.weight,'min="0.1" max="1000" step="0.1" placeholder="例如 40"')}${toolField('weight-current-reps','已完成次数（次）','currentReps',d.currentReps,'min="1" max="15" step="1"')}</div>
+    ${rmPresetButtons('current',d.currentReps)}
+    <p class="tool-footnote">组数不参与 RM 估算；如果做完仍能轻松继续，结果会低估你的能力。</p>
+    <fieldset class="weight-scheme-fields"><legend>目标 RM 换算</legend><div class="form-grid">${toolField('weight-target-reps','目标 RM 次数','targetReps',d.targetReps,'min="1" max="15" step="1"')}</div>${rmPresetButtons('target',d.targetReps)}</fieldset>
+    <div id="weights-error" class="tool-error" role="alert"></div><div class="form-footer"><button class="button primary" type="submit">估算与换算</button></div>
+   </form>
+   <div id="rm-target-result" class="tool-result-panel rm-target-result" aria-live="polite" hidden></div>
+  </section>
+  <section class="card tool-card weight-table-card">
+   <div class="card-head"><div><span class="eyebrow">RM CONVERSION</span><h2>1RM 估算与重量换算表</h2></div><span class="badge neutral">1–15RM</span></div>
+   <div id="weights-result" aria-live="polite"><div class="weight-empty">${icon('dumbbell')}<strong>填写重量，查看你的 1RM</strong><p>1RM 是标准完成一次的最大重量。也可以查看 5RM、8RM、12RM 等次数对应的重量。</p></div></div>
+   <details class="weight-method"><summary>RM 是什么？如何估算？</summary><p class="formula-expression">${esc(rmConversionReference.formula)}</p><p>${esc(rmConversionReference.description)}</p><p>超过 10 次的估算误差可能更大。表内百分比由所选公式计算，这些预测值不能代替实测最大重量。</p>${sourceLink(rmConversionReference.sourceName,rmConversionReference.sourceUrl)}</details>
+  </section>
+ </div>`;
+ if(knowledgeDrafts.weights)updateKnowledgeTool($('#weight-conversion-form'));
+}
+function renderWeightResult(result) {
+ const target=result.target,method=result.method==='epley'?'Epley':'Brzycki';
+ return `<p class="weight-basis">根据已完成 ${result.weight} kg × ${result.currentReps} 次估算</p>
+  <div class="tool-result-panel rm-estimate"><div class="row spread wrap"><div class="tool-total"><small>估算 1RM · 单次最大重量</small><strong data-rm-max>${result.estimatedMax}<em> kg</em></strong></div><span class="badge neutral">${method}</span></div><p>${esc(result.note)}</p></div>
+  <div class="rm-formula-comparison" role="group" aria-label="选择估算公式">${[['epley','Epley'],['brzycki','Brzycki']].map(([key,name])=>`<button type="button" data-action="rm-method" data-method="${key}" aria-label="使用 ${name} 公式估算" aria-pressed="${key===result.method}"><small>${name} 估算</small><strong>${result.estimates[key]}<em> kg</em></strong></button>`).join('')}</div><small class="tool-footnote">点击对应公式切换估算结果。两种公式的差异不是你的最大重量上下限。</small>
+  <div class="weight-table-wrap"><table class="weight-conversion-table"><caption>${method} · 点击 RM 可设为目标</caption><thead><tr><th scope="col">RM 次数</th><th scope="col">估算重量</th><th scope="col">占 1RM</th></tr></thead><tbody>${result.rows.map(row=>`<tr ${row.reps===target.reps?'class="selected"':''}><th scope="row"><button type="button" data-action="rm-preset" data-side="target" data-reps="${row.reps}" aria-label="查看 ${row.label} 对应重量" aria-pressed="${row.reps===target.reps}">${row.label}${row.reps===1?' · 最大重量':''}</button></th><td>${row.weight} kg</td><td>${row.percent}%</td></tr>`).join('')}</tbody></table></div><small class="tool-footnote">同一动作、同一器械的单组重量参考。11–15RM 仅作粗略估算，多组训练还需考虑累积疲劳。</small>`;
+}
+function chooseRMMethod(method) {
+ if(!['epley','brzycki'].includes(method))return;
+ $('#weight-method').value=method;updateKnowledgeTool($('#weight-conversion-form'));
+}
+function chooseRMPreset(reps,side) {
+ const count=Number(reps);if(!Number.isInteger(count)||count<1||count>15||!['current','target'].includes(side))return;
+ $(`#weight-${side}-reps`).value=count;
+ updateKnowledgeTool($('#weight-conversion-form'));
+}
 function updateKnowledgeTool(form) {
  if(!form)return;
- const values=formData(form),id=form.id,kind=id==='metabolism-form'?'metabolism':id==='macro-energy-form'?'macro':'portion',prefix=kind==='macro'?'macro-energy':kind;
+ const values=formData(form),id=form.id,kind=id==='metabolism-form'?'metabolism':id==='macro-energy-form'?'macro':id==='weight-conversion-form'?'weights':'portion',prefix=kind==='macro'?'macro-energy':kind;
  knowledgeDrafts[kind]=values;
- const output=$('#'+prefix+'-result'),errorBox=$('#'+prefix+'-error');if(!output||!errorBox)return;
+ if(kind==='weights')form.querySelectorAll('[data-action="rm-preset"]').forEach(button=>button.setAttribute('aria-pressed',String(Number(values[button.dataset.side+'Reps'])===Number(button.dataset.reps))));
+ const output=$('#'+prefix+'-result'),errorBox=$('#'+prefix+'-error'),targetOutput=kind==='weights'?$('#rm-target-result'):null;if(!output||!errorBox)return;
  try {
    let html='';
-   if(kind==='metabolism'){
+   if(kind==='weights'){
+     const result=calculateRMConversion(values),method=result.method==='epley'?'Epley':'Brzycki';
+     html=renderWeightResult(result);
+     patchHTML(targetOutput,`<div class="row spread wrap"><div class="tool-total"><small>目标 ${result.target.label} · 估算重量</small><strong data-rm-target>${result.target.weight}<em> kg</em></strong></div><span class="badge neutral">${method}</span></div>`);targetOutput.hidden=false;
+   }else if(kind==='metabolism'){
      const result=calculateMetabolism(values);
      html=`<div class="tool-numbers"><div><small>静息能量消耗</small><strong>${numeric(result.ree)}<em> kcal / 天</em></strong></div><div><small>全天总消耗估算</small><strong>${numeric(result.tdee)}<em> kcal / 天</em></strong></div></div><p>${esc(result.note)}</p>`;
    }else if(kind==='macro'){
@@ -1274,7 +1382,7 @@ function updateKnowledgeTool(form) {
      html=`<div class="row spread wrap"><strong>${esc(result.label)}</strong><span class="badge">共 ${result.grams} g</span></div><div class="portion-totals">${[['kcal','热量','kcal'],['protein','蛋白质','g'],['carbs','碳水','g'],['fat','脂肪','g']].map(([key,label,unit])=>`<div><small>${label}</small><strong>${Math.round(result[key]*10)/10}<em> ${unit}</em></strong></div>`).join('')}</div><p>${esc(result.note)}</p>${sourceLink(result.source)}`;
    }
    errorBox.innerHTML='';patchHTML(output,html);output.hidden=false;
- }catch(error){output.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
+ }catch(error){output.hidden=true;if(targetOutput)targetOutput.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
 }
 function choosePortion(id) {
  const item=foodPortions.find(item=>item.id===id);if(!item)return;
@@ -1311,9 +1419,22 @@ function renderSettings() {
  }else ({profile:renderProfile,achievements:renderAchievements,ai:renderAISettings,review:renderReview,data:renderData}[state.setting])();
 }
 function renderAchievements() {
- const awards=earnedWeeklyAchievements(records('achievement'));
- $('#settings-content').innerHTML=`<section class="achievement-wall" aria-labelledby="achievement-wall-title"><header class="achievement-wall-head"><div><h2 id="achievement-wall-title">成就墙</h2><p>每一周，都留下自己的印记。</p></div><div class="achievement-total">累计达成 <strong>${awards.length}</strong> 周</div></header>${awards.length?`<div class="achievement-grid">${awards.map(({data})=>`<article class="achievement-stamp"><img src="/assets/weekly-achievement.svg" alt="周训练达成印记" width="120" height="120"><h3>一周达成</h3><p class="achievement-week">${esc(data.weekStart.replaceAll('-','.'))} — ${esc(data.weekEnd.slice(5).replace('-','.'))}</p><time datetime="${esc(data.earnedDate)}">${esc(data.earnedDate.replaceAll('-','.'))} 获得</time></article>`).join('')}</div>`:`<div class="achievement-empty"><img src="/assets/weekly-achievement.svg" alt="" width="104" height="104"><h3>第一枚印记，等你点亮</h3><p>完成本周训练，在这里留下记录。</p></div>`}</section>`;
+ const all=[...state.store.records.values()],pageSize=matchMedia('(max-width:700px)').matches?2:4;
+ const model=achievementWall(all,state.achievementCategory||'all');
+ state.achievementPage=Math.max(0,Math.min(state.achievementPage||0,Math.ceil(model.cards.length/pageSize)-1));
+ $('#settings-content').innerHTML=renderAchievementWall(all,{category:state.achievementCategory||'all',page:state.achievementPage,pageSize});
+ const carousel=$('.achievement-carousel');if(!carousel)return;
+ let touch=null;
+ carousel.addEventListener('touchstart',event=>{const p=event.touches[0];touch={x:p.clientX,y:p.clientY};},{passive:true});
+ carousel.addEventListener('touchend',event=>{const p=event.changedTouches[0];if(touch&&Math.abs(p.clientX-touch.x)>60&&Math.abs(p.clientY-touch.y)<45){state.achievementPage+=p.clientX<touch.x?1:-1;renderAchievements();}touch=null;},{passive:true});
 }
+function showAchievement(id) {
+ const all=[...state.store.records.values()];
+ const card=achievementWall(all).cards.find(item=>item.id===id)||achievementWall(all,'milestone').cards.find(item=>item.id===id);if(!card)return;
+ modal(card.name,renderAchievementDetails([...state.store.records.values()],id));
+ $('#modal').classList.add('achievement-detail-modal');
+}
+
 function renderProfile() {
  const p=profile(),history=records('phase');
  $('#settings-content').innerHTML=`<div class="grid-2"><div class="card"><div class="profile-head"><span class="avatar">${esc(state.user.name?.slice(0,1))}</span><div><h2>${esc(state.user.name)}</h2><small>${esc(state.user.email)}</small></div></div><div class="stats" style="grid-template-columns:1fr 1fr;margin-bottom:20px"><div class="stat"><small>当前体重</small><strong>${p?.weight||'—'}<em>kg</em></strong></div><div class="stat"><small>当前目标</small><strong style="font-size:23px">${goalLabel(p?.goal)||'待设置'}</strong></div></div><div class="row spread"><small>年龄 / 性别</small><span>${p?.age||'—'} 岁 · ${p?.sex==='female'?'女':'男'}</span></div><div class="divider"></div><div class="row spread"><small>身高</small><span>${p?.height||'—'} cm</span></div><div class="divider"></div>${button('更新阶段资料','profile','','primary')}<p class="description" style="font-size:11px;margin:18px 0 0">每次更新会保留带日期的历史，并重新估算营养建议。</p></div><div class="card"><div class="card-head"><h2>阶段记录</h2><span class="badge neutral">${history.length} 条</span></div>${history.length?`<table class="history-table"><thead><tr><th>日期</th><th>体重</th><th>目标</th><th></th></tr></thead><tbody>${history.map(r=>`<tr><td>${esc(r.data.date)}</td><td>${r.data.weight} kg</td><td>${goalLabel(r.data.goal)}</td><td><button class="link-button" data-action="delete-phase" data-id="${r.id}">删除</button></td></tr>`).join('')}</tbody></table>`:empty('更新资料后，会在这里留下一条记录。')}</div></div>`;
@@ -1327,7 +1448,7 @@ function providerLogo(preset) { return `<span class="provider-logo" style="--pro
 function modelCapability(model) { return model.vision===true?'<span class="badge">支持图片</span>':model.vision===false?'<span class="badge neutral">文本</span>':'<span class="badge neutral">图片能力待确认</span>'; }
 function renderAISettings() {
  const taskOptions=task=>'<option value="">选择供应商与模型</option>'+state.providers.filter(p=>enabledModels(p).length).map(p=>`<optgroup label="${esc(p.name)}">${options(enabledModels(p).map(m=>[JSON.stringify({providerId:p.id,modelId:m.id}),`${p.name} · ${m.name||m.id}${m.vision===true?' · 支持图片':''}`]),taskSelection(task,state.providers,state.tasks,state.taskModels))}</optgroup>`).join('');
- $('#settings-content').innerHTML=`<div id="provider-settings-feedback" role="status" aria-live="polite">${state.providersConflict?providerConflictMarkup():''}</div><div class="provider-intro"><div><div class="eyebrow">CONNECT YOUR AI</div><h2>选择服务，填入密钥，就可以开始。</h2><p>地址已为你准备好。获取模型后，勾选常用模型，再分配给不同任务。</p></div><span class="badge">${providerPresets.filter(p=>p.id!=='custom').length} 种供应商预设</span></div><div class="provider-settings-grid"><section class="card"><div class="card-head"><h2>我的供应商</h2>${button('+ 添加供应商','provider','','small')}</div>${state.providers.length?state.providers.map(p=>{const preset=presetFor(p.presetId);return `<article class="provider-card"><div class="row">${providerLogo(preset)}<div class="grow"><strong>${esc(p.name)}</strong><small>${enabledModels(p).length} 个已启用模型</small></div><span class="badge ${p.hasKey?'':'neutral'}">${p.hasKey?'已配置':'无密钥'}</span></div><div class="provider-model-tags">${enabledModels(p).slice(0,4).map(m=>`<span title="${esc(m.id)}">${esc(m.name||m.id)}</span>`).join('')}${enabledModels(p).length>4?`<small>+${enabledModels(p).length-4}</small>`:''}</div><div class="row wrap">${button('管理模型','provider',`data-id="${esc(p.id)}"`,'small')}${button('测试连接','test-provider',`data-id="${esc(p.id)}" ${p.model?'':'disabled'}`,'small')}${button('删除','delete-provider',`data-id="${esc(p.id)}"`,'small')}</div></article>`;}).join(''):empty('还没有连接 AI 服务<br>从下面选择你使用的供应商。','spark')}<div class="divider"></div><div class="card-head"><h3>添加常用服务</h3><small>自动填写接口地址</small></div><div class="provider-presets">${providerPresets.map(p=>`<button class="preset-tile" data-action="provider-preset" data-preset="${p.id}">${providerLogo(p)}<span>${esc(p.name)}</span></button>`).join('')}</div><p class="provider-footnote">密钥在服务端加密保存，个人导出与浏览器缓存不包含密钥。</p></section><section class="card task-card"><div class="card-head"><h2>任务使用的模型</h2>${icon('settings')}</div><p class="description">同一份密钥下的多个模型，可以分别承担不同任务。</p><form id="tasks-form" data-version="${state.providersVersion??''}">${[['chat','日常对话','连续追问、知识问答与阶段分析','chat'],['meal','餐食识别','请选择支持图片输入的模型','image'],['planning','规划建议','训练安排、食谱与阶段规划','leaf']].map(([id,label,desc,i])=>`<div class="task-model-field"><label for="task-${id}">${icon(i)} ${label}</label><select id="task-${id}" name="${id}">${taskOptions(id)}</select><small>${desc}</small></div>`).join('')}<div class="form-footer"><button class="button primary">保存任务模型</button></div></form><div class="notice" style="margin-top:24px">有些服务的模型列表不提供图片能力信息；这类模型会标注“待确认”，可结合供应商说明选择。</div></section></div>`;
+ $('#settings-content').innerHTML=`<div id="provider-settings-feedback" role="status" aria-live="polite">${state.providersConflict?providerConflictMarkup():''}</div><div class="provider-intro"><div><div class="eyebrow">CONNECT YOUR AI</div><h2>选择服务，填入密钥，就可以开始。</h2><p>地址已为你准备好。获取模型后，勾选常用模型，再分配给不同任务。</p></div><span class="badge">${providerPresets.filter(p=>p.id!=='custom').length} 种供应商预设</span></div><div class="provider-settings-grid"><section class="card"><div class="card-head"><h2>我的供应商</h2>${button('+ 添加供应商','provider','','small')}</div>${state.providers.length?state.providers.map(p=>{const preset=presetFor(p.presetId);return `<article class="provider-card"><div class="row">${providerLogo(preset)}<div class="grow"><strong>${esc(p.name)}</strong><small>${enabledModels(p).length} 个已启用模型</small></div><span class="badge ${p.hasKey?'':'neutral'}">${p.hasKey?'已配置':'无密钥'}</span></div><div class="provider-model-tags">${enabledModels(p).slice(0,4).map(m=>`<span title="${esc(m.id)}">${esc(m.name||m.id)}</span>`).join('')}${enabledModels(p).length>4?`<small>+${enabledModels(p).length-4}</small>`:''}</div><div class="row wrap">${button('管理模型','provider',`data-id="${esc(p.id)}"`,'small')}${button('测试连接','test-provider',`data-id="${esc(p.id)}" ${p.model?'':'disabled'}`,'small')}${button('删除','delete-provider',`data-id="${esc(p.id)}"`,'small')}</div></article>`;}).join(''):empty('还没有连接 AI 服务<br>从下面选择你使用的供应商。','spark')}<div class="divider"></div><div class="card-head"><h3>添加常用服务</h3><small>自动填写接口地址</small></div><div class="provider-presets">${providerPresets.map(p=>`<button class="preset-tile" data-action="provider-preset" data-preset="${p.id}">${providerLogo(p)}<span>${esc(p.name)}</span></button>`).join('')}</div><p class="provider-footnote">密钥在服务端加密保存，个人导出与浏览器缓存不包含密钥。</p></section><section class="card task-card"><div class="card-head"><h2>任务使用的模型</h2>${icon('settings')}</div><p class="description">同一份密钥下的多个模型，可以分别承担不同任务。</p><form id="tasks-form" data-version="${state.providersVersion??''}">${[['chat','日常对话','连续追问、知识问答与阶段分析','chat'],['meal','餐食识别','请选择支持图片输入的模型','image'],['planning','规划建议','训练安排、食谱与阶段规划','leaf'],['motion','动作点评','视觉模型可识别器械与动作细节；文本模型解释检测证据','body']].map(([id,label,desc,i])=>`<div class="task-model-field"><label for="task-${id}">${icon(i)} ${label}</label><select id="task-${id}" name="${id}">${taskOptions(id)}</select><small>${desc}</small></div>`).join('')}<div class="form-footer"><button class="button primary">保存任务模型</button></div></form><div class="notice" style="margin-top:24px">有些服务的模型列表不提供图片能力信息；这类模型会标注“待确认”，可结合供应商说明选择。</div></section></div>`;
 }
 function providerEditor(id,presetId='deepseek') {
  const existing=state.providers.find(x=>x.id===id),preset=presetFor(existing?.presetId||presetId);
@@ -1470,7 +1591,7 @@ async function communityNavigate(hash) {
   }else location.hash=hash;
 }
 async function navigate(page,{fromHash=false}={}) {
-  if(!['chat','nutrition','training','library','community','settings'].includes(page))return;
+  if(!['chat','nutrition','training','library','motion','community','settings'].includes(page))return;
   const version=++navigationVersion;
   if(page==='community'&&!fromHash&&!location.hash.startsWith('#community'))history.pushState(null,'','#community');
   if(page==='community'){
@@ -1505,7 +1626,7 @@ window.addEventListener('hashchange',()=>{
     navigate('settings',{fromHash:true}).catch(error=>toast(error.message,true));
   }else{
     const page=hash.slice(1);
-    if(['chat','nutrition','training','library'].includes(page)&&page!==state.page)
+    if(['chat','nutrition','training','library','motion'].includes(page)&&page!==state.page)
       navigate(page,{fromHash:true}).catch(error=>toast(error.message,true));
   }
 });
@@ -1532,6 +1653,7 @@ document.addEventListener('click',async event=>{
    break;
  }
  case 'nav':if(target.dataset.page==='settings')state.setting='home';await navigate(target.dataset.page);break;
+ case 'motion-open':modelViewer.close();closeModal();await navigate('motion');break;
  case 'toggle-sidebar': {
    state.sidebarCollapsed = !state.sidebarCollapsed;
    $('.layout').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
@@ -1590,6 +1712,7 @@ document.addEventListener('click',async event=>{
  case 'draft-remove-exercise':await changeDraftExercise(target,true);break;
 
  case 'training-day':state.date=target.dataset.date;renderTraining();break;
+ case 'training-reopen':{const record=assertTaskCurrent(state.calendarDetail);if(record.id!==id)throw new Error('请重新打开训练。');const data=structuredClone(record.data);data.completed=false;delete data.actual;delete data.completedAt;data.daySnapshot.exercises.forEach(exercise=>exercise.completed=false);await saveTrainingProgress(record,data);renderTraining();showCalendarTask(id);break;}
  case 'log-training':logTraining(id);break;
  case 'busy-days':await openBusyDays();break;
  case 'busy-month':await changeBusyMonth(Number(target.dataset.offset));break;
@@ -1599,7 +1722,7 @@ document.addEventListener('click',async event=>{
  case 'busy-save':{const controls=[...$('#modal').querySelectorAll('button')].map(node=>({node,disabled:node.disabled}));controls.forEach(({node})=>node.disabled=true);try{await saveBusyDays();}catch(error){$('#busy-days-error').innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}finally{controls.forEach(({node,disabled})=>node.disabled=disabled);}break;}
  case 'calendar-week':state.date=addDays(state.date,Number(target.dataset.offset));renderTraining();break;
  case 'calendar-today':state.date=today();renderTraining();break;
- case 'calendar-reset':modal('重置日历',`<p class="description">清空全部日程训练及完成记录，并停止循环排期。训练模板会保留。</p><div class="form-footer">${button('取消','close-modal')}${button('确认重置','calendar-reset-confirm','','danger')}</div>`);break;
+ case 'calendar-reset':modal('重置日历',`<p class="description">清空日程并停止循环排期。已确认的训练历史、成就和方案库会保留。</p><div class="form-footer">${button('取消','close-modal')}${button('确认重置','calendar-reset-confirm','','danger')}</div>`);break;
  case 'calendar-reset-confirm':target.disabled=true;try{await resetTrainingCalendar();}finally{target.disabled=false;}break;
  case 'calendar-add':planBuilder(target.dataset.date||state.date);break;
  case 'calendar-schedule':target.disabled=true;try{await addPlanToCalendar(plan(),state.date);renderTraining();toast('已添加循环训练');}finally{target.disabled=false;}break;
@@ -1621,18 +1744,23 @@ document.addEventListener('click',async event=>{
  case 'training-content-edit':openTrainingContentEditor(id);break;
  case 'training-content-add':changeTrainingContentExercise(target);break;
  case 'training-content-remove':changeTrainingContentExercise(target,true);break;
- case 'calendar-delete':{const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');state.calendarDelete=structuredClone(record);confirmDialog('删除训练',record.data.completed?`删除「${record.data.title}」及其完成记录？`:`从日程中删除「${record.data.title}」？`,'calendar-delete-confirm',id);break;}
- case 'calendar-delete-confirm':{const record=assertTaskCurrent(state.calendarDelete);if(record.id!==id)throw new Error('这项任务不能删除。');target.disabled=true;try{await state.store.remove(record.id);state.calendarDelete=null;closeModal();renderTraining();toast('已从日程中删除');}finally{target.disabled=false;}break;}
+ case 'calendar-delete':{const record=calendarTask(id);if(!record)throw new Error('这项训练已被删除。');state.calendarDelete=structuredClone(record);confirmDialog('删除训练',trainingTaskCompleted(record)?`从日程中移除「${record.data.title}」？已确认的训练历史与成就会保留。`:`从日程中删除「${record.data.title}」？`,'calendar-delete-confirm',id);break;}
+ case 'calendar-delete-confirm':{const record=assertTaskCurrent(state.calendarDelete);if(record.id!==id)throw new Error('这项任务不能删除。');target.disabled=true;try{await syncBeforeArchiving();assertTaskCurrent(record);await state.store.remove(record.id);state.calendarDelete=null;closeModal();renderTraining();toast('已从日程中删除');}finally{target.disabled=false;}break;}
  case 'strength':strengthTool();break;
  case 'exercise':showExercise(id);break;
  case 'knowledge-tab':state.knowledgeTab=target.dataset.tab;renderLibrary();break;
  case 'portion-preset':choosePortion(id);break;
+ case 'rm-preset':chooseRMPreset(target.dataset.reps,target.dataset.side);break;
+ case 'rm-method':chooseRMMethod(target.dataset.method);break;
  case 'muscle-model':showMuscle(id);break;
  case 'open-visual':target.dataset.type==='muscle'?showMuscle(id):showExercise(id);break;
  case 'knowledge':{const k=knowledgeCards.find(x=>x.id===id);if(k)modal(esc(k.title),`<span class="badge neutral">${esc(k.review.note)}</span><p class="description" style="margin-top:18px">${esc(k.summary)}</p><a class="link-button" href="${esc(k.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(k.sourceName)} ↗</a><p style="font-size:10px;color:#8b9981;margin-top:15px">来源核对日期：${esc(k.review.date)}</p>`);break;}
  case 'profile':showProfile();break;
  case 'delete-phase':confirmDialog('删除阶段历史','只删除这条历史记录，当前个人资料保持不变。','confirm-delete-phase',id);break;
  case 'confirm-delete-phase':await state.store.remove(id);closeModal();renderProfile();break;
+ case 'achievement-filter':state.achievementCategory=target.dataset.category;state.achievementPage=0;renderAchievements();break;
+ case 'achievement-page':state.achievementPage=Number(target.dataset.page);renderAchievements();break;
+ case 'achievement-detail':showAchievement(id);break;
  case 'settings-tab':if(personalSections.some(([section])=>section===target.dataset.tab)){state.setting=target.dataset.tab;await navigate('settings');}break;
  case 'provider':providerEditor(id);break;
  case 'provider-preset':providerEditor(null,target.dataset.preset);break;
@@ -1679,7 +1807,7 @@ document.addEventListener('submit',async event=>{
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await estimateMeal();break;
  case 'meal-confirm-form':await confirmMeal();break;
- case 'metabolism-form':case 'macro-energy-form':case 'portion-form':updateKnowledgeTool(form);break;
+ case 'metabolism-form':case 'macro-energy-form':case 'portion-form':case 'weight-conversion-form':updateKnowledgeTool(form);break;
  case 'plan-form':{await ensurePlanLibrary();const draft=generateGroupedPlan({split:state.planSplit,groups:state.planGroups.slice(0,state.planSplit),variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;state.librarySelected=id;state.libraryEditing=structuredClone(state.store.records.get(id));viewDraft();break;}
  case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();libraryPlan({id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
  case 'plan-library-form':await importLibraryTemplate(values);break;
@@ -1689,7 +1817,7 @@ document.addEventListener('submit',async event=>{
  case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await saveTrainingProgress(record,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});renderTraining();showCalendarTask(record.id);toast('训练已记录');break;}
  case 'strength-form':{const r=estimate1RM(Number(values.weight),Number(values.reps));$('#strength-result').innerHTML=`<div class="divider"></div><div class="grid-2"><div class="stat"><small>Epley 参考</small><strong>${r.epley}<em>kg</em></strong></div><div class="stat"><small>Brzycki 参考</small><strong>${r.brzycki}<em>kg</em></strong></div></div><p class="description" style="margin-top:18px">${esc(r.note)}</p>`;break;}
  case 'provider-form':await saveProvider();break;
- case 'tasks-form':{const tasks={},taskModels={};for(const task of ['chat','meal','planning']){const selected=values[task]?JSON.parse(values[task]):{};tasks[task]=selected.providerId||'';taskModels[task]=selected.modelId||'';}const version=form.dataset.version===''?null:Number(form.dataset.version);const saved=await saveProviderConfiguration({providers:state.providers,tasks,taskModels},version,form);if(saved&&form.isConnected){form.dataset.version=String(state.providersVersion);toast('任务模型已保存');}break;}
+ case 'tasks-form':{const tasks={},taskModels={};for(const task of ['chat','meal','planning','motion']){const selected=values[task]?JSON.parse(values[task]):{};tasks[task]=selected.providerId||'';taskModels[task]=selected.modelId||'';}const version=form.dataset.version===''?null:Number(form.dataset.version);const saved=await saveProviderConfiguration({providers:state.providers,tasks,taskModels},version,form);if(saved&&form.isConnected){form.dataset.version=String(state.providersVersion);toast('任务模型已保存');}break;}
  case 'recipe-form':{const pref={preferences:values.preferences,restrictions:values.restrictions,trainingTime:values.trainingTime};const result=suggestRecipe({...values,days:Number(values.days),profile:profile()});await state.store.put('preferences','preferences',pref);state.recipe=result;$('#recipe-result').innerHTML=recipeResult(result);break;}
  case 'food-swap-form':{const r=substituteFood(values.from,Number(values.grams),values.to,values.basis),from=foods.find(f=>f.id===values.from),to=foods.find(f=>f.id===values.to);$('#swap-result').innerHTML=`<div class="divider"></div><h3>${esc(from.name)} ${values.grams}g → ${esc(to.name)} ${r.grams}g</h3><table class="history-table"><thead><tr><th>营养</th><th>替换前</th><th>替换后</th><th>变化</th></tr></thead><tbody>${[['kcal','能量 kcal'],['protein','蛋白质 g'],['carbs','碳水 g'],['fat','脂肪 g']].map(([k,n])=>`<tr><td>${n}</td><td>${r.before[k]}</td><td>${r.after[k]}</td><td>${r.delta[k]>0?'+':''}${r.delta[k]}</td></tr>`).join('')}</tbody></table><p class="description">${esc(r.note)}</p><small>${esc(from.source)}<br>${esc(to.source)}</small>`;break;}
  case 'cooked-form':{const r=convertFoodWeight(Number(values.grams),Number(values.raw),Number(values.cooked));$('#cooked-result').innerHTML=`<div class="notice">对应熟重约 <strong>${r.grams} g</strong><br>${esc(r.note)}</div>`;break;}
@@ -1756,13 +1884,13 @@ document.addEventListener('focusin',event=>{
 document.addEventListener('keydown',event=>{
  if(event.key==='Escape'){const menu=$('.task-card-menu[open],.calendar-popover[open]');if(menu){event.preventDefault();menu.open=false;$('summary',menu).focus();return;}}
  const tab=event.target.closest('.knowledge-tabs [role="tab"]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
- event.preventDefault();const tabs=['nutrition','portions','exercises','muscles'],index=tabs.indexOf(state.knowledgeTab);
+ event.preventDefault();const tabs=['nutrition','portions','weights','exercises','muscles'],index=tabs.indexOf(state.knowledgeTab);
  state.knowledgeTab=event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
  renderLibrary();$('#knowledge-tab-'+state.knowledgeTab)?.focus();
 });
 
 document.addEventListener('input',event=>{
- if(event.target.closest('#metabolism-form,#macro-energy-form,#portion-form'))updateKnowledgeTool(event.target.closest('form'));
+ if(event.target.closest('#metabolism-form,#macro-energy-form,#portion-form,#weight-conversion-form'))updateKnowledgeTool(event.target.closest('form'));
  if(event.target.id==='provider-model-search'&&state.providerDraft){state.providerDraft.search=event.target.value;renderProviderModels();}
  if(event.target.id==='exercise-search'){const start=event.target.selectionStart;state.filter=event.target.value;renderLibrary();$('#exercise-search').focus();$('#exercise-search').setSelectionRange(start,start);}
 });
@@ -1772,6 +1900,7 @@ async function deleteAccount(password) {
   await stopChat();if(!current())return;
   try {await api('/account',{method:'DELETE',headers:{'X-Fitness-User':user.id},body:{password}});}
   catch(error){if(!current())return;throw error;}
+  if(current())closeMotionView();
   // Cleanup always belongs to the account that sent DELETE, including after logout.
   if(community){await community.clearAccountData();await community.destroy();if(communityController===community)communityController=null;}
   else await clearCommunityDrafts(user.id);
@@ -1789,19 +1918,21 @@ async function deleteAccount(password) {
 async function logout() {
   const user=state.user,store=state.store,community=communityController;if(!user)return;
   const current=()=>state.user===user&&state.store===store;
+  closeMotionView();
   rememberCommunityReturn();
   await community?.destroy();if(communityController===community)communityController=null;
   if(!current())return;
   modelViewer.destroy();
   await chatUploads.clearAll({removeUploaded:true});if(!current())return;
   await stopChat();if(!current())return;
-  if(store?.status!=='expired')try{await api('/auth/logout',{method:'POST',headers:{'X-Fitness-User':user.id},body:{}});}catch(error){if(!current())return;if(![401,409].includes(error.status))throw error;}
+  if(store?.status!=='expired')try{await api('/auth/logout',{method:'POST',headers:{'X-Fitness-User':user.id},body:{}});}catch(error){if(!current())return;if(![401,409].includes(error.status)){if(state.page==='motion')renderMotion();throw error;}}
   await store?.close?.();if(!current())return;
   localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.providersVersion=null;state.providersConflict=false;providersRequest++;state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';chatDrafts.clear();chatScroll.clear();renderAuth();
 }
 $('#modal').addEventListener('cancel',()=>{if($('#provider-form'))clearProviderDraft();});
 window.addEventListener('online',()=>state.store?.sync().then(()=>{toast('已恢复网络，记录已同步');}).catch(e=>toast(e.message,true)));
+matchMedia('(max-width:700px)').addEventListener('change',()=>{if(state.user&&state.page==='settings'&&state.setting==='achievements'){state.achievementPage=0;renderAchievements();}});
 window.addEventListener('offline',()=>{if(state.store){state.store.status='offline';updateSync();}});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.store&&navigator.onLine)state.store.sync().catch(()=>{});});
-setInterval(()=>{if(state.store&&!document.hidden&&navigator.onLine)state.store.sync().catch(()=>{});},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateSidebarQuote();if(state.store&&navigator.onLine)state.store.sync().catch(()=>{});}});
+setInterval(()=>{if(!document.hidden){updateSidebarQuote();if(state.store&&navigator.onLine)state.store.sync().catch(()=>{});}},30000);
 boot().catch(error=>{$('#app').innerHTML=`<div class="boot"><h2>暂时无法打开健身空间</h2><p>${esc(error.message)}</p><a class="button primary" href="/">重新加载</a></div>`;});

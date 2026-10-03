@@ -292,7 +292,7 @@ test('API streams account-scoped CRUD, replays committed receipts and rejects se
   const aliceState = await (await api(alice, '/api/state')).json();
   assert.equal(aliceState.records.find(record => record.id === 'active-plan').version, 3);
   assert.equal(JSON.stringify(aliceState).includes(provider.apiKey), false);
-  assert.deepEqual((await (await api(bob, '/api/state')).json()).records, []);
+  assert.deepEqual((await (await api(bob, '/api/state')).json()).records.filter(record=>record.kind!=='achievement-summary'), []);
   assert.equal((await api(alice, '/api/ai', 'POST', { task: 'chat', stream: true, messages: [{ role: 'user', content: 'hi' }] })).status, 400);
   assert.ok(upstream.every(body => body.stream === true));
 });

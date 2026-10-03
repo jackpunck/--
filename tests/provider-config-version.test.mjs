@@ -131,6 +131,35 @@ test('configuration versions survive restart and remain isolated by the authenti
   assert.equal((await api(alice, '/api/providers', 'PUT', configuration())).status, 409);
 });
 
+test('motion task settings share configuration versions and survive stale saves, three-task clients and restart', async t => {
+  const { api, register, stop, start } = await fixture(t), alice = await register('motion-config-version@example.test');
+  const initial = configuration(); initial.tasks.motion = 'first'; initial.taskModels.motion = 'model-a'; initial.version = 0;
+  const saved = await api(alice, '/api/providers', 'PUT', initial);
+  assert.equal(saved.status, 200); assert.equal(saved.body.version, 1);
+  assert.deepEqual(saved.body.tasks, initial.tasks); assert.deepEqual(saved.body.taskModels, initial.taskModels);
+  assert.deepEqual((await api(alice, '/api/providers')).body, saved.body);
+
+  const stale = structuredClone(saved.body), motionEdit = structuredClone(saved.body);
+  motionEdit.taskModels.motion = 'model-b';
+  const updated = await api(alice, '/api/providers', 'PUT', motionEdit);
+  assert.equal(updated.status, 200); assert.equal(updated.body.version, 2);
+  assert.equal(updated.body.tasks.motion, 'first'); assert.equal(updated.body.taskModels.motion, 'model-b');
+  stale.tasks.motion = 'second'; stale.taskModels.motion = 'model-a'; stale.providers[0].name = 'Stale overwrite';
+  assert.equal((await api(alice, '/api/providers', 'PUT', stale)).status, 409);
+  assert.deepEqual((await api(alice, '/api/providers')).body, updated.body);
+
+  const legacyEdit = structuredClone(updated.body);
+  delete legacyEdit.tasks.motion; delete legacyEdit.taskModels.motion;
+  legacyEdit.providers[0].name = 'Edited by three-task client'; legacyEdit.taskModels.meal = 'model-b';
+  const legacySaved = await api(alice, '/api/providers', 'PUT', legacyEdit);
+  assert.equal(legacySaved.status, 200); assert.equal(legacySaved.body.version, 3);
+  assert.equal(legacySaved.body.providers[0].name, 'Edited by three-task client');
+  assert.equal(legacySaved.body.taskModels.meal, 'model-b');
+  assert.equal(legacySaved.body.tasks.motion, 'first'); assert.equal(legacySaved.body.taskModels.motion, 'model-b');
+  await stop(); await start();
+  assert.deepEqual((await api(alice, '/api/providers')).body, legacySaved.body);
+});
+
 test('pre-version databases migrate existing preferences and provider-only accounts without losing encrypted keys or resetting on reopen', async t => {
   const { directory, api, register, stop, start } = await fixture(t);
   const alice = await register('legacy-config@example.test'), orphan = await register('legacy-provider-only@example.test'), fresh = await register('legacy-unconfigured@example.test');

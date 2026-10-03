@@ -1,0 +1,168 @@
+{
+  "samples": [
+    {
+      "filename": "subject_001_squat_bad_side.mp4",
+      "fileId": "463181cd-dec8-4adb-8f07-f962a1131d02",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/463181cd-dec8-4adb-8f07-f962a1131d02",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/463181cd-dec8-4adb-8f07-f962a1131d02/file_downloaded",
+      "sourceSha256": "06d7eea19599aacef66fd50da985d10074e42fc87b70bf135993f66f682c0ce5",
+      "folderId": "7bb85568-16f5-435f-b177-870bfbff83ff",
+      "label": {
+        "subject": "001",
+        "exercise": "squat",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "bad",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_001_squat_bad_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "4d497463d464daad7944f3639b023fee97e96251fa86eeac6a494b8128904b05"
+    },
+    {
+      "filename": "subject_002_squat_bad_side.mp4",
+      "fileId": "1297274a-6cea-4057-964e-e541bf19dc9b",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/1297274a-6cea-4057-964e-e541bf19dc9b",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/1297274a-6cea-4057-964e-e541bf19dc9b/file_downloaded",
+      "sourceSha256": "0240235c9f4de6b2c9bb14dcc7f43e427404ce780e8ed3fd30dad733baf3ea7f",
+      "folderId": "7bb85568-16f5-435f-b177-870bfbff83ff",
+      "label": {
+        "subject": "002",
+        "exercise": "squat",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "bad",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_002_squat_bad_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "66a71e281bbb0e7e6ff11136db3d3994d5880969ebedeb7e713dacc15c739de1"
+    },
+    {
+      "filename": "subject_001_squat_good_side.mp4",
+      "fileId": "2d1ab70a-2d69-4fa0-945f-8b74b4d2a6bf",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/2d1ab70a-2d69-4fa0-945f-8b74b4d2a6bf",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/2d1ab70a-2d69-4fa0-945f-8b74b4d2a6bf/file_downloaded",
+      "sourceSha256": "44ff1ddfce1f197b67a4cf3434fefb7f1ef695269e00725021c70299676978a0",
+      "folderId": "20246153-4e22-4f00-9cb7-757f74c26db4",
+      "label": {
+        "subject": "001",
+        "exercise": "squat",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "good",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_001_squat_good_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "f8e87081809f40aff3516abaecf54b9768aeb2c4559cfaa06ae0e5cfaf728199"
+    },
+    {
+      "filename": "subject_002_squat_good_side.mp4",
+      "fileId": "cc5ef28d-1070-4e03-aaee-46b1be7a661c",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/cc5ef28d-1070-4e03-aaee-46b1be7a661c",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/cc5ef28d-1070-4e03-aaee-46b1be7a661c/file_downloaded",
+      "sourceSha256": "62d4c84c1b61e1456a576a8bff3ac7caccf08a5ca9b01a6c467a0cfd8afb1bc8",
+      "folderId": "20246153-4e22-4f00-9cb7-757f74c26db4",
+      "label": {
+        "subject": "002",
+        "exercise": "squat",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "good",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_002_squat_good_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "3eb8423665a1ae797dca5bbe2eee7bc742cd0cb2e9c99eeada1176387c4cb694"
+    },
+    {
+      "filename": "subject_001_push_up_bad_side.mp4",
+      "fileId": "e4c377dd-525c-4dde-97f2-6f6ef4971256",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/e4c377dd-525c-4dde-97f2-6f6ef4971256",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/e4c377dd-525c-4dde-97f2-6f6ef4971256/file_downloaded",
+      "sourceSha256": "6b15b5def051b84e6e21b17cc3c2ad1202a3e0c4cc67caea442db4a42b1238db",
+      "folderId": "5bfb1c16-d08b-4280-b8e4-5dc40d16e739",
+      "label": {
+        "subject": "001",
+        "exercise": "push_up",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "bad",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_001_push_up_bad_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "ff44d559930dfef1d0a29faec6c3563f19d2587f565d4fb819990f8045250718"
+    },
+    {
+      "filename": "subject_002_push_up_bad_side.mp4",
+      "fileId": "d3e9a78a-8f96-4692-949a-635a7eacd686",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/d3e9a78a-8f96-4692-949a-635a7eacd686",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/d3e9a78a-8f96-4692-949a-635a7eacd686/file_downloaded",
+      "sourceSha256": "c520b1a64145f8bc04e4bae508de311516a9b6c10b49a0e7ad3517444ab53c13",
+      "folderId": "5bfb1c16-d08b-4280-b8e4-5dc40d16e739",
+      "label": {
+        "subject": "002",
+        "exercise": "push_up",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "bad",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_002_push_up_bad_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "a2fbad4830bb0b5c134e2f1322482d181b53d5a945dfadb338cda3a5f88b3ca1"
+    },
+    {
+      "filename": "subject_001_push_up_good_side.mp4",
+      "fileId": "f5b3d804-89f5-42b4-af6e-6debedaf3f11",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/f5b3d804-89f5-42b4-af6e-6debedaf3f11",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/f5b3d804-89f5-42b4-af6e-6debedaf3f11/file_downloaded",
+      "sourceSha256": "816e914603f479ef2b28eadb66d268f675f103c17e1f28cb9159f0694d79f17b",
+      "folderId": "042b92ea-5759-4c94-a641-cdc7131f9761",
+      "label": {
+        "subject": "001",
+        "exercise": "push_up",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "good",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_001_push_up_good_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "ddeff83054728008df3e73c372906edbfc02cbc3cae8d2f137613cba69dbec9f"
+    },
+    {
+      "filename": "subject_002_push_up_good_side.mp4",
+      "fileId": "116a40d3-cdb3-4bc8-957d-67b17fb6108f",
+      "sourcePage": "https://data.mendeley.com/datasets/kgbb3yn47p/1/files/116a40d3-cdb3-4bc8-957d-67b17fb6108f",
+      "downloadUrl": "https://data.mendeley.com/public-files/datasets/kgbb3yn47p/files/116a40d3-cdb3-4bc8-957d-67b17fb6108f/file_downloaded",
+      "sourceSha256": "f8f93dc6e015927824b359e6ef1f86234993cf4cd7b4b0c2f48a3de169ba81f0",
+      "folderId": "042b92ea-5759-4c94-a641-cdc7131f9761",
+      "label": {
+        "subject": "002",
+        "exercise": "push_up",
+        "specificErrorLabel": null,
+        "evidence": "Author filename convention in mendeley-README.md and Dataset Exercise-wise/<exercise>/<quality>/side API folder hierarchy",
+        "quality": "good",
+        "view": "side"
+      },
+      "localPlayableCopy": "subject_002_push_up_good_side-h264.mp4",
+      "conversion": "FFmpeg 7.1 (imageio-ffmpeg 0.6.0 QA-only) libx264 CRF20 fast yuv420p; original dimensions and duration preserved; audio removed",
+      "localPlayableSha256": "adad704039ac1306a00284498fa13f848e0a6b160bc3ebee2e15265ef725d5f0"
+    }
+  ],
+  "doi": "10.17632/kgbb3yn47p.1",
+  "license": "CC BY 4.0",
+  "url": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+  "dataset": "A Multi-View Raw Video Dataset of Seven Fitness Exercises with Good/Bad Form Labels",
+  "purpose": "Local QA only; media and codec tool excluded from application distribution",
+  "reproduction": {
+    "hashAlgorithm": "SHA256",
+    "accept": "application/vnd.mendeley-public-dataset.1+json",
+    "conversionArguments": "-i ORIGINAL.mp4 -map 0:v:0 -an -c:v libx264 -crf 20 -preset fast -pix_fmt yuv420p -movflags +faststart ORIGINAL-h264.mp4",
+    "filesApi": "https://data.mendeley.com/public-api/datasets/kgbb3yn47p/files?folder_id=<folderId>&version=1&$start=0&$limit=1000",
+    "folderApi": "https://data.mendeley.com/public-api/datasets/kgbb3yn47p/folders/1"
+  }
+}

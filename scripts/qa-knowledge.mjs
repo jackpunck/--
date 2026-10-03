@@ -52,12 +52,12 @@ async function stableFrames(){for(let i=0;!releaseStream&&i<250;i++)await sleep(
 async function readyFrame(locator,{exercise,muscle}={}){await locator.scrollIntoViewIfNeeded();if(await locator.getAttribute('id')==='model-detail-frame')await page.locator('#model-dialog[data-state=ready]').waitFor();const frame=locator.contentFrame();await frame.locator('#loading').waitFor({state:'hidden',timeout:60000});if(exercise)assert.equal(await frame.locator('html').getAttribute('data-exercise'),exercise);if(muscle)assert.equal(await frame.locator('html').getAttribute('data-selected-muscle'),muscle);assert.equal(await frame.locator('canvas').count(),1);return frame;}
 let step='',modelPage;
 try{
- step='register isolated account and open four knowledge panels';console.log(step);
+ step='register isolated account and open five knowledge panels';console.log(step);
  const registration=await context.request.post(base+'/api/auth/register',{data:{name:'知识验证',email:`qa-knowledge-${Date.now()}@example.test`,password:'qa-password-123'}});assert.equal(registration.status(),201);const {user}=await registration.json();
  const profile={age:30,sex:'male',height:175,weight:70,goal:'maintain',activity:1.55};
  assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes:[{id:'profile',kind:'profile',data:profile,baseVersion:0}]}})).status(),200);
  assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[{id:'qa',name:'QA 本地模型',baseUrl:'http://127.0.0.1:9987/v1',model:'qa-knowledge'}],tasks:{chat:'qa',meal:'qa',planning:'qa'}}})).status(),200);
- await page.goto(base);await page.locator('#chat-input').waitFor();await nav('library');assert.match(await page.locator('.nav [data-page="library"]').textContent(),/知识大全/);assert.equal(await page.locator('[data-action="knowledge-tab"]').count(),4);
+ await page.goto(base);await page.locator('#chat-input').waitFor();await nav('library');assert.match(await page.locator('.nav [data-page="library"]').textContent(),/知识大全/);assert.equal(await page.locator('[data-action="knowledge-tab"]').count(),5);
 
  step='metabolism and macronutrient energy calculators';console.log(step);
  await tab('nutrition');for(const [field,value]of Object.entries({sex:'male',age:'30',height:'175',weight:'70',activity:'1.55'})){const input=page.locator('#calc-'+field);if(await input.evaluate(el=>el.tagName==='SELECT'))await input.selectOption(value);else await input.fill(value);}await submit('metabolism-form');await includesNumber('#metabolism-result',1648.75);await includesNumber('#metabolism-result',2555.56);assert((await page.locator('.knowledge-source a[href^="https://"],a.knowledge-source[href^="https://"]').count())>=1,'Formula sources are missing');await page.locator('#calc-weight').fill('0');await submit('metabolism-form');assert((await page.locator('#metabolism-error').textContent()).trim());await page.locator('#calc-weight').fill('70');await submit('metabolism-form');
