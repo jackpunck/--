@@ -35,6 +35,17 @@ export async function streamChat(body, {userId = apiUserId, signal, onEvent} = {
   return consumeChatEvents(response.body, onEvent, signal);
 }
 
+export async function streamMotionCoach(body,{userId=apiUserId,signal,onProgress}={}){
+  const response=await fetch('/api/motion/coach',{
+    method:'POST',credentials:'same-origin',signal,
+    headers:{'Content-Type':'application/json','Accept':'text/event-stream',...(userId?{'X-Fitness-User':userId}:{})},
+    body:JSON.stringify({...body,stream:true}),
+  });
+  if(!response.ok){const data=await response.json().catch(()=>({}));const error=new Error(data.error||`动作评价请求失败（${response.status}）`);error.status=response.status;throw error;}
+  if(!response.headers.get('content-type')?.includes('text/event-stream'))throw new Error('动作评价服务需要更新，请重启服务并刷新页面后重试。');
+  return consumeChatEvents(response.body,(type,data)=>{if(type==='progress')onProgress?.(data);},signal);
+}
+
 export class RecordStore extends EventTarget {
   constructor(user) {
     super(); this.user = { ...user }; this.records = new Map(); this.pending = new Map();

@@ -120,6 +120,7 @@ export function createServer(options = {}) {
     modelDir = join(root, '精细模型与动作开发'),
     fetchImpl,
     aiTimeoutMs = 60000,
+    motionAiTimeoutMs = options.aiTimeoutMs ?? 180000,
     allowPrivateProviders = process.env.ALLOW_PRIVATE_AI !== 'false',
     secureCookie = process.env.COOKIE_SECURE === 'true',
   } = options;
@@ -332,12 +333,27 @@ export function createServer(options = {}) {
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
           res.once('close', disconnect);
+          const started=Date.now();let heartbeat,lastProgress={stage:'preparing',completed:0,total:0,message:'正在准备 AI 动作评价…'};
+          const event=async(name,data)=>{
+            if(controller.signal.aborted||res.destroyed||res.writableEnded)return;
+            if(!res.headersSent){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();}
+            if(!res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`))await new Promise(resolve=>{
+              const done=()=>{res.off('drain',done);res.off('close',done);resolve();};res.once('drain',done);res.once('close',done);
+            });
+          };
+          const progress=async data=>{lastProgress={...data,elapsedMs:Date.now()-started};if(body.stream)await event('progress',lastProgress);};
           try {
             if (req.aborted || res.destroyed) return;
-            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal}));
-            if (!controller.signal.aborted && !res.destroyed) send(res, 200, result);
-          } catch (error) { if (!controller.signal.aborted && !res.destroyed) throw error; }
-          finally { res.off('close', disconnect); }
+            if(body.stream){await progress(lastProgress);heartbeat=setInterval(()=>{void event('progress',{...lastProgress,elapsedMs:Date.now()-started});},15000);heartbeat.unref?.();}
+            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: motionAiTimeoutMs, allowPrivateProviders, signal: controller.signal,onProgress:progress}));
+            if (!controller.signal.aborted && !res.destroyed){if(body.stream)await event('done',result);else send(res,200,result);}
+          } catch (error) {
+            if (!controller.signal.aborted && !res.destroyed){
+              if(body.stream)await event('error',{error:error instanceof HttpError?error.message:'AI 动作评价失败，请重试。'});
+              else throw error;
+            }
+          }
+          finally {clearInterval(heartbeat);res.off('close',disconnect);if(body.stream&&!res.destroyed&&!res.writableEnded)res.end();}
           return;
         }
         if (pathname === '/api/ai' && method === 'POST') {

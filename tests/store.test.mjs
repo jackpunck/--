@@ -282,7 +282,7 @@ test('batch calendar updates persist and sync cycle rules together with task tom
 
 
 test('large motion assessments sync intact while reports over 1 MiB remain locally available with an explicit error',async()=>{
- const {report}=longMotionReport();assert.ok(new TextEncoder().encode(JSON.stringify(report)).byteLength>256*1024);
+ const {report:concise}=longMotionReport();const report={...concise,extra:'a'.repeat(270000)};assert.ok(new TextEncoder().encode(JSON.stringify(report)).byteLength>256*1024);
  const store=await open();await store.put('motion-assessment','motion:long',report);
  const server=fakeServer();globalThis.fetch=server.fetch;online=true;await store.sync();
  assert.equal(store.pending.size,0);assert.equal(store.status,'synced');assert.deepEqual(server.remote.get('motion:long').data,report);

@@ -1,337 +1,199 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {analyzeMotion, MOTION_RULE_VERSION} from '../public/motion-analysis.js';
+import analyzeMotion, {analyzeMotion as namedAnalyzeMotion, MOTION_OBSERVATION_VERSION} from '../public/motion-analysis.js';
 
-// Synthetic kinematic cases test rule invariants, NOT real-world accuracy.
-// Physical points are uniformly fitted before normalization so aspect-ratio
-// tests catch angles incorrectly calculated in normalized x/y coordinates.
-function recording(kind = 'squat', options = {}) {
-  const {fps = 15, period = 3.4, repetitions = 2, width = 1280, height = 720,
-    mirror = false, depth = 45, pushDepth = 60, sag = 0, lean = 0, front = false, jitter = false} = options;
-  const duration = period * repetitions;
-  const frames = [];
-  for (let n = 0; n <= duration * fps; n++) {
-    const time = n / fps;
-    const phase = Math.max(0, Math.min(1, ((time % period) - 0.3 * period / 3.4) / (period * 2.8 / 3.4)));
-    const progress = (1 - Math.cos(phase * Math.PI * 2)) / 2;
-    let shoulder, elbow, wrist, hip, knee, ankle;
-    if (kind === 'pushup' || kind === 'plank') {
-      const motion = kind === 'plank' ? 0 : progress;
-      shoulder = {x: 240, y: 350 + pushDepth * motion};
-      wrist = {x: 240, y: 550};
-      const d = wrist.y - shoulder.y;
-      elbow = {x: 240 + Math.sqrt(Math.max(0, 10000 - (d / 2) ** 2)), y: (wrist.y + shoulder.y) / 2};
-      ankle = {x: 760, y: 550};
-      hip = {x: 470, y: shoulder.y + (550 - shoulder.y) * 230 / 520 + sag * motion};
-      knee = {x: 615, y: (hip.y + ankle.y) / 2};
-    } else {
-      const motion = kind === 'squat' ? progress : 0;
-      const radians = ((jitter ? 2 * Math.sin(time * 14) : depth * motion)) * Math.PI / 180;
-      ankle = {x: 360, y: 670};
-      knee = {x: 360 + 180 * Math.sin(radians), y: 670 - 180 * Math.cos(radians)};
-      hip = {x: 360, y: 670 - 360 * Math.cos(radians)};
-      shoulder = {x: hip.x + lean * motion, y: hip.y - 190 + lean * motion * 0.3};
-      elbow = {x: shoulder.x + 30, y: shoulder.y + 85};
-      wrist = {x: shoulder.x + 15 + (kind === 'curl' ? 85 * progress : 0), y: shoulder.y + 165 - (kind === 'curl' ? 120 * progress : 0)};
-    }
-    const landmarks = Array.from({length: 33}, () => ({x: 0.5, y: 0.5, z: 0, visibility: 0.99, presence: 0.99}));
-    const scale = Math.min(width / 1000, height / 800) * 0.9;
-    const fit = p => ({x: ((mirror ? 1000 - p.x : p.x) * scale + (width - 1000 * scale) / 2) / width,
-      y: (p.y * scale + (height - 800 * scale) / 2) / height, z: 0, visibility: 0.99, presence: 0.99});
-    [shoulder, elbow, wrist, hip, knee, ankle].forEach((p, i) => {
-      const index = [11, 13, 15, 23, 25, 27][i];
-      const separation = front && (i === 0 || i === 3) ? 150 : 6;
-      landmarks[index] = fit({...p, x: p.x - separation / 2});
-      landmarks[index + 1] = fit({...p, x: p.x + separation / 2});
+const angleNames = ['elbowAngle', 'shoulderAngle', 'hipAngle', 'kneeAngle', 'bodyAlignmentAngle', 'torsoLean'];
+const joints = [[200, 100], [200, 250], [350, 250], [200, 400], [200, 600], [400, 600]];
+const indices = [11, 13, 15, 23, 25, 27];
+function pose({width = 1000, height = 1000, scale = 1, mirror = false} = {}) {
+  const landmarks = Array(33).fill(null);
+  for (const side of [0, 1]) {
+    joints.forEach(([px, py], n) => {
+      const x = (px + side * 250) * scale + 25, y = py * scale + 25;
+      landmarks[indices[n] + side] = {x: (mirror ? width - x : x) / width, y: y / height, visibility: 0.99, presence: null};
     });
-    frames.push({time, landmarks});
   }
-  return {frames, options: {width, height, duration}};
+  return {time: 0, landmarks};
+}
+const options = {width: 1000, height: 1000};
+const close = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
+const values = row => [...Object.values(row.left), ...Object.values(row.right)];
+function assertOnlyObservations(report) {
+  assert.deepEqual(Object.keys(report).sort(), ['measurements', 'quality', 'version']);
+  assert.deepEqual(Object.keys(report.quality).sort(), ['reasons', 'sourceFps', 'targetCoverage', 'totalFrames', 'usableRatio', 'validFrames']);
+  for (const row of report.measurements) {
+    assert.deepEqual(Object.keys(row).sort(), ['frameIndex', 'left', 'right', 'time']);
+    assert.deepEqual(Object.keys(row.left), angleNames);
+    assert.deepEqual(Object.keys(row.right), angleNames);
+  }
 }
 
-function run(kind, options) {
-  const clip = recording(kind, options);
-  return analyzeMotion(clip.frames, clip.options);
-}
+test('the analysis contract contains measurements and data quality without local exercise or form judgments', () => {
+  assert.equal(analyzeMotion, namedAnalyzeMotion);
+  const report = analyzeMotion([pose()], options);
+  assert.equal(report.version, MOTION_OBSERVATION_VERSION);
+  assert.equal(report.version, 'motion-observations-v1');
+  assertOnlyObservations(report);
+  assert.equal(report.quality.totalFrames, 1);
+  assert.equal(report.quality.validFrames, 1);
+  assert.equal(report.quality.usableRatio, 1);
+  assert.equal(report.quality.targetCoverage, null);
+  assert.deepEqual(report.quality.reasons, []);
+});
 
-test('automatically recognizes full squats and push-ups and returns timed, transparent per-rep scores', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const result = run(exercise);
-    assert.equal(result.version, MOTION_RULE_VERSION);
-    assert.equal(result.exerciseId, exercise, JSON.stringify(result));
-    assert.equal(result.status, 'complete', JSON.stringify(result));
-    assert.equal(result.reps.length, 2);
-    assert.ok(result.observedScore >= 90);
-    assert.equal(result.scoreStatus, 'provisional');
-    assert.ok(result.score <= 69);
-    assert.equal(result.qualifiedRepCount, 0);
-    assert.equal(result.checks.find(c => c.code === 'SPINE_NEUTRAL').status, 'unobservable');
-    assert.equal(result.quality.view, 'side');
-    for (const rep of result.reps) {
-      assert.ok(rep.start < rep.bottom && rep.bottom < rep.end);
-      assert.ok(rep.metrics.descentDuration > 0 && rep.metrics.ascentDuration > 0);
-      assert.ok(Math.abs(Object.values(rep.metrics.components).reduce((s, c) => s + c.weight, 0) - 1) < 1e-9);
-    }
+test('joint definitions give known angles in degrees for both independently measured sides', () => {
+  const row = analyzeMotion([pose()], options).measurements[0];
+  for (const side of [row.left, row.right]) {
+    close(side.elbowAngle, 90);
+    close(side.shoulderAngle, 0);
+    close(side.hipAngle, 180);
+    close(side.kneeAngle, 90);
+    close(side.bodyAlignmentAngle, 135);
+    close(side.torsoLean, 0);
   }
 });
 
-test('left/right mirroring and portrait/landscape dimensions preserve physical angles and scores', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const normal = run(exercise, {width: 1600, height: 900});
-    for (const config of [{mirror: true}, {width: 900, height: 1600}, {width: 960, height: 960, mirror: true}]) {
-      const result = run(exercise, config);
-      assert.equal(result.status, 'complete');
-      assert.equal(result.exerciseId, normal.exerciseId);
-      assert.equal(result.reps.length, normal.reps.length);
-      assert.ok(Math.abs(result.score - normal.score) <= 1);
-      assert.ok(Math.abs(result.reps[0].metrics.bottomAngle - normal.reps[0].metrics.bottomAngle) < 0.1);
-    }
+test('mirror, uniform scale and portrait or landscape dimensions preserve physical geometry', () => {
+  const reference = analyzeMotion([pose()], options).measurements[0];
+  for (const transform of [
+    {width: 1600, height: 900, scale: 1},
+    {width: 900, height: 1600, scale: 1},
+    {width: 1000, height: 1000, scale: 0.35, mirror: true},
+    {width: 1600, height: 900, scale: 0.75, mirror: true},
+  ]) {
+    const actual = analyzeMotion([pose(transform)], transform).measurements[0];
+    values(actual).forEach((value, index) => close(value, values(reference)[index]));
   }
 });
 
-test('different sampling rates and real movement speeds preserve count and phase timing', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    for (const period of [2.4, 3.4, 6.8]) {
-      const low = run(exercise, {period, fps: 10});
-      const high = run(exercise, {period, fps: 30});
-      assert.equal(low.reps.length, 2, JSON.stringify(low));
-      assert.equal(high.reps.length, 2);
-      assert.ok(Math.abs(low.reps[0].bottom - period / 2) <= 0.2);
-      assert.ok(Math.abs(low.reps[0].metrics.duration - high.reps[0].metrics.duration) < 0.3);
-    }
+test('torso lean is an unsigned projection to image vertical and does not assert spinal posture', () => {
+  for (const [shoulder, hip, expected] of [
+    [[200, 100], [200, 400], 0],
+    [[200, 200], [400, 400], 45],
+    [[400, 200], [200, 400], 45],
+    [[200, 400], [400, 400], 90],
+    [[200, 400], [200, 100], 0],
+  ]) {
+    const frame = pose();
+    [shoulder, hip].forEach(([x, y], index) => {frame.landmarks[index ? 23 : 11] = {x: x / 1000, y: y / 1000, visibility: 1};});
+    close(analyzeMotion([frame], options).measurements[0].left.torsoLean, expected);
   }
 });
 
-test('brief repositioning between repetitions does not turn supported movements into unknown exercises', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const clip = recording(exercise);
-    const frames = clip.frames.map(f => ({...f, landmarks: f.landmarks.map(p => ({...p, x: p.x + (f.time >= 3.4 ? 0.16 : 0)}))}));
-    const result = analyzeMotion(frames, clip.options);
-    assert.equal(result.exerciseId, exercise, JSON.stringify(result));
-    assert.equal(result.attemptCount, 2);
+test('occluded joints null only the measurements that require them and retain the other side', () => {
+  const frame = pose();
+  frame.landmarks[15].visibility = 0.2;
+  const result = analyzeMotion([frame], options);
+  assert.equal(result.measurements[0].left.elbowAngle, null);
+  close(result.measurements[0].left.kneeAngle, 90);
+  close(result.measurements[0].right.elbowAngle, 90);
+  assert.equal(result.quality.validFrames, 1);
+  assert.deepEqual(result.quality.reasons, ['MISSING_OR_UNCERTAIN_LANDMARKS']);
+  frame.landmarks[23] = null;
+  const cropped = analyzeMotion([frame], options).measurements[0];
+  for (const name of ['shoulderAngle', 'hipAngle', 'kneeAngle', 'bodyAlignmentAngle', 'torsoLean']) assert.equal(cropped.left[name], null);
+  close(cropped.right.hipAngle, 180);
+});
+
+test('unknown presence uses visibility while missing or unreliable confidence cannot produce angles', () => {
+  for (const presence of [null, undefined, 0.99]) {
+    const frame = pose();
+    frame.landmarks.forEach(point => {if (point) point.presence = presence;});
+    close(analyzeMotion([frame], options).measurements[0].left.elbowAngle, 90);
+  }
+  for (const invalid of [{visibility: undefined}, {visibility: NaN}, {visibility: 0.4}, {visibility: 1.2}, {presence: 0.1}, {presence: -1}, {presence: NaN}]) {
+    const frame = pose();
+    frame.landmarks.forEach(point => {if (point) Object.assign(point, invalid);});
+    const report = analyzeMotion([frame], options);
+    assert.ok(values(report.measurements[0]).every(value => value === null));
+    assert.equal(report.quality.validFrames, 0);
   }
 });
 
-test('long kneeling preparation does not outvote later push-ups or manufacture reps for a following plank', () => {
-  const preparation = recording('plank', {repetitions: 3});
-  const preparationFrames = preparation.frames.map(f => ({...f, landmarks: f.landmarks.map((p, i) => ({...p, y: p.y + ([25, 26].includes(i) ? 0.17 : 0), x: p.x - ([27, 28].includes(i) ? 0.12 : 0)}))}));
-  for (const exercise of ['pushup', 'plank']) {
-    const clip = recording(exercise);
-    const shift = preparation.options.duration + 1 / 15;
-    const frames = [...preparationFrames, ...clip.frames.map(f => ({...f, time: f.time + shift}))];
-    const result = analyzeMotion(frames, {...clip.options, duration: frames.at(-1).time});
-    if (exercise === 'pushup') {
-      assert.equal(result.exerciseId, 'pushup', JSON.stringify(result));
-      assert.equal(result.attemptCount, 2);
-      assert.equal(result.incompleteAttemptCount, 0);
-      assert.ok(result.observedActiveRange.start >= shift - 0.1);
-      assert.ok(result.reps[0].start >= shift);
-    } else {
-      assert.equal(result.score, null);
-      assert.equal(result.reps.length, 0);
-    }
+test('out-of-frame or invalid coordinates and degenerate segments stay null rather than becoming fabricated angles', () => {
+  for (const coordinates of [{x: -0.1}, {x: 1.1}, {y: NaN}, {x: Infinity}]) {
+    const frame = pose();
+    Object.assign(frame.landmarks[13], coordinates);
+    assert.equal(analyzeMotion([frame], options).measurements[0].left.elbowAngle, null);
+  }
+  const frame = pose();
+  frame.landmarks[13] = {...frame.landmarks[11]};
+  frame.landmarks[23] = {...frame.landmarks[11]};
+  const row = analyzeMotion([frame], options).measurements[0];
+  assert.equal(row.left.elbowAngle, null);
+  assert.equal(row.left.shoulderAngle, null);
+  assert.equal(row.left.torsoLean, null);
+  assert.ok(values(row).every(value => value === null || Number.isFinite(value)));
+});
+
+test('missing lower body does not erase visible elbow angles or invent leg measurements', () => {
+  const frame = pose();
+  for (const index of [23, 24, 25, 26, 27, 28]) frame.landmarks[index] = null;
+  const report = analyzeMotion([frame], options);
+  for (const side of ['left', 'right']) {
+    close(report.measurements[0][side].elbowAngle, 90);
+    for (const name of angleNames.filter(name => name !== 'elbowAngle')) assert.equal(report.measurements[0][side][name], null);
+  }
+  assert.equal(report.quality.validFrames, 1);
+});
+
+test('every sampled frame remains aligned through pauses, missing poses and sequences beyond the former analysis caps', () => {
+  const frame = pose();
+  const frames = Array.from({length: 2005}, (_, index) => ({...frame, time: index / 15, landmarks: index % 5 === 0 ? [] : frame.landmarks}));
+  const report = analyzeMotion(frames, {...options, duration: 2005 / 15});
+  assert.equal(report.measurements.length, frames.length);
+  assert.equal(report.quality.totalFrames, frames.length);
+  assert.equal(report.quality.validFrames, 1604);
+  assert.equal(report.quality.usableRatio, 1604 / 2005);
+  report.measurements.forEach((row, index) => {
+    assert.equal(row.frameIndex, index);
+    assert.equal(row.time, frames[index].time);
+    if (index % 5 === 0) assert.ok(values(row).every(value => value === null));
+    else close(row.left.elbowAngle, 90);
+  });
+});
+
+test('invalid or duplicate timestamps are reported without dropping, sorting or merging original frame indices', () => {
+  const frames = [2, 2, 1, NaN, -1, 3].map(time => ({...pose(), time}));
+  const report = analyzeMotion(frames, options);
+  assert.deepEqual(report.measurements.map(row => row.frameIndex), [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(report.measurements.map(row => row.time), [2, 2, 1, null, null, 3]);
+  assert.ok(report.quality.reasons.includes('NON_MONOTONIC_FRAME_TIMES'));
+  assert.ok(report.quality.reasons.includes('INVALID_FRAME_TIME'));
+  for (const index of [3, 4]) assert.ok(values(report.measurements[index]).every(value => value === null));
+});
+
+test('invalid dimensions and absent input return stable empty or null-valued observations', () => {
+  assertOnlyObservations(analyzeMotion(null, options));
+  assert.equal(analyzeMotion(undefined, options).measurements.length, 0);
+  assert.deepEqual(analyzeMotion([], options).quality.reasons, ['NO_FRAMES']);
+  for (const dimensions of [{width: NaN, height: 1000}, {width: 0, height: 1000}, {width: 1000, height: -1}, {}]) {
+    const report = analyzeMotion([pose()], dimensions);
+    assert.equal(report.measurements.length, 1);
+    assert.ok(report.quality.reasons.includes('INVALID_DIMENSIONS'));
+    assert.ok(values(report.measurements[0]).every(value => value === null));
   }
 });
 
-test('stationary standing, plank, and small local jitter never generate repetitions', () => {
-  for (const [kind, options] of [['standing', {}], ['plank', {}], ['squat', {jitter: true}]]) {
-    const result = run(kind, options);
-    assert.equal(result.score, null);
-    assert.equal(result.reps.length, 0);
-    assert.notEqual(result.status, 'complete');
+test('source frame rate remains factual metadata and exercise hints cannot change the observation builder', () => {
+  const frame = pose();
+  const reference = analyzeMotion([frame], options);
+  assert.deepEqual(analyzeMotion([frame], {...options, exerciseHint: 'squat'}), reference);
+  assert.deepEqual(analyzeMotion([frame], {...options, exerciseHint: {exerciseId: 'pushup', family: 'row'}}), reference);
+  for (const sourceFps of [3, 15, 29.97]) {
+    const result = analyzeMotion([frame], {...options, sourceFps});
+    assert.equal(result.quality.sourceFps, sourceFps);
+    assert.deepEqual(result.measurements, reference.measurements);
   }
+  for (const sourceFps of [0, -1, NaN, Infinity, undefined, null]) assert.equal(analyzeMotion([frame], {...options, sourceFps}).quality.sourceFps, null);
 });
 
-test('elbow isolation is recognized without inventing a grip or equipment variant', () => {
-  const result = run('curl');
-  assert.equal(result.exerciseFamily, 'elbow-isolation');
-  assert.equal(result.exerciseId, null);
-  assert.equal(result.requiresVisualConfirmation, true);
-  assert.ok(result.candidates.some(c => c.exerciseId === 'curl'));
-  assert.ok(result.candidates.some(c => c.exerciseId === 'triceps'));
-});
-
-test('clips missing their beginning or return to the top are unscored', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const clip = recording(exercise, {repetitions: 1});
-    for (const frames of [clip.frames.filter(f => f.time <= 1.8), clip.frames.filter(f => f.time >= 1.5).map(f => ({...f, time: f.time - 1.5}))]) {
-      const result = analyzeMotion(frames, {...clip.options, duration: frames.at(-1).time});
-      assert.equal(result.reps.length, 0);
-      assert.equal(result.score, null);
-      assert.notEqual(result.status, 'complete');
-    }
-  }
-});
-
-test('shallow but complete attempts are recognized, counted, and scored as insufficient depth', () => {
-  for (const [exercise, options] of [['squat', {depth: 15}], ['pushup', {pushDepth: 10}]]) {
-    const result = run(exercise, options);
-    assert.equal(result.exerciseId, exercise, JSON.stringify(result));
-    assert.equal(result.status, 'complete');
-    assert.equal(result.attemptCount, 2);
-    assert.equal(result.qualifiedRepCount, 0);
-    assert.ok(result.score < 70);
-    assert.ok(result.issues.some(i => ['SQUAT_DEPTH', 'PUSHUP_DEPTH'].includes(i.code)));
-  }
-});
-
-test('the first observed top frame is sufficient evidence without requiring a starting pause', () => {
-  const clip = recording('squat', {repetitions: 1});
-  const frames = clip.frames.filter(f => f.time >= 0.53).map(f => ({...f, time: f.time - 8 / 15}));
-  const result = analyzeMotion(frames, {...clip.options, duration: frames.at(-1).time});
-  assert.equal(result.attemptCount, 1, JSON.stringify(result));
-});
-
-test('missing bottom frames and long landmark gaps cannot be bridged into a repetition', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const clip = recording(exercise, {repetitions: 1});
-    for (const omit of [false, true]) {
-      const frames = clip.frames.flatMap(f => f.time > 1.35 && f.time < 2.05 ? (omit ? [] : [{...f, landmarks: []}]) : [f]);
-      const result = analyzeMotion(frames, clip.options);
-      assert.equal(result.reps.length, 0);
-      assert.equal(result.score, null);
-    }
-  }
-});
-
-test('complete repetitions survive a gap between repetitions without merging across it', () => {
-  const clip = recording('squat', {repetitions: 3});
-  const frames = clip.frames.map(f => f.time > 3.1 && f.time < 3.7 ? {...f, landmarks: []} : f);
-  const result = analyzeMotion(frames, clip.options);
-  assert.equal(result.status, 'complete');
-  assert.ok(result.reps.length >= 1 && result.reps.length <= 3);
-  assert.ok(result.reps.every(rep => !(rep.start < 3.1 && rep.end > 3.7)));
-  assert.ok(result.issues.some(i => i.code === 'POSE_GAP'));
-});
-
-test('front views, extensive occlusion, absent confidence and insufficient sampling are rejected', () => {
-  const front = run('squat', {front: true});
-  assert.equal(front.score, null);
-  assert.ok(front.quality.reasons.includes('INSUFFICIENT_CHECK_COVERAGE'));
-  const clip = recording('squat');
-  for (const frames of [
-    clip.frames.map((f, i) => i % 3 ? {...f, landmarks: []} : f),
-    clip.frames.map(f => ({...f, landmarks: f.landmarks.map(({visibility, presence, ...p}) => p)})),
-  ]) assert.equal(analyzeMotion(frames, clip.options).score, null);
-  assert.equal(run('squat', {fps: 3}).score, null);
-});
-
-test('recognition remains available when view, coverage, or sampling prevents scoring', () => {
-  const front = run('squat', {front: true});
-  assert.equal(front.exerciseId, 'squat');
-  assert.equal(front.score, null);
-  assert.equal(run('squat', {fps: 3}).exerciseId, 'squat');
-  const clip = recording('squat');
-  const result = analyzeMotion(clip.frames.map((f, i) => i % 3 ? {...f, landmarks: []} : f), clip.options);
-  assert.equal(result.exerciseId, 'squat');
-  assert.equal(result.score, null);
-});
-
-test('resampling cannot disguise a low original video frame rate', () => {
-  const clip = recording('squat', {fps: 15});
-  const lowSource = analyzeMotion(clip.frames, {...clip.options, sourceFps: 3});
-  assert.equal(lowSource.exerciseId, 'squat');
-  assert.equal(lowSource.score, null);
-  assert.equal(lowSource.status, 'insufficient');
-  assert.ok(lowSource.quality.reasons.includes('LOW_SOURCE_FRAME_RATE'));
-  assert.equal(analyzeMotion(clip.frames, {...clip.options, sourceFps: null}).status, 'complete');
-});
-
-test('observable shallow depth, trunk lean and hip sag reduce relevant scores with timestamped evidence', () => {
-  const squat = run('squat');
-  const shallow = run('squat', {depth: 33});
-  assert.equal(shallow.status, 'complete', JSON.stringify(shallow));
-  assert.ok(shallow.score < squat.score);
-  assert.ok(shallow.issues.some(i => ['SQUAT_DEPTH', 'PUSHUP_DEPTH'].includes(i.code)));
-  const leaning = run('squat', {lean: 210});
-  assert.equal(leaning.status, 'complete', JSON.stringify(leaning));
-  assert.ok(leaning.score < squat.score);
-  assert.ok(leaning.issues.some(i => i.code === 'SQUAT_TORSO_LEAN'));
-  const sagging = run('pushup', {sag: 75});
-  assert.equal(sagging.status, 'complete', JSON.stringify(sagging));
-  assert.ok(sagging.score < run('pushup').score);
-  assert.ok(sagging.issues.some(i => i.code === 'BODY_ALIGNMENT' && i.time > 0));
-});
-
-test('world landmarks do not override view/quality gates; inputs are not mutated', () => {
-  const clip = recording('squat', {front: true});
-  const frames = clip.frames.map(f => ({...f, worldLandmarks: f.landmarks.map((p, i) => ({...p, z: i / 33}))}));
-  const before = JSON.stringify(frames);
-  assert.equal(analyzeMotion(frames, clip.options).score, null);
-  assert.equal(JSON.stringify(frames), before);
-  assert.equal(analyzeMotion([], clip.options).score, null);
-  assert.equal(analyzeMotion(clip.frames, {width: NaN, height: 720}).score, null);
-});
-
-test('duplicate timestamps and invalid coordinates cannot manufacture valid repetitions', () => {
-  const clip = recording('squat');
-  const frames = Array.from({length: 100}, () => clip.frames[0]);
-  assert.equal(analyzeMotion(frames, clip.options).score, null);
-  const invalid = clip.frames.map(f => ({...f, landmarks: f.landmarks.map(p => ({...p, x: NaN}))}));
-  assert.equal(analyzeMotion(invalid, clip.options).score, null);
-});
-
-test('multiple people are rejected and absent presence can fall back to visibility', () => {
-  const clip = recording('squat');
-  const multiple = clip.frames.map(f => ({...f, personCount: 2}));
-  assert.equal(analyzeMotion(multiple, clip.options).issues[0].code, 'MULTIPLE_PEOPLE');
-  const noPresence = clip.frames.map(f => ({...f, landmarks: f.landmarks.map(p => ({...p, presence: null}))}));
-  assert.equal(analyzeMotion(noPresence, clip.options).status, 'complete');
-});
-
-test('real extracted poses preserve squat and perspective push-up recognition without facial data', () => {
-  for (const exercise of ['squat', 'pushup']) {
-    const fixture = JSON.parse(readFileSync(new URL(`./fixtures/motion-${exercise}-real.json`, import.meta.url)));
-    const frames = fixture.frames.map(([time, points]) => {
-      const landmarks = Array(33).fill(null);
-      fixture.landmarkIndices.forEach((index, i) => {
-        const [x, y, visibility] = points[i];
-        landmarks[index] = {x, y, visibility};
-      });
-      return {time, landmarks};
-    });
-    const result = analyzeMotion(frames, fixture.options);
-    assert.equal(result.status, 'complete', JSON.stringify(result));
-    assert.equal(result.exerciseId, fixture.expectedExercise);
-    assert.ok(result.reps.every(rep => rep.start < rep.bottom && rep.bottom < rep.end));
-    if (exercise === 'squat') assert.equal(result.reps.length, 5); // independently reviewed count
-    else assert.ok(result.reps.length >= 1); // no unverified on-screen counter as a golden label
-  }
-});
-
-
-test('a visual squat hint cannot force an unrelated push-up into squat repetitions', () => {
-  const clip = recording('pushup');
-  const result = analyzeMotion(clip.frames, {...clip.options, exerciseHint: 'squat'});
-  assert.equal(result.score, null);
-  assert.equal(result.attemptCount, 0);
-  assert.ok(result.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
-});
-
-test('squat torso lean records sustained time but does not diagnose spinal neutrality', () => {
-  const result = run('squat', {lean: 210});
-  const lean = result.checks.find(c => c.code === 'SQUAT_TORSO_LEAN');
-  assert.equal(lean.status, 'fail');
-  assert.ok(lean.evidence.duration >= 0.2);
-  assert.ok(lean.evidence.value > 50);
-  assert.ok(lean.time > 0);
-  assert.equal(result.checks.find(c => c.code === 'SPINE_NEUTRAL').status, 'unobservable');
-  const clip = recording('squat');
-  for (const f of clip.frames.filter(f => f.time > 1.61 && f.time < 1.71)) {
-    for (const index of [11, 12]) f.landmarks[index].x += 0.19;
-  }
-  const spike = analyzeMotion(clip.frames, clip.options);
-  assert.equal(spike.checks.find(c => c.code === 'SQUAT_TORSO_LEAN').status, 'pass');
-});
-
-
-test('all squat and push-up catalogue variants reach the compatible-hint scoring recipe', () => {
-  for (const [kind, id] of [['squat', 'squat'], ['squat', 'goblet-squat'], ['pushup', 'pushup']]) {
-    const clip = recording(kind);
-    const result = analyzeMotion(clip.frames, {...clip.options, exerciseHint: id});
-    assert.equal(result.exerciseId, id);
-    assert.equal(result.attemptCount, 2);
-    assert.ok(result.checks.length >= 4);
-  }
+test('inferred depth cannot override image measurements and input poses remain unmodified', () => {
+  const frame = pose();
+  const original = analyzeMotion([frame], options);
+  frame.landmarks.forEach(point => {if (point) {point.z = -999; Object.freeze(point);}});
+  frame.worldLandmarks = frame.landmarks.map(point => point && {x: -999, y: 999, z: 999, visibility: 1});
+  Object.freeze(frame.landmarks);
+  Object.freeze(frame);
+  assert.deepEqual(analyzeMotion(Object.freeze([frame]), options), original);
 });

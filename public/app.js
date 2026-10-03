@@ -6,7 +6,7 @@ import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
 import {beijingDate,validTrainingCompletion,achievementWall} from './achievements.js?v=5';
 import {renderAchievementWall,renderAchievementDetails} from './achievement-view.js?v=4';
-import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=10';
+import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} from './store.js?v=11';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
@@ -16,7 +16,7 @@ import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {formulaCards, foodPortions, rmPresets, rmConversionReference, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, calculateRMConversion} from './knowledge-tools.js?v=11';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
-import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=6';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=9';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {createProviderSettings} from './provider-settings.js?v=1';
@@ -207,9 +207,9 @@ function renderMotion() {
      const model=provider&&enabledModels(provider).find(item=>item.id===currentModel('motion'));
      return {configured:!!model,vision:model?.vision===true,model:model?.name||model?.id||'',provider:provider?.name||''};
    },
-   reviewAssessment:async(payload,{signal}={})=>{
+   reviewAssessment:async(payload,{signal,onProgress}={})=>{
      if(state.store!==store)throw new Error('账号已切换，请重新分析视频。');
-     return api('/motion/coach',{method:'POST',body:payload,signal});
+     return streamMotionCoach(payload,{signal,onProgress});
    },
    openCoachSettings:()=>{state.setting='ai';void navigate('settings');},
    notify:toast,

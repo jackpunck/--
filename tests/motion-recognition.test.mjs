@@ -1,182 +1,123 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {motionExercises, getMotionExercise} from '../public/motion-catalog.js';
-import {compactMotionAnalysis, motionCoachActionCatalog, sanitizeMotionCoachResponse, mergeCoachAssessment} from '../public/motion-contract.js';
+import * as catalogue from '../public/motion-catalog.js';
+import {compactMotionAnalysis, confirmedMotionAction, motionCoachActionCatalog, sanitizeMotionCoachResponse, mergeCoachAssessment} from '../public/motion-contract.js';
 
-const legacyIds = ['squat','pushup','curl','bench','incline-bench','chest-press','lat-pulldown','row','dumbbell-row','pullup','shoulder-press','lateral-raise','reverse-fly','triceps','overhead-triceps','hammer-curl','goblet-squat','rdl','lunge','leg-curl','leg-extension','glute-bridge','plank','crunch','calf-raise'];
-const newIds = ['barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row'];
-const frames = [{time:1},{time:2},{time:3}];
-const examples = [
-  ['bench','dumbbell','flat-bench','horizontal-press','bilateral'],
-  ['incline-bench','dumbbell','incline-bench','horizontal-press','bilateral'],
-  ['chest-press','machine','seated','horizontal-press','bilateral'],
-  ['row','cable','seated','row','bilateral'],
-  ['dumbbell-row','dumbbell','single-arm-supported','row','unilateral'],
-  ['barbell-bench','barbell','flat-bench','horizontal-press','bilateral'],
-  ['incline-barbell-bench','barbell','incline-bench','horizontal-press','bilateral'],
-  ['smith-bench','smith-machine','flat-bench','horizontal-press','bilateral'],
-  ['incline-smith-bench','smith-machine','incline-bench','horizontal-press','bilateral'],
-  ['barbell-row','barbell','bent-over','row','bilateral'],
-  ['machine-row','machine','seated','row','bilateral'],
-  ['chest-supported-row','dumbbell','chest-supported','row','bilateral'],
-];
-const observation = ([,equipment,support,movement,laterality], evidenceTimes=[1,2]) => ({equipment,support,movement,laterality,evidence:'画面中负重器械、身体支撑与推拉方向持续清楚可见。',evidenceTimes});
-const output = (example=examples[5], overrides={}) => ({action:{exerciseId:example[0],status:'identified',confidence:'high',evidenceTimes:[1,2],observations:observation(example),...overrides},checks:[]});
-const sanitize = (value, options={}) => sanitizeMotionCoachResponse(value,{mode:'visual',keyframes:frames,...options});
+const teachingIds = ['squat','pushup','curl','bench','incline-bench','chest-press','lat-pulldown','row','dumbbell-row','pullup','shoulder-press','lateral-raise','reverse-fly','triceps','overhead-triceps','hammer-curl','goblet-squat','rdl','lunge','leg-curl','leg-extension','glute-bridge','plank','crunch','calf-raise'];
+const additionalIds = ['barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row'];
+const frames = [{time: 1}, {time: 2}, {time: 3}];
+const action = extra => ({exerciseId: 'barbell-bench', name: '杠铃卧推', family: 'horizontal-press', status: 'identified', confidence: 'high', evidenceTimes: [1, 2], evidence: '目标仰卧于凳面，双手将同一根杠铃推离胸部。', ...extra});
+const sanitize = (value, options = {}) => sanitizeMotionCoachResponse(value, {mode: 'visual', keyframes: frames, ...options});
+const forbidden = new Set(['score', 'observedScore', 'scoreStatus', 'scoreCoverage', 'scoreCap', 'checks', 'requiredChecks', 'recognitionRules', 'weight', 'threshold', 'qualified', 'qualifiedRepCount', 'reps', 'issues', 'measurements', 'landmarks', 'worldLandmarks', 'frames']);
+function assertNoLegacyFields(value) {
+  if (!value || typeof value !== 'object') return;
+  for (const [key, item] of Object.entries(value)) {
+    assert.equal(forbidden.has(key), false, key);
+    assertNoLegacyFields(item);
+  }
+}
 
-test('equipment actions extend the motion catalogue while preserving legacy teaching IDs and recipes', () => {
-  assert.equal(motionExercises.length,32);
-  assert.equal(new Set(motionExercises.map(item=>item.id)).size,32);
-  assert.equal(getMotionExercise('bench').name,'哑铃卧推');
-  assert.equal(getMotionExercise('row').name,'坐姿绳索划船');
-  assert.deepEqual(motionExercises.filter(item=>item.hasTeaching).map(item=>item.id),legacyIds);
-  assert.deepEqual(motionExercises.filter(item=>!item.hasTeaching).map(item=>item.id),newIds);
-  for(const id of newIds){
-    const exercise=getMotionExercise(id);
-    assert.equal(exercise.checks.reduce((total,check)=>total+check.weight,0),100);
-    assert.deepEqual(exercise.requiredChecks,getMotionExercise(exercise.family==='row'?'row':'bench').requiredChecks);
+test('catalogue preserves teaching names and adds identity hints without evaluation rules', () => {
+  assert.equal(catalogue.motionExercises.length, 32);
+  assert.equal(new Set(catalogue.motionExercises.map(item => item.id)).size, 32);
+  assert.deepEqual(catalogue.motionExercises.filter(item => item.hasTeaching).map(item => item.id), teachingIds);
+  assert.deepEqual(catalogue.motionExercises.filter(item => !item.hasTeaching).map(item => item.id), additionalIds);
+  assert.equal(catalogue.getMotionExercise('bench').name, '哑铃卧推');
+  assert.equal(catalogue.getMotionExercise('row').name, '坐姿绳索划船');
+  assert.equal(catalogue.motionCheckDefinitions, undefined);
+  assert.equal(catalogue.motionCheckCodes, undefined);
+  for (const entry of catalogue.motionExercises) assert.deepEqual(Object.keys(entry).sort(), ['family', 'hasTeaching', 'id', 'name']);
+  for (const entry of motionCoachActionCatalog()) assert.deepEqual(Object.keys(entry).sort(), ['family', 'id', 'name']);
+});
+
+test('every catalogue name can be confirmed from two actual pictures without a coded equipment rubric', () => {
+  for (const {id, name, family} of catalogue.motionExercises) {
+    const result = sanitize({action: action({exerciseId: id, name, family})});
+    assert.equal(result.action.exerciseId, id);
+    assert.equal(result.action.name, name);
+    assert.equal(result.action.family, family);
+    assert.equal(result.action.status, 'identified');
+    assert.deepEqual(confirmedMotionAction(result), result.action);
+    assert.equal(result.checks, undefined);
+    assertNoLegacyFields(result);
   }
 });
 
-test('the model catalogue supplies concrete visual recognition rules for every press and row', () => {
-  const catalog=motionCoachActionCatalog();
-  for(const [id,equipment,support,movement,laterality] of examples){
-    const rules=catalog.find(item=>item.id===id)?.recognitionRules;
-    assert.ok(rules,`${id} must require equipment and support observations`);
-    assert.ok(rules.equipment.includes(equipment),id);
-    assert.ok(rules.support.includes(support),id);
-    assert.equal(rules.movement,movement);
-    assert.ok(rules.laterality.includes(laterality),id);
+test('exact catalogue ID, name and family consistency is enforced', () => {
+  for (const change of [
+    {name: '哑铃卧推'}, {name: '目录外特殊卧推'}, {family: 'row'}, {family: 'invented-family'},
+    {exerciseId: 'invented-id'}, {exerciseId: 1},
+  ]) {
+    const coach = sanitize({action: action(change)});
+    assert.equal(coach.action.status, 'unknown', JSON.stringify(change));
+    assert.equal(coach.action.exerciseId, null);
+    assert.equal(coach.candidates.length, 0);
   }
-  assert.deepEqual(getMotionExercise('machine-row').recognitionRules.support,['seated','chest-supported']);
-  assert.deepEqual(getMotionExercise('chest-supported-row').recognitionRules.equipment,['dumbbell','barbell']);
+  assert.equal(sanitize({action: action({exerciseId: null})}).action.exerciseId, 'barbell-bench');
+  assert.equal(sanitize({action: action({name: undefined})}).action.name, '杠铃卧推');
 });
 
-test('two matching visual observations identify the correct equipment action and survive sanitization', () => {
-  for(const example of examples){
-    const result=sanitize(output(example));
-    assert.equal(result.action.exerciseId,example[0],example[0]);
-    assert.equal(result.action.status,'identified');
-    assert.deepEqual(result.action.observations,observation(example));
-  }
-  const example=examples[11], alternate=observation(example);
-  alternate.equipment='barbell';
-  assert.equal(sanitize(output(example,{observations:alternate})).action.exerciseId,'chest-supported-row');
+test('confident identity needs distinct supplied picture times, evidence and explicit confidence', () => {
+  for (const change of [
+    {evidenceTimes: [1]}, {evidenceTimes: [1, 1, 99]}, {evidenceTimes: [1.02, 2.02]},
+    {evidenceTimes: [-1, NaN, Infinity, '1']}, {evidence: ''}, {evidence: 'abc'},
+    {confidence: 'medium'}, {status: 'unknown'},
+  ]) assert.equal(sanitize({action: action(change)}).action.status, 'unknown', JSON.stringify(change));
+  const result = sanitize({action: action({evidenceTimes: [1, 2, 99, 2], evidence: '\u0000 清楚看到双手推起杠铃。 '})});
+  assert.deepEqual(result.action.evidenceTimes, [1, 2]);
+  assert.equal(result.action.evidence, '清楚看到双手推起杠铃。');
+  for (const options of [{mode: 'evidence-only'}, {keyframes: []}, {keyframes: [{time: 1}]}]) assert.equal(sanitize({action: action()}, options).action.status, 'unknown');
 });
 
-test('equipment labels abstain without matching visible equipment, support, movement and laterality', () => {
-  const example=examples[5], original=observation(example);
-  const invalid=[
-    undefined,
-    {...original,equipment:'dumbbell'},
-    {...original,equipment:'smith-machine'},
-    {...original,equipment:'invented-machine'},
-    {...original,support:'incline-bench'},
-    {...original,movement:'row'},
-    {...original,laterality:'unilateral'},
-    {...original,evidence:'  '},
-    {...original,evidence:'abc'},
-    {...original,evidenceTimes:[1]},
-    {...original,evidenceTimes:[2,3]},
-    {...original,evidenceTimes:[1,99]},
-  ];
-  for(const observations of invalid){
-    const result=sanitize(output(example,{observations}));
-    assert.equal(result.action.status,'unknown',JSON.stringify(observations));
-    assert.equal(result.action.exerciseId,null);
-    assert.ok(result.candidates.some(item=>item.exerciseId==='barbell-bench'));
-    assert.equal(result.candidates.find(item=>item.exerciseId==='barbell-bench').confidence,'low');
-  }
-  for(const example of examples)assert.equal(sanitize(output(example,{observations:undefined})).action.status,'unknown',example[0]);
+test('analysis navigation includes only bounded quality and picture metadata', () => {
+  const bbox = {xMin: 0.1, yMin: 0.2, xMax: 0.8, yMax: 0.9};
+  const result = compactMotionAnalysis({
+    score: 99, checks: [{status: 'pass'}], measurements: [{raw: true}], exerciseName: '本地猜测',
+    quality: {totalFrames: 30, validFrames: 24, usableRatio: 0.8, targetCoverage: null, sourceFps: 30, reasons: ['MISSING_OR_UNCERTAIN_LANDMARKS', 'SQUAT_DEPTH'], score: 100},
+    evidenceFrames: [{time: 1, crop: bbox, data: 'pixels', landmarks: [1], subjectTracking: {status: 'locked', trackId: 'target', confidence: 0.9, bbox, raw: [1]}, frameMappings: [{requestedTime: 1, poseTime: 1, sourceTime: 1.01, raw: [1]}]}],
+  });
+  assert.deepEqual(Object.keys(result), ['quality', 'evidenceFrames']);
+  assert.deepEqual(result.quality, {totalFrames: 30, validFrames: 24, usableRatio: 0.8, targetCoverage: null, sourceFps: 30, reasons: ['MISSING_OR_UNCERTAIN_LANDMARKS']});
+  assert.equal(result.evidenceFrames[0].data, undefined);
+  assert.equal(result.evidenceFrames[0].subjectTracking.raw, undefined);
+  assert.deepEqual(result.evidenceFrames[0].frameMappings, [{requestedTime: 1, poseTime: 1, sourceTime: 1.01}]);
+  assertNoLegacyFields(result);
 });
 
-test('equipment evidence uses two distinct shared actual keyframe times and drops arbitrary data', () => {
-  const example=examples[5], original=observation(example);
-  assert.equal(sanitize(output(example,{observations:{...original,evidenceTimes:[1,1,99]}})).action.status,'unknown');
-  const result=sanitize(output(example,{evidenceTimes:[1.02,2.02],observations:{...original,evidence:'\u0000  清楚可见杠铃与平凳支撑。  ',evidenceTimes:[1.01,2.01,99],rawLandmarks:Array(33).fill(1)}}));
-  assert.deepEqual(result.action.observations,{...original,evidence:'清楚可见杠铃与平凳支撑。',evidenceTimes:[1,2]});
-  assert.deepEqual(result.action.evidenceTimes,[1,2]);
+test('saved reports are an allowlist and retain every validated feedback reference and coverage count', () => {
+  const feedbackTimes = Array.from({length: 120}, (_, index) => index / 15);
+  const coach = {
+    ...sanitize({action: action(), checks: [{score: 100}]}),
+    verdict: {status: 'needs-improvement', summary: '起身时肩髋不同步，需要调整。'},
+    feedback: [{title: '肩髋同步', status: 'improve', source: 'analysis', frameIndices: [], evidenceTimes: feedbackTimes,
+      analysisPaths: [['measurements', 17, 'left', 'bodyAlignmentAngle']], evidence: '起身时髋部先抬起，肩部随后移动。', correction: '减轻负荷，让肩髋同时起身。', priority: 1,
+      checks: [1], raw: [1], score: 30}],
+    coverage: {complete: true, frameCount: 120, reviewedFrameCount: 120, measurementCount: 120, reviewedMeasurementCount: 120, dataBatches: 3, modelCalls: 5, repetitionCount: 9},
+    timing: {providerMs: 123, totalMs: 456, raw: 1}, model: 'model', provider: 'provider', checks: [{status: 'pass'}], raw: [1], score: 100,
+  };
+  const local = {version: 'motion-observations-v1', score: 69, exerciseName: '本地猜测', reps: [{score: 69}], checks: [{status: 'fail'}], measurements: [{frameIndex: 0}], quality: {totalFrames: 120, validFrames: 120, usableRatio: 1, targetCoverage: 1, reasons: []}};
+  const report = mergeCoachAssessment(local, coach);
+  assert.deepEqual(Object.keys(report).sort(), ['coach', 'exerciseFamily', 'exerciseId', 'exerciseName', 'quality', 'recognitionSource', 'version']);
+  assert.equal(report.exerciseName, '杠铃卧推');
+  assert.equal(report.recognitionSource, 'visual');
+  assert.deepEqual(report.coach.feedback[0].evidenceTimes, feedbackTimes);
+  assert.deepEqual(report.coach.feedback[0].analysisPaths, [['measurements', 17, 'left', 'bodyAlignmentAngle']]);
+  assert.deepEqual(report.coach.coverage, {complete: true, frameCount: 120, reviewedFrameCount: 120, measurementCount: 120, reviewedMeasurementCount: 120, dataBatches: 3, modelCalls: 5});
+  assertNoLegacyFields(report);
+  assert.equal(report.coach.raw, undefined);
+  assert.equal(report.coach.feedback[0].raw, undefined);
+  assert.equal(report.coach.overallEvaluation, undefined);
 });
 
-test('bodyweight recognition stays compatible while text or missing frames cannot identify equipment', () => {
-  const simple={action:{exerciseId:'pushup',status:'identified',confidence:'high',evidenceTimes:[1,2]},checks:[]};
-  assert.equal(sanitize(simple).action.exerciseId,'pushup');
-  for(const options of [{mode:'evidence-only'},{keyframes:[]},{keyframes:[{time:1}]}]){
-    assert.equal(sanitize(output(),options).action.exerciseId,null);
-  }
-});
-
-test('analysis compaction retains all supported candidate actions without accepting unknown IDs', () => {
-  const result=compactMotionAnalysis({candidates:[...legacyIds,...newIds,'invented-action'].map(exerciseId=>({exerciseId}))});
-  assert.equal(result.candidates.length,32);
-  assert.deepEqual(result.candidates.map(item=>item.exerciseId),[...legacyIds,...newIds]);
-});
-
-test('a hard quality failure retains a confirmed equipment name without permitting any scoring', () => {
-  const coach=sanitize(output());
-  const rep={index:1,start:0,end:3,bottom:1.5,time:1.5,qualified:true,score:90,observedScore:90,scoreStatus:'assessed',scoreCoverage:1,metrics:{angleRange:90},checks:[{code:'PRESS_TRUNK',status:'pass',evidenceTimes:[1],evidence:{samples:30}}],issues:[{code:'POSE_GAP',time:2,message:'原始检查证据'}]};
-  const base={exerciseId:null,exerciseFamily:'horizontal-press',requiresVisualConfirmation:true,status:'unsupported',score:90,observedScore:90,scoreCoverage:1,scoreStatus:'assessed',qualified:true,qualifiedRepCount:1,quality:{reasons:['LOW_TARGET_COVERAGE']},reps:[rep]};
-  const result=mergeCoachAssessment(base,coach);
-  assert.equal(result.exerciseId,'barbell-bench');
-  assert.equal(result.exerciseFamily,'horizontal-press');
-  assert.equal(result.requiresVisualConfirmation,false);
-  assert.equal(result.score,null);
-  assert.equal(result.observedScore,null);
-  assert.equal(result.scoreStatus,'unavailable');
-  assert.equal(result.scoreCoverage,0);
-  assert.equal(result.qualified,false);
-  assert.equal(result.qualifiedRepCount,0);
-  assert.deepEqual(result.reps,[{...rep,score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false}]);
-  const conflict=mergeCoachAssessment({...base,exerciseFamily:'row'},coach);
-  assert.equal(conflict.exerciseId,'barbell-bench','Sparse target tracking cannot establish a conflicting pose family');
-  assert.equal(conflict.recognitionConflict,false);
-  assert.equal(conflict.requiresVisualConfirmation,false);
-  assert.equal(conflict.score,null);
-  assert.ok(conflict.reps.every(rep=>rep.score===null&&rep.qualified===false));
-  const reliableConflict=mergeCoachAssessment({...base,exerciseFamily:'row',quality:{reasons:[]}},coach);
-  assert.equal(reliableConflict.exerciseId,null);
-  assert.equal(reliableConflict.recognitionConflict,true);
-  assert.equal(reliableConflict.requiresVisualConfirmation,true);
-  assert.equal(reliableConflict.score,null);
-});
-
-test('a family conflict removes each repetition score while preserving its measured evidence and times', () => {
-  const coach=sanitize(output());
-  const rep={index:1,start:0,end:3,bottom:1.5,time:1.5,qualified:true,score:90,observedScore:90,scoreStatus:'assessed',scoreCoverage:1,metrics:{angleRange:90},checks:[{code:'ROW_ROM',status:'pass',evidenceTimes:[1],evidence:{samples:30}}],issues:[{code:'POSE_GAP',time:2,message:'原始检查证据'}]};
-  const base={exerciseId:'row',exerciseFamily:'row',requiresVisualConfirmation:false,status:'complete',score:90,observedScore:90,scoreCoverage:1,scoreStatus:'assessed',qualified:true,qualifiedRepCount:1,quality:{reasons:[]},reps:[rep]};
-  const result=mergeCoachAssessment(base,coach);
-  assert.equal(result.score,null);
-  assert.equal(result.observedScore,null);
-  assert.equal(result.scoreStatus,'unavailable');
-  assert.equal(result.scoreCoverage,0);
-  assert.equal(result.qualified,false);
-  assert.equal(result.qualifiedRepCount,0);
-  assert.match(result.summary,/动作类别不一致/);
-  assert.deepEqual(result.reps,[{...rep,score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false}]);
-});
-
-test('equipment confirmation cannot manufacture a complete attempt or clear a prior pose failure', () => {
-  const coach=sanitize(output()), exercise=getMotionExercise('bench');
-  const base={exerciseId:null,exerciseFamily:'horizontal-press',requiresVisualConfirmation:true,status:'insufficient',score:null,quality:{reasons:['INCOMPLETE_REPETITION']},reps:[]};
-  const incomplete=mergeCoachAssessment(base,coach);
-  assert.equal(incomplete.exerciseId,'barbell-bench');
-  assert.equal(incomplete.score,null);
-  assert.equal(incomplete.qualifiedRepCount,0);
-  const checks=exercise.checks.map(rule=>({...rule,status:rule.code==='PRESS_TRUNK'?'fail':rule.visual?'unobservable':'pass',severity:rule.code==='PRESS_TRUNK'?'severe':'info',source:'pose',score:rule.code==='PRESS_TRUNK'?0:rule.visual?null:100,scope:rule.visual?'unobservable':'whole-repetition',time:1,evidenceTimes:[1],message:'连续姿态证据'}));
-  const merged=mergeCoachAssessment({...base,status:'complete',score:49,checks,quality:{reasons:[]},reps:[{start:0,end:3,score:49,checks}]},coach);
-  assert.equal(merged.exerciseId,'barbell-bench');
-  assert.equal(merged.checks.find(check=>check.code==='PRESS_TRUNK').status,'fail');
-  assert.ok(merged.score<=49);
-});
-
-test('assessment merging cannot turn a missing or mismatched equipment observation into an exact action', () => {
-  const base={exerciseId:null,exerciseFamily:'horizontal-press',requiresVisualConfirmation:true,status:'insufficient',score:null,quality:{reasons:[]},reps:[]};
-  const original=observation(examples[5]);
-  for(const overrides of [{observations:undefined},{observations:{...original,equipment:'dumbbell'}},{confidence:'low'},{evidenceTimes:[1,1]},{observations:{...original,evidence:' abc '}}]){
-    const coach={mode:'visual',...output(examples[5],overrides)};
-    const result=mergeCoachAssessment(base,coach);
-    assert.equal(result.exerciseId,null,JSON.stringify(overrides));
-    assert.equal(result.requiresVisualConfirmation,true);
-    assert.equal(result.score,null);
-  }
+test('local guesses cannot override or fabricate the AI action name', () => {
+  const local = {exerciseId: 'row', exerciseName: '坐姿绳索划船', quality: {totalFrames: 30, validFrames: 4, usableRatio: 0.13, targetCoverage: 0.13, reasons: ['MISSING_OR_UNCERTAIN_LANDMARKS']}, score: 100};
+  const confirmed = mergeCoachAssessment(local, sanitize({action: action()}));
+  assert.equal(confirmed.exerciseId, 'barbell-bench');
+  assert.equal(confirmed.exerciseName, '杠铃卧推');
+  assert.equal(confirmed.coach.verdict.status, 'uncertain');
+  const unknown = mergeCoachAssessment(local, sanitize({action: action({evidenceTimes: []})}));
+  assert.equal(unknown.exerciseId, null);
+  assert.equal(unknown.exerciseName, '');
+  assert.equal(unknown.recognitionSource, 'unknown');
+  assertNoLegacyFields(unknown);
 });

@@ -7,6 +7,9 @@ import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {startServer} from '../server.mjs';
 import {motionExercises} from '../public/motion-catalog.js';
+import {mergeCoachAssessment} from '../public/motion-contract.js';
+import {analyzeMotion} from '../public/motion-analysis.js';
+import {buildMotionPoseData,buildFullMotionAnalysis} from '../public/motion-pose-data.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const reportsOnly=process.argv.includes('--reports-only');
@@ -25,6 +28,7 @@ const evidenceSource=await readFile(join(root,'public/motion-evidence.js'),'utf8
 const heldEvidence=evidenceSource.replace('export async function buildMotionEvidence(', 'async function actualBuildMotionEvidence(')+`\nexport async function buildMotionEvidence(...args){if(window.__qaHoldEvidence)await new Promise(resolve=>{window.__qaReleaseEvidence=resolve;});return actualBuildMotionEvidence(...args);}`;
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'精细模型与动作开发/node_modules/playwright/index.mjs'))));
 const calls=[],errors=[],external=[],browserRequests=[];let upstreamMode='success',pendingRelease=null,equipmentAction=null;
+const pendingResolves=new Set();
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(url,options)=>{
  assert(new URL(url).pathname.endsWith('/chat/completions'));
@@ -32,12 +36,26 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
  const input=JSON.parse(typeof content==='string'?content:content[0].text);
  const images=Array.isArray(content)?content.filter(part=>part.type==='image_url'):[];
  calls.push({model:body.model,input,imageCount:images.length,imageBytes:images.reduce((n,p)=>n+Buffer.from(p.image_url.url.split(',')[1],'base64').length,0)});
- if(upstreamMode==='pending')await new Promise(resolve=>{pendingRelease=resolve;});
+ if(upstreamMode==='pending')await new Promise((resolve,reject)=>{
+  pendingResolves.add(resolve);pendingRelease=()=>{for(const release of pendingResolves)release();pendingResolves.clear();};
+  options.signal?.addEventListener('abort',()=>{pendingResolves.delete(resolve);reject(options.signal.reason);},{once:true});
+ });
  if(upstreamMode==='error')return json({error:{message:'QA upstream temporarily unavailable'}},503);
+ if(input.stage==='full-data'||input.stage==='synthesis')await new Promise(resolve=>setTimeout(resolve,40));
  const times=input.frames.map(frame=>frame.time),visual=times.length>0;
- const local=input.analysis.checks?.find(check=>check.status!=='unobservable');
- const output={action:{exerciseId:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2)},overallEvaluation:'先减轻负重，保持躯干稳定，再逐步增加动作深度。<img src=x onerror=alert(1)>',checks:visual?[{code:'SPINE_NEUTRAL',status:'fail',severity:'severe',time:times[1],evidenceTimes:[times[1]],evidence:'测试画面证据：最低点出现明显腰背弯曲。',correction:'下一组先降低负重，收紧腹部，保持可控制的深度。'}]:[{code:local?.code||'SQUAT_DEPTH',status:'fail',evidence:'文本模型不应新增视觉事实。',correction:'依据已检测的幅度，放慢下降并保持控制。'},{code:'SPINE_NEUTRAL',status:'pass',evidence:'无图假设必须被拒绝。'}],limitations:['此响应来自 QA 模拟模型，仅验证功能链路。']};
- if(equipmentAction)Object.assign(output,{action:equipmentAction,checks:[],overallEvaluation:'QA 模拟识别响应，仅验证器械证据、报告显示与保存。'});
+ const output={action:{exerciseId:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2),evidence:'两张画面中可见同一训练者屈膝下蹲并起身。'},verdict:{status:'needs-improvement',summary:'这组动作需要调整，请先改善躯干控制。'},feedback:[],limitations:['此响应来自 QA 模拟模型，仅验证功能链路。']};
+ if(equipmentAction)output.action=equipmentAction;
+ if(input.stage==='full-data'){
+  const indices=input.data.frameIndices;
+  if(visual)output.feedback.push({title:'最低点的躯干控制',status:'improve',source:'visual',frameIndices:[],evidenceTimes:[times[1]??times[0]],evidence:'测试画面中最低点出现明显躯干弯曲。<img src=x onerror=alert(1)>',correction:'下一组先降低负重，收紧腹部，保持可控制的深度。',priority:1});
+  if(indices.length)output.feedback.push({title:'动作过程与下一组调整',status:'improve',source:'pose',frameIndices:indices.slice(0,2),evidenceTimes:[],evidence:'骨架采样显示起身时肩髋没有同步移动。',correction:'下一组收紧腹部，让肩髋一起起身。',priority:1});
+  const row=input.data.blocks.find(block=>block.path[0]==='fullAnalysis'&&block.path[1]==='measurements'&&Number.isInteger(block.path[2])&&Number.isFinite(block.value?.right?.elbowAngle));
+  if(row)output.feedback.push({title:'关节运动过程',status:'improve',source:'analysis',analysisPaths:[['measurements',row.path[2],'right','elbowAngle']],evidence:'该帧测量显示手肘屈伸需要结合完整过程保持控制。',correction:'下一组保持平稳的屈伸节奏。',priority:2});
+ }else if(input.stage==='synthesis'){
+  const previous=input.data.reviewedParts.flatMap(part=>part.report.feedback||[]);
+  output.feedback=['visual','pose','analysis'].map(source=>previous.find(item=>item.source===source)).filter(Boolean);
+ }
+
  return json({choices:[{message:{content:JSON.stringify(output)}}]});
 }});
 const base=`http://127.0.0.1:${server.address().port}`;
@@ -45,6 +63,10 @@ const browser=await chromium.launch({executablePath:process.env.QA_BROWSER||'C:/
 const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',serviceWorkers:'block'});
 await context.route('**/motion-video.js',route=>route.fulfill({contentType:'text/javascript',body:replay}));
 await context.route('**/motion-evidence.js',route=>route.fulfill({contentType:'text/javascript',body:heldEvidence}));
+await context.addInitScript(()=>{
+ window.__qaMotionMessages=[];let previous='';
+ new MutationObserver(()=>{const value=document.querySelector('[data-motion-coach-status]')?.textContent;if(value&&value!==previous){window.__qaMotionMessages.push(value);previous=value;}}).observe(document,{subtree:true,childList:true,characterData:true});
+});
 const page=await context.newPage();page.setDefaultTimeout(15000);
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{browserRequests.push({url:r.url(),method:r.method()});if(/^https?:/.test(r.url())&&!r.url().startsWith(base))external.push(r.url());});
 const nav=async name=>{if(await page.locator('.mobile-menu').isVisible())await page.locator('.mobile-menu').click();await page.locator(`.nav [data-page="${name}"]`).click();};
@@ -73,10 +95,14 @@ const unpublished=async()=>{
  assert.equal(await page.locator('[data-motion-action="save"]').count(),0,'Unreviewed results cannot be saved');
 };
 const waitPending=async()=>{
- await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('AI 正在核对'),{},{timeout:60000});
- for(let i=0;i<100&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
+ await page.waitForFunction(()=>/AI 正在|AI 已/.test(document.querySelector('[data-motion-coach-status]')?.textContent||''),{},{timeout:60000});
+ for(let i=0;i<300&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
 };
 const releasePending=()=>{upstreamMode='success';pendingRelease();pendingRelease=null;};
+const noRuleUi=async()=>{
+ assert.equal(await page.locator('.motion-score,.motion-score-note,.motion-checks,.motion-check-grid,.motion-reps,.motion-metric-section,.motion-history-score,.motion-result-facts').count(),0,'Scores, rules and measurement panels are removed');
+ const text=await page.locator('[data-motion-results]').textContent();assert(!/严格检查|参考分|逐项检查|分数上限|\/ 100/.test(text));
+};
 const checks=[];
 try{
  const reg=await context.request.post(base+'/api/auth/register',{data:{name:'动作AI验证',email:`motion-coach-${Date.now()}@example.test`,password:'motion-qa-password-123'}});assert.equal(reg.status(),201);const {user}=await reg.json();
@@ -84,30 +110,42 @@ try{
  const provider={id:'motion-qa',presetId:'openai',apiKey:'QA-fixture-key-no-external-request',models:[{id:'qa-motion-vision',vision:true},{id:'qa-motion-text',vision:false}]};
  assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
  await page.goto(base);await page.locator('#chat-input').waitFor();await nav('motion');
- assert.equal(await page.locator('.motion-catalog li').count(),motionExercises.length);
+ assert.equal(await page.locator('.motion-guide ol li').count(),3);await noRuleUi();
  assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),true);
  if(!reportsOnly){
  upstreamMode='pending';await page.evaluate(()=>{window.__qaHoldEvidence=true;});
  await analyze({waitForCoach:false});await page.waitForFunction(()=>typeof window.__qaReleaseEvidence==='function');
  await unpublished();assert.equal(calls.length,0);assert.equal(await page.locator('[data-motion-action="cancel-coach"]').isVisible(),true);
  await page.evaluate(()=>{window.__qaHoldEvidence=false;window.__qaReleaseEvidence();window.__qaReleaseEvidence=null;});
- await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('AI 正在核对'),{},{timeout:60000});
- for(let i=0;i<100&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
- await unpublished();assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);await shot('waiting-for-ai');
+ await page.waitForFunction(()=>/AI 正在|AI 已/.test(document.querySelector('[data-motion-coach-status]')?.textContent||''),{},{timeout:60000});
+ for(let i=0;i<300&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
+ await unpublished();assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);await page.waitForFunction(()=>document.querySelector('[data-motion-coach-status]')?.textContent.includes('正在评价动作'));await shot('waiting-for-ai');
  pendingRelease();pendingRelease=null;upstreamMode='success';
- await page.locator('.motion-coach-evaluation').waitFor();await shot('desktop-visual');
+ await page.locator('.motion-coach-evaluation').waitFor();await noRuleUi();assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'needs-improvement');await shot('desktop-visual');
  checks.push('no-result-during-evidence-preparation','no-result-before-ai-review','unreviewed-report-not-saveable');
- assert.equal(calls.length,1);assert.equal(calls[0].model,'qa-motion-vision');assert(calls[0].imageCount>=2&&calls[0].imageCount<=6);assert(calls[0].imageBytes<=2*1024*1024);
- assert(calls[0].input.analysis.checks.length>0);assert(!JSON.stringify(calls[0].input.analysis).includes('landmarks'));
- const contextFrames=calls[0].input.analysis.evidenceFrames.filter(frame=>frame.framing==='equipment-context');
+ assert(calls.length>=1);assert.equal(calls[0].model,'qa-motion-vision');assert(calls[0].imageCount>=2&&calls[0].imageCount<=6);assert(calls[0].imageBytes<=2*1024*1024);
+ const fullCalls=calls.filter(call=>call.input.stage==='full-data'),sentFrameIndices=new Set(fullCalls.flatMap(call=>call.input.data.frameIndices));
+ assert.equal(sentFrameIndices.size,pipeline.frames.length);assert(sentFrameIndices.has(0));assert(sentFrameIndices.has(pipeline.frames.length-1));
+ assert.equal(await page.locator('.motion-ai-feedback').count(),1);assert(fullCalls[0].imageCount>0);assert(fullCalls.slice(1).every(call=>call.imageCount===0),'Later pose packets do not resend images');assert.equal(calls.filter(call=>call.input.stage==='context').length,0);assert.equal(calls.filter(call=>call.input.stage==='synthesis').length,fullCalls.length>1?1:0);
+ assert.match(await page.locator('.motion-ai-feedback').textContent(),/关节运动过程/);
+ checks.push('all-pose-frames-reach-ai','full-pose-feedback-display','full-data-coverage-report');
+ const progressMessages=await page.evaluate(()=>window.__qaMotionMessages);assert(progressMessages.some(text=>text.includes('正在评价动作')));if(fullCalls.length>1)assert(progressMessages.some(text=>text.includes('汇总动作是否标准')));
+ const measurements=fullCalls.flatMap(call=>call.input.data.blocks).filter(block=>block.path[0]==='fullAnalysis'&&block.path[1]==='measurements'&&Number.isInteger(block.path[2]));
+ assert.equal(new Set(measurements.map(block=>block.path[2])).size,pipeline.frames.length);
+ assert(measurements.every(block=>block.value.frameIndex===block.path[2]));
+ assert(!/"(?:score|checks|reps|qualified|threshold)":/.test(JSON.stringify(fullCalls.map(call=>call.input))));
+
+ checks.push('complete-measurement-feedback-display','only-first-data-packet-needs-images','all-objective-measurements-reach-ai','no-local-judgements-in-ai-request','streamed-phase-progress');
+ assert(calls[0].input.stage==='full-data');assert(!JSON.stringify(calls[0].input.analysis).includes('landmarks'));
+ const evidenceFrames=calls[0].input.analysis.evidenceFrames,contextFrames=[evidenceFrames[0],evidenceFrames.at(-1)];
  assert.equal(contextFrames.length,2);assert(contextFrames.every(frame=>frame.crop.xMin===0&&frame.crop.yMin===0&&frame.crop.xMax===1&&frame.crop.yMax===1));
- assert.match(await page.locator('.motion-coach').textContent(),/关键画面 \+ 检测证据/);
+ assert.match(await page.locator('.motion-coach').textContent(),/动作需要调整/);assert.equal(await page.locator('.motion-feedback-item').count(),3);
  assert.equal(await page.locator('.motion-coach img').count(),0);assert(!(await page.locator('.motion-results').textContent()).includes('[object Object]'));
  const target=page.locator('.motion-coach [data-motion-action="seek"]').first(),time=Number(await target.getAttribute('data-time'));await target.click();
  await page.waitForFunction(()=>!document.querySelector('[data-motion-video]').seeking);assert(Math.abs(await page.locator('[data-motion-video]').evaluate(v=>v.currentTime)-time)<.15);
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile overflow');await shot('mobile-visual');await page.setViewportSize({width:1440,height:1000});
- await save();let stored=(await reports())[0];assert(stored.data.score<=49);assert.equal(stored.data.coach.mode,'visual');assert.equal(stored.data.coach.action.exerciseId,'squat');assert(stored.data.checks.some(c=>c.code==='SPINE_NEUTRAL'&&c.status==='fail'));
- const serialized=JSON.stringify(stored.data);assert(!/data:image|base64|blob:|landmarks/.test(serialized));assert(serialized.length<200*1024);checks.push('real-keyframe-extraction','dedicated-vision-route','strict-ai-failure-cap','escaped-model-prose','timestamp-replay','mobile-layout','save-without-images');
+ await save();let stored=(await reports())[0];assert.equal(stored.data.coach.verdict.status,'needs-improvement');assert.equal(stored.data.coach.mode,'visual');assert.equal(stored.data.coach.action.exerciseId,'squat');assert.equal(stored.data.coach.coverage.reviewedFrameCount,pipeline.frames.length);assert.equal(stored.data.coach.checks,undefined);assert.equal(stored.data.coach.coverage.measurementCount,pipeline.frames.length);
+ const serialized=JSON.stringify(stored.data);assert(!/data:image|base64|blob:|landmarks|"score":|"checks":|"measurements":|"reps":/.test(serialized));assert(serialized.length<200*1024);checks.push('real-keyframe-extraction','dedicated-vision-route','plain-language-verdict-and-corrections','escaped-model-prose','timestamp-replay','mobile-layout','save-without-images');
  // A pending response must not steal focus from a saved report.
  upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();await unpublished();
  await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-history-notice').waitFor();
@@ -122,9 +160,9 @@ try{
  // Cancellation aborts the browser request and ignores a late model response.
  upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();
  await page.locator('[data-motion-action="cancel-coach"]').click();assert.match(await page.locator('.motion-coach-error').textContent(),/取消/);await unpublished();releasePending();
- await page.locator('[data-motion-action="local-result"]').click();assert.equal(await page.locator('[data-motion-results]').isVisible(),true);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),false);assert.equal(await page.locator('[data-motion-action="save"]').isDisabled(),false);checks.push('cancel-ignores-late-result','explicit-local-fallback');
+ await page.locator('[data-motion-action="local-result"]').click();assert.equal(await page.locator('[data-motion-results]').isVisible(),true);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),false);assert.equal(await page.locator('[data-motion-action="save"]').count(),0);assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'pending');await noRuleUi();checks.push('cancel-ignores-late-result','local-data-remains-unreviewed');
  // A local-only run publishes immediately and never contacts the model.
- const localCalls=calls.length;await analyze({waitForCoach:false});await page.locator('[data-motion-results]').waitFor();assert.equal(calls.length,localCalls);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);checks.push('local-only-remains-available');
+ const localCalls=calls.length;await analyze({waitForCoach:false});await page.locator('[data-motion-results]').waitFor();assert.equal(calls.length,localCalls);assert.equal(await page.locator('.motion-coach-evaluation').count(),0);await noRuleUi();assert.match(await page.locator('[data-motion-verdict]').textContent(),/AI 尚未评价/);checks.push('local-only-awaits-ai-evaluation');
  // Enabling AI while reading history still reviews the current local candidate.
  await page.locator('[data-motion-action="history"]').first().click();upstreamMode='pending';await page.locator('[data-motion-ai-mode]').check();await waitPending();assert.equal(await page.locator('.motion-history-notice').isVisible(),true);
  await page.locator('[data-motion-action="live-result"]').click();await unpublished();releasePending();await page.locator('.motion-coach-evaluation').waitFor();checks.push('enable-ai-on-local-result-even-in-history');
@@ -138,61 +176,66 @@ try{
  // Actual settings UI switches the dedicated task to text-only, leaving other tasks alone.
  assert.equal(await page.locator('#tasks-form select').count(),4);
  await page.locator('#task-motion').selectOption(JSON.stringify({providerId:provider.id,modelId:'qa-motion-text'}));await page.locator('#tasks-form button').click();
- await page.waitForTimeout(150);await nav('motion');assert.match(await page.locator('.motion-coach-mode').textContent(),/只接收检测摘要/);
+ await page.waitForTimeout(150);await nav('motion');assert.match(await page.locator('.motion-coach-mode').textContent(),/接收全部骨架采样/);
  await analyze({selectTarget:true});assert.equal(calls.at(-1).model,'qa-motion-text');assert.equal(calls.at(-1).imageCount,0);await save();checks.push('manual-target-first-frame-letterbox-coordinates');
- stored=(await reports()).find(r=>r.data.coach?.mode==='evidence-only');assert(stored);assert(!stored.data.coach.checks.some(c=>c.code==='SPINE_NEUTRAL'&&c.status==='pass'));checks.push('settings-four-task-routing','text-only-sends-no-images','text-cannot-confirm-neutral');
+ stored=(await reports()).find(r=>r.data.coach?.mode==='evidence-only');assert(stored);assert.equal(stored.data.coach.checks,undefined);checks.push('settings-four-task-routing','text-only-sends-no-images','text-cannot-confirm-neutral');
  await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-coach-evaluation').waitFor();assert.equal(await page.locator('[data-motion-action="seek"]').count(),0);checks.push('coach-report-reloads');
  }
  // Mock equipment responses pass through the real HTTP contract and report storage.
  // They are fixtures, not recognition-accuracy measurements.
  assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
  const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=';
+ const shortPipeline={...pipeline,duration:3,frames:pipeline.frames.filter(frame=>frame.time<=3)};
+ const reportInput={duration:3,poseData:buildMotionPoseData(shortPipeline),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(shortPipeline.frames,shortPipeline),shortPipeline)};
  const changes=[];
  for(const [id,equipment,support]of [['bench','dumbbell','flat-bench'],['barbell-bench','barbell','flat-bench'],['smith-bench','smith-machine','flat-bench'],['machine-row','machine','seated']]){
   equipmentAction={exerciseId:id,status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment,support,movement:id==='machine-row'?'row':'horizontal-press',laterality:'bilateral',evidence:'两个提供画面中可见同一训练者的负重、支撑面与推拉变化。',evidenceTimes:[1,2]}};
-  const response=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{status:'insufficient',quality:{reasons:['LOW_POSE_COVERAGE']},reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
-  assert.equal(response.status(),200);const review=await response.json();assert.equal(review.action.exerciseId,id);assert.equal(review.assessment.exerciseId,id);assert.equal(review.assessment.score,null);
-  changes.push({id:`motion:equipment-qa-${id}`,kind:'motion-assessment',baseVersion:0,data:{...review.assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
+  const response=await context.request.post(base+'/api/motion/coach',{data:{...reportInput,analysis:{quality:{totalFrames:0,validFrames:0,usableRatio:0,sourceFps:null,targetCoverage:null,reasons:['NO_FRAMES']}},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+  assert.equal(response.status(),200,await response.text());const review=await response.json(),assessment=mergeCoachAssessment(reportInput.fullAnalysis,review);assert.equal(review.action.exerciseId,id);assert.equal(assessment.exerciseId,id);assert.equal(assessment.score,undefined);
+  changes.push({id:`motion:equipment-qa-${id}`,kind:'motion-assessment',baseVersion:0,data:{...assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
  }
  const openCases=[
-  {name:'引体向上',exerciseId:'pullup',family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'none',expectedId:null,evidence:'两帧可见训练者握单杠悬垂并拉起身体，双脚悬空，未接触助力垫、弹力带或他人。'},
+  {name:'引体向上',exerciseId:null,family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'none',expectedId:null,evidence:'两帧可见训练者握单杠悬垂并拉起身体，双脚悬空，未接触助力垫、弹力带或他人。'},
   {name:'辅助引体向上',exerciseId:'pullup',family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'band',expectedId:'pullup',evidence:'两帧可见训练者握单杠拉起身体，脚部持续踩住连接杆上的绷紧弹力带。'},
   {name:'壶铃摆荡',exerciseId:null,family:'hinge',equipment:'kettlebell',support:'standing',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手握壶铃，以髋部往返带动负重在身前摆动。'},
   {name:'双杠臂屈伸',exerciseId:null,family:null,equipment:'parallel-bars',support:'suspended',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手支撑双杠，通过屈伸肘让悬空身体上下移动。'},
  ];
  for(const item of openCases){
   equipmentAction={exerciseId:item.exerciseId,name:item.name,family:item.family,evidence:item.evidence,status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:item.equipment,support:item.support,movement:item.family,laterality:'bilateral',assistance:item.assistance,evidence:item.evidence,evidenceTimes:[1,2]}};
-  const response=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{status:'insufficient',quality:{reasons:['LOW_POSE_COVERAGE']},reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
-  assert.equal(response.status(),200);const review=await response.json();
+  const response=await context.request.post(base+'/api/motion/coach',{data:{...reportInput,analysis:{quality:{totalFrames:0,validFrames:0,usableRatio:0,sourceFps:null,targetCoverage:null,reasons:['NO_FRAMES']}},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+  assert.equal(response.status(),200);const review=await response.json(),assessment=mergeCoachAssessment(reportInput.fullAnalysis,review);
   assert.equal(review.action.status,'identified');assert.equal(review.action.name,item.name);assert.equal(review.action.exerciseId,item.expectedId);
-  assert.equal(review.assessment.exerciseName,item.name);assert.equal(review.assessment.exerciseId,item.expectedId);assert.equal(review.assessment.score,null);
-  changes.push({id:`motion:open-qa-${changes.length}`,kind:'motion-assessment',baseVersion:0,data:{...review.assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
+  assert.equal(assessment.exerciseName,item.name);assert.equal(assessment.exerciseId,item.expectedId);assert.equal(assessment.score,undefined);
+  changes.push({id:`motion:open-qa-${changes.length}`,kind:'motion-assessment',baseVersion:0,data:{...assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
  }
- equipmentAction={exerciseId:'bench',name:'哑铃卧推',family:'horizontal-press',evidence:'两帧可见训练者握哑铃并在平凳上推举。',status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:'dumbbell',support:'flat-bench',movement:'horizontal-press',laterality:'bilateral',evidence:'两帧可见训练者握哑铃并在平凳上推举。',evidenceTimes:[1,2]}};
- const conflicted=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{exerciseFamily:'row',status:'complete',quality:{reasons:[]},score:90,reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
- assert.equal(conflicted.status(),200);const conflict=(await conflicted.json()).assessment;
- assert.equal(conflict.recognitionConflict,true);assert.equal(conflict.score,null);
- changes.push({id:'motion:conflict-qa',kind:'motion-assessment',baseVersion:0,data:{...conflict,createdAt:new Date().toISOString(),video:{duration:3}}});
+ equipmentAction={exerciseId:null,name:'单臂哑铃卧推',family:'horizontal-press',evidence:'两帧可见训练者仰卧并单手握哑铃推举。',status:'identified',confidence:'high',evidenceTimes:[1,2]};
+ const independent=await context.request.post(base+'/api/motion/coach',{data:{...reportInput,analysis:{exerciseFamily:'row',score:90,checks:[{status:'fail'}],quality:{reasons:[]}},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+ assert.equal(independent.status(),200);const independentReport=mergeCoachAssessment(reportInput.fullAnalysis,await independent.json());
+ assert.equal(independentReport.exerciseName,'单臂哑铃卧推');assert.equal(independentReport.score,undefined);assert.equal(independentReport.recognitionConflict,undefined);
+ changes.push({id:'motion:ai-independent-qa',kind:'motion-assessment',baseVersion:0,data:{...independentReport,createdAt:new Date().toISOString(),video:{duration:3}}});
  equipmentAction=null;
+ changes.push({id:'motion:legacy-local-score',kind:'motion-assessment',baseVersion:0,data:{exerciseId:'lunge',score:100,status:'complete',checks:[{status:'pass'}],reps:[{score:100}],createdAt:new Date().toISOString(),video:{duration:3}}});
+ changes.push({id:'motion:standard-verdict',kind:'motion-assessment',baseVersion:0,data:{exerciseId:'pushup',score:49,status:'complete',quality:{usableRatio:1},coach:{mode:'visual',action:{name:'俯卧撑',status:'identified'},coverage:{complete:true,frameCount:2,reviewedFrameCount:2},verdict:{status:'standard',summary:'已观察到的动作基本标准，继续保持当前控制。'},feedback:[{title:'保持肩髋同步',status:'good',source:'visual',evidence:'两张画面中肩髋保持同步，身体位置稳定。',correction:'下一组继续保持平稳的动作节奏。',evidenceTimes:[1,2]}]},createdAt:new Date().toISOString(),video:{duration:3}}});
  assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes}})).status(),200);
  await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.waitForFunction(count=>document.querySelectorAll('.motion-history-item').length>=count,changes.length);
- for(const {data}of changes){
+ for(const {id,data}of changes){
   const exercise=motionExercises.find(item=>item.id===data.exerciseId),name=data.recognitionConflict?'动作名称待确认':data.exerciseName||exercise?.name;
   const item=page.locator('.motion-history-item').filter({has:page.getByText(name,{exact:true})});
-  if(data.recognitionConflict||data.recognitionSource==='visual'&&!data.exerciseFamily)assert.match(await item.textContent(),/未计次/);
+  assert.equal(await item.locator('.motion-history-score').count(),0);
   await item.locator('[data-motion-action="history"]').click();
   assert.equal(await page.locator('#motion-result-title').textContent(),name);
-  if(data.recognitionConflict||data.recognitionSource==='visual'&&!data.exerciseFamily)assert.match(await page.locator('.motion-result-facts').textContent(),/未计次/);
-  if(data.recognitionConflict){assert.match(await page.locator('.motion-coach-identification').textContent(),/视觉候选/);assert.match(await page.locator('.motion-coach-identification').textContent(),/尚待确认/);}
-  else assert((await page.locator('.motion-coach-identification').textContent()).includes(data.coach.action.observations.evidence));
-  assert.equal(await page.locator('[data-motion-action="exercise"]').count(),exercise?.hasTeaching?1:0);
-  assert.equal(await page.locator('.motion-coach-identification [data-motion-action="seek"]').count(),0);
+  await noRuleUi();
+  if(data.recognitionConflict)assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'uncertain');
+  if(id==='motion:legacy-local-score')assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'pending');
+  if(id==='motion:standard-verdict'){assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'standard');assert.match(await page.locator('.motion-ai-feedback').textContent(),/继续保持/);}
+  assert.equal(await page.locator('[data-motion-action="exercise"]').count(),data.coach&&exercise?.hasTeaching?1:0);
+  assert.equal(await page.locator('.motion-coach [data-motion-action="seek"]').count(),0);
  }
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await shot('mobile-equipment-report');
- checks.push('equipment-contract-http','identified-name-without-pose-score','equipment-observations-persist','equipment-history-display','no-missing-3d-link');
- checks.push('ordinary-pullup-no-assisted-mapping','assisted-pullup-requires-assistance','unlisted-motion-http','unlisted-name-history-reload');
- checks.push('conflicting-visual-name-is-only-a-candidate');
+ checks.push('equipment-contract-http','identified-name-without-pose-score','action-evidence-persists','equipment-history-display','no-missing-3d-link');
+ checks.push('ordinary-pullup-no-assisted-mapping','assisted-pullup-name-preserved','unlisted-motion-http','unlisted-name-history-reload');
+ checks.push('old-local-label-does-not-veto-ai-action','scores-and-rule-panels-removed','legacy-local-score-never-becomes-ai-verdict','explicit-standard-report-displays-maintenance-advice');
  assert.equal(browserRequests.filter(r=>r.method==='POST'&&r.url.includes('/api/attachments')).length,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- await writeFile(join(dataDir,'results.json'),JSON.stringify({checks,calls:calls.map(({input,...call})=>({...call,frameTimes:input.frames.map(f=>f.time),checkCount:input.analysis.checks.length})),errors,external},null,2));console.log(JSON.stringify({dataDir,checks,errors,external},null,2));
+ await writeFile(join(dataDir,'results.json'),JSON.stringify({checks,calls:calls.map(({input,...call})=>({...call,frameTimes:input.frames.map(f=>f.time),stage:input.stage||'legacy',checkCount:input.analysis.checks?.length||0})),errors,external},null,2));console.log(JSON.stringify({dataDir,checks,errors,external},null,2));
 }catch(error){await shot('failure').catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}
 finally{pendingRelease?.();await browser.close();await new Promise(r=>{server.close(r);server.closeAllConnections();});}

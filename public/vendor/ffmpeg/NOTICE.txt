@@ -1,0 +1,28 @@
+Local video compatibility decoder
+
+The unmodified ffmpeg-core.js and ffmpeg-core.wasm are from the official
+@ffmpeg/core 0.12.10 single-thread npm package. Its declared license is
+GPL-2.0-or-later. See COPYING.GPLv2 and the upstream source licenses.
+
+Package and reproducible download:
+https://registry.npmjs.org/@ffmpeg/core/-/core-0.12.10.tgz
+node scripts/setup-motion-codec.mjs
+
+Upstream source, build scripts, FFmpeg bindings and all dependency versions:
+https://github.com/ffmpegwasm/ffmpeg.wasm
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/f876f907c7e9b9bf51d4ed0b913a855a63ae63fc
+https://github.com/ffmpegwasm/ffmpeg.wasm/blob/f876f907c7e9b9bf51d4ed0b913a855a63ae63fc/Dockerfile
+This revision declares core version 0.12.10. The npm archive integrity is pinned
+in manifest.json; the reference revision is not a claim of a bit-identical build.
+
+FFmpeg n5.1.4 source and licenses:
+https://github.com/FFmpeg/FFmpeg/tree/n5.1.4
+https://github.com/FFmpeg/FFmpeg/blob/n5.1.4/LICENSE.md
+The core enables GPL components including x264 and x265. FFmpeg's LGPL parts
+also retain their notices; see COPYING.LGPLv2.1. The JavaScript bindings and
+build scripts are MIT, copyright (c) 2019 Jerome Wu; see LICENSE.bindings.
+For the bundled codec libraries and their source/license notices, follow the
+versioned repository references and build scripts in the upstream Dockerfile.
+
+No codecs are downloaded from a CDN while processing a user's video. The local
+application serves these assets; input files are mounted read-only in a worker.

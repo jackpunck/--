@@ -1,13 +1,12 @@
 import { browserSeekTime, scaledVideoSize, validateVideoFile, validateVideoMetadata } from './motion-video.js';
+import { prepareMotionVideo } from './motion-media.js';
 
 export const MOTION_EVIDENCE_LIMITS = Object.freeze({ maxImages: 6, maxBytes: 1900000, maxDimension: 640 });
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const checkAbort = signal => { if (signal?.aborted) throw new DOMException('已取消关键帧提取。', 'AbortError'); };
 const jsonBytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
-const clipped = (value, length = 300) => typeof value === 'string' ? value.slice(0, length) : undefined;
 
-// Bound every field; a saved report must not accidentally send raw pose arrays,
-// arbitrary attachment data or an unbounded history to the model.
+// Keep target metadata bounded; complete pose samples travel separately.
 function compact(value, depth = 0) {
   if (value === null || typeof value === 'boolean') return value;
   if (finite(value)) return value;
@@ -17,32 +16,14 @@ function compact(value, depth = 0) {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !/^(landmarks|worldLandmarks|frames|dataurl|base64|images?|video|file)$/i.test(key)).slice(0, 24).map(([key, item]) => [key.slice(0, 64), compact(item, depth + 1)]));
 }
 
-export function summarizeMotionAnalysis(assessment = {}, pipeline = {}) {
-  const reps = Array.isArray(assessment.reps) ? assessment.reps : [];
-  // Include representative and lowest-scoring repetitions, preserving chronology.
-  const chosen = new Set([0, Math.floor(reps.length / 2), reps.length - 1]);
-  reps.map((rep, index) => ({ index, score: finite(rep.score) ? rep.score : 101 })).sort((a, b) => a.score - b.score).slice(0, 12).forEach(item => chosen.add(item.index));
+export function summarizeMotionAnalysis(observations={},pipeline={}) {
+  const quality=observations.quality||{};
   return {
-    version: clipped(assessment.version, 100), exerciseId: clipped(assessment.exerciseId, 100) ?? null,
-    exerciseConfidence: finite(assessment.exerciseConfidence) ? assessment.exerciseConfidence : null,
-    exerciseFamily: compact(assessment.exerciseFamily), exerciseFamilyName: compact(assessment.exerciseFamilyName),
-    candidates: compact(assessment.candidates), requiresVisualConfirmation: assessment.requiresVisualConfirmation === true,
-    status: clipped(assessment.status, 40), score: finite(assessment.score) ? assessment.score : null,
-    duration: finite(pipeline.duration) ? pipeline.duration : null,
-    sampleFps: finite(pipeline.sampleFps) ? pipeline.sampleFps : null,
-    sourceFps: finite(pipeline.sourceFps) ? pipeline.sourceFps : null,
-    quality: compact(assessment.quality), summary: clipped(assessment.summary, 800),
-    attemptCount: finite(assessment.attemptCount) ? assessment.attemptCount : reps.length, qualifiedRepCount: finite(assessment.qualifiedRepCount) ? assessment.qualifiedRepCount : null,
-    incompleteAttemptCount: finite(assessment.incompleteAttemptCount) ? assessment.incompleteAttemptCount : null,
-    observedActiveRange: compact(assessment.observedActiveRange),
-    limitations: compact(assessment.limitations),
-    checks: compact(assessment.checks), scoreCoverage: compact(assessment.scoreCoverage),
-    observedScore: finite(assessment.observedScore) ? assessment.observedScore : null,
-    scoreStatus: clipped(assessment.scoreStatus, 100), visualReviewRequests: compact(assessment.visualReviewRequests),
-    targetTracking: compact(pipeline.targetTracking),
-    reps: [...chosen].filter(index => reps[index]).sort((a, b) => a - b).map(index => compact(reps[index])),
-    issues: compact(assessment.issues || []),
-    evidenceNote: '姿态规则是可见运动线索。肩髋连线不能证明腰椎中立；缺失或遮挡部位不可据此断言。',
+    version:'motion-observations-v1',duration:finite(pipeline.duration)?pipeline.duration:null,
+    sampleFps:finite(pipeline.sampleFps)?pipeline.sampleFps:null,sourceFps:finite(pipeline.sourceFps)?pipeline.sourceFps:null,
+    quality:Object.fromEntries(['totalFrames','validFrames','usableRatio','sourceFps','targetCoverage','reasons'].filter(key=>Object.hasOwn(quality,key)).map(key=>[key,key==='reasons'?(Array.isArray(quality[key])?quality[key].filter(item=>typeof item==='string').slice(0,64).map(item=>item.slice(0,100)):[]):quality[key]===null||finite(quality[key])?quality[key]:null])),
+    ...(pipeline.targetTracking?{targetTracking:compact(Object.fromEntries(['mode','point','trackId','coverage','lockedFrames','ambiguousFrames','lostFrames','totalFrames','maxPeople'].filter(key=>Object.hasOwn(pipeline.targetTracking,key)).map(key=>[key,pipeline.targetTracking[key]])))}:{}),
+    evidenceNote:'骨架为单目估计的运动观测；缺失或遮挡部位保持未知，不能据此断言动作质量。',
   };
 }
 
@@ -65,27 +46,24 @@ export function selectMotionEvidenceFrames(frames, assessment = {}, { maxImages 
     if (selected.size >= limit) return;
     selected.set(frame.time, { time: frame.time, requestedTime: time, poseTime: frame.time, sourceTime: finite(frame.sourceTime) ? frame.sourceTime : null, reasons: [reason], ...(tracking ? { subjectTracking: compact(frame.subjectTracking) } : {}) });
   };
-  const start = finite(assessment.observedActiveRange?.start) ? assessment.observedActiveRange.start : ordered[0].time;
-  const end = finite(assessment.observedActiveRange?.end) ? assessment.observedActiveRange.end : ordered.at(-1).time;
-  const reps = Array.isArray(assessment.reps) ? assessment.reps : [];
-  const middleRep = reps[Math.floor(reps.length / 2)];
-  add(start, '动作区间起始');
-  add(middleRep?.peak ?? middleRep?.bottom ?? middleRep?.time ?? (start + end) / 2, middleRep ? '代表动作顶点' : '动作区间中部');
-  add(end, '动作区间结束');
-  const severity = { error: 0, severe: 0, warning: 1, warn: 1, info: 3 };
-  const checkIssues = (Array.isArray(assessment.checks) ? assessment.checks : []).filter(item => item && !['pass', 'passed', 'unobservable', 'not_applicable'].includes(item.status)).flatMap(item => (item.evidenceTimes || []).filter(finite).map(time => ({ ...item, time })));
-  const issues = [...(assessment.issues || []), ...reps.flatMap(rep => rep.issues || []), ...checkIssues].filter(item => item && finite(item.time));
-  const scoredIssues = issues.map(item => ({ ...item, score: finite(item.score) ? item.score : reps.find(rep => item.time >= rep.start && item.time <= rep.end)?.score ?? 101 }));
-  scoredIssues.sort((a, b) => Number(b.critical === true) - Number(a.critical === true) || (severity[a.severity] ?? 2) - (severity[b.severity] ?? 2) || a.score - b.score || a.time - b.time);
-  const codes = new Set();
-  for (const item of scoredIssues) { if (codes.has(item.code)) continue; codes.add(item.code); add(item.time, '问题：' + (clipped(item.code, 80) || '可见动作'), 0.35); }
-  for (const request of Array.isArray(assessment.visualReviewRequests) ? assessment.visualReviewRequests : []) {
-    if (!request || typeof request !== 'object') continue;
-    const times = Array.isArray(request.evidenceTimes) ? request.evidenceTimes : [request.time];
-    for (const time of times) add(time, '待画面核查：' + (clipped(request.code, 80) || '细节'), 0.35);
+  const start=ordered[0].time,end=ordered.at(-1).time;
+  add(start,'视频起始');add(end,'视频结束');add((start+end)/2,'视频中部');
+  // Use observed extrema to capture changing postures without classifying an
+  // exercise or labelling any position as correct/incorrect.
+  const measurements=Array.isArray(assessment.measurements)?assessment.measurements:[];
+  const series=[];
+  for(const side of ['left','right'])for(const field of ['elbowAngle','shoulderAngle','hipAngle','kneeAngle','bodyAlignmentAngle','torsoLean']){
+    const values=measurements.filter(row=>finite(row?.time)&&finite(row?.[side]?.[field])&&Math.abs(nearest(row.time).time-row.time)<=0.035);
+    if(!values.length)continue;
+    const low=values.reduce((a,b)=>a[side][field]<=b[side][field]?a:b),high=values.reduce((a,b)=>a[side][field]>=b[side][field]?a:b);
+    series.push({side,field,low,high,range:high[side][field]-low[side][field]});
   }
-  add(middleRep?.start, '代表动作起始'); add(middleRep?.end, '代表动作结束');
-  for (const fraction of [0.25, 0.75, 0.125, 0.875]) add(start + (end - start) * fraction, '动作过程');
+  for(const item of series.sort((a,b)=>b.range-a.range)){
+    if(item.range<=0)continue;
+    add(item.low.time,item.side+'.'+item.field+' 最小观测',0.035);
+    add(item.high.time,item.side+'.'+item.field+' 最大观测',0.035);
+  }
+  for(const fraction of [0.25,0.75,0.125,0.875])add(start+(end-start)*fraction,'视频过程');
   return [...selected.values()].sort((a, b) => a.time - b.time);
 }
 
@@ -161,7 +139,8 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
   if (budget < 50000) throw new Error('关键帧请求大小限制过小。');
   const video = document.createElement('video'), canvas = document.createElement('canvas');
   video.preload = 'auto'; video.muted = true; video.playsInline = true;
-  const url = URL.createObjectURL(file);
+  const prepared = await prepareMotionVideo(file, { signal, onProgress });
+  const url = URL.createObjectURL(prepared.file);
   let observation, lastImageTime = null;
   try {
     await waitForMedia(video, 'loadedmetadata', signal, () => { video.src = url; video.load(); });

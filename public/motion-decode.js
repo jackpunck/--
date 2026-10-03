@@ -55,7 +55,7 @@ export async function prepareMp4(file, { width, height, duration, sampleFps, max
   const sourceFps = simpleTimeline ? sourceFrameRate(samples, { duration, offset }) : null;
   const unsupported = () => ({ sourceFps });
   // Metadata remains useful even when the optimized decoder is unavailable.
-  if (typeof VideoDecoder === 'undefined' || !/\.mp4$/i.test(file.name)) return unsupported();
+  if (typeof VideoDecoder === 'undefined') return unsupported();
   // Let HTMLVideo handle rotation, complex timelines and changing codecs.
   const matrix = trak.tkhd?.matrix;
   if (matrix && (matrix[0] !== 65536 || matrix[1] !== 0 || matrix[3] !== 0 || matrix[4] !== 65536)) return unsupported();

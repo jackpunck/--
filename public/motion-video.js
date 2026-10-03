@@ -1,24 +1,9 @@
-export const MOTION_VIDEO_LIMITS = Object.freeze({ maxBytes: 200 * 1024 * 1024, maxDuration: 120, sampleFps: 15, maxDimension: 960 });
+import { MOTION_VIDEO_LIMITS, validateVideoFile, validateVideoMetadata, prepareMotionVideo } from './motion-media.js';
+export { MOTION_VIDEO_LIMITS, validateVideoFile, validateVideoMetadata } from './motion-media.js';
 export const MOTION_MODEL_VERSION = 'MediaPipe Tasks Vision 0.10.32 / Pose Landmarker Full float16 v1';
 
 const aborted = () => new DOMException('已取消视频分析。', 'AbortError');
 const checkAbort = signal => { if (signal?.aborted) throw aborted(); };
-
-export function validateVideoFile(file) {
-  if (!file || !Number.isFinite(file.size) || file.size <= 0) throw new Error('请选择一个有效的视频文件。');
-  if (file.size > MOTION_VIDEO_LIMITS.maxBytes) throw new Error('视频不能超过 200 MB。');
-  // The extension is a chooser hint; the browser decoder makes the final check.
-  if (!/\.(mp4|m4v|webm|mov)$/i.test(file.name || '') && !/^video\/(mp4|webm|quicktime)$/i.test(file.type || '')) {
-    throw new Error('请选择 MP4、WebM 或 MOV 视频。');
-  }
-}
-
-export function validateVideoMetadata({ duration, width, height }) {
-  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
-    throw new Error('无法读取视频时长或画面，请转换为 H.264 MP4 或 WebM 后重试。');
-  }
-  if (duration > MOTION_VIDEO_LIMITS.maxDuration) throw new Error('请将视频裁剪到 120 秒以内再分析。');
-}
 
 export function sampleVideoTimes(duration, fps = MOTION_VIDEO_LIMITS.sampleFps) {
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(fps) || fps <= 0) throw new Error('无效的视频采样参数。');
@@ -95,6 +80,9 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
   validateVideoFile(file); checkAbort(externalSignal);
   targetPoint = validateTargetPoint(targetPoint);
   if (typeof Worker === 'undefined' || typeof createImageBitmap !== 'function') throw new Error('此浏览器不支持后台视频分析，请使用新版 Chrome 或 Edge。');
+  const prepared = await prepareMotionVideo(file, { signal: externalSignal, onProgress });
+  checkAbort(externalSignal);
+  file = prepared.file;
   const lifecycle = new AbortController(), signal = lifecycle.signal;
   const cancel = () => lifecycle.abort();
   externalSignal?.addEventListener('abort', cancel, { once: true });
