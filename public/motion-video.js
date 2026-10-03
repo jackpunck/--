@@ -1,6 +1,7 @@
 import { MOTION_VIDEO_LIMITS, validateVideoFile, validateVideoMetadata, prepareMotionVideo } from './motion-media.js';
+import { DEFAULT_MOTION_MODEL, getMotionModel } from './motion-models.js';
 export { MOTION_VIDEO_LIMITS, validateVideoFile, validateVideoMetadata } from './motion-media.js';
-export const MOTION_MODEL_VERSION = 'MediaPipe Tasks Vision 0.10.32 / Pose Landmarker Full float16 v1';
+export const MOTION_MODEL_VERSION = getMotionModel().version;
 
 const aborted = () => new DOMException('已取消视频分析。', 'AbortError');
 const checkAbort = signal => { if (signal?.aborted) throw aborted(); };
@@ -76,7 +77,7 @@ function createPoseWorker(signal) {
   };
 }
 
-async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, targetPoint }) {
+async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, targetPoint, model }) {
   const started = performance.now(), frames = [], previews = new Map();
   const totalFrames = sampleVideoTimes(metadata.duration).length;
   const timing = { initializationMs: 0, decodeMs: 0, inferenceMs: 0 };
@@ -99,21 +100,21 @@ async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, target
     while (previewBytes > maxPreviewBytes && previews.size > 1) trimPreviews(previewStride * 2);
   };
   try {
-    onProgress({ stage: 'loading', progress: 0, totalFrames, processedFrames: 0, message: '正在加载本地姿态模型…', delegate });
+    onProgress({ stage: 'loading', progress: 0, totalFrames, processedFrames: 0, message: model.loadingMessage, delegate });
     engine = createPoseWorker(signal);
-    try { await engine.request({ type: 'init', delegate, targetPoint }, [], 120000); }
+    try { await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs); }
     catch (error) {
       checkAbort(signal); engine.stop(); delegate = 'CPU';
       onProgress({ stage: 'loading', progress: 0, totalFrames, processedFrames: 0, message: '正在切换到 CPU 后台分析…', delegate });
       engine = createPoseWorker(signal);
-      await engine.request({ type: 'init', delegate, targetPoint }, [], 120000);
+      await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs);
     }
     const prepared = await engine.request({ type: 'prepare-source', file, options: { ...metadata, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, maxDimension: MOTION_VIDEO_LIMITS.maxDimension } }, [], 120000, undefined, event);
     const source = prepared.metadata;
     validateVideoMetadata(source);
     if (source.width !== metadata.width || source.height !== metadata.height || Math.abs(source.duration - metadata.duration) > 0.1) throw new Error('视频画面与读取的信息不一致，请重新选择视频。');
     timing.initializationMs = performance.now() - started;
-    const decoded = await engine.request({ type: 'decode-source' }, [], 600000, frame => {
+    const decoded = await engine.request({ type: 'decode-source' }, [], model.analysisTimeoutMs, frame => {
       checkAbort(signal);
       const expectedTime = frames.length / MOTION_VIDEO_LIMITS.sampleFps;
       if (Math.abs(frame.time - expectedTime) > 0.00001 || frames.length >= totalFrames) throw new Error('视频解码采样时间不连续，请重新分析。');
@@ -126,7 +127,7 @@ async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, target
     if (frames.length !== totalFrames) throw new Error('视频未完整解码，请重新分析或选择其他视频。');
     timing.decodeMs = decoded.timing?.decodeMs ?? Math.max(0, performance.now() - started - timing.initializationMs - timing.inferenceMs);
     await engine.request({ type: 'close' });
-    return { frames, ...metadata, elapsedMs: performance.now() - started, modelVersion: MOTION_MODEL_VERSION, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps: source.sourceFps ?? null, delegate, timing, decoder: 'ffmpeg-direct', targetTracking: summarizeTargetTracking(frames, { targetPoint }), previewFrames: [...previews.values()].sort((a, b) => a.time - b.time) };
+    return { frames, ...metadata, elapsedMs: performance.now() - started, modelVersion: model.version, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps: source.sourceFps ?? null, delegate, timing, decoder: 'ffmpeg-direct', targetTracking: summarizeTargetTracking(frames, { targetPoint }), previewFrames: [...previews.values()].sort((a, b) => a.time - b.time) };
   } finally { engine?.stop(); }
 }
 
@@ -134,13 +135,14 @@ async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, target
  * Pixels stay on this device. One worker frame plus one prefetched bitmap bounds memory.
  * Cancellation terminates the worker immediately, including native inference.
  */
-export async function analyzeVideo(file, { signal: externalSignal, onProgress = () => {}, targetPoint=null } = {}) {
+export async function analyzeVideo(file, { signal: externalSignal, onProgress = () => {}, targetPoint=null, model: modelId=DEFAULT_MOTION_MODEL } = {}) {
   validateVideoFile(file); checkAbort(externalSignal);
+  const model = getMotionModel(modelId);
   targetPoint = validateTargetPoint(targetPoint);
   if (typeof Worker === 'undefined' || typeof createImageBitmap !== 'function') throw new Error('此浏览器不支持后台视频分析，请使用新版 Chrome 或 Edge。');
   const prepared = await prepareMotionVideo(file, { signal: externalSignal, onProgress });
   checkAbort(externalSignal);
-  if (prepared.mode === 'software') return analyzeSoftwareVideo(file, prepared.metadata, { signal: externalSignal, onProgress, targetPoint });
+  if (prepared.mode === 'software') return analyzeSoftwareVideo(file, prepared.metadata, { signal: externalSignal, onProgress, targetPoint, model });
   file = prepared.file;
   const lifecycle = new AbortController(), signal = lifecycle.signal;
   const cancel = () => lifecycle.abort();
@@ -173,18 +175,18 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
       } catch (error) { ownedBitmap?.close(); throw error; }
     };
     const initializationStarted = performance.now();
-    onProgress({ stage: 'loading', progress: 0, totalFrames: times.length, processedFrames: 0, message: '正在加载本地姿态模型…', delegate });
+    onProgress({ stage: 'loading', progress: 0, totalFrames: times.length, processedFrames: 0, message: model.loadingMessage, delegate });
     checkAbort(signal);
     engine = createPoseWorker(signal);
-    try { await engine.request({ type: 'init', delegate, targetPoint }, [], 120000); }
+    try { await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs); }
     catch (error) {
       checkAbort(signal); engine.stop();
       delegate = 'CPU';
       onProgress({ stage: 'loading', progress: 0, totalFrames: times.length, processedFrames: 0, message: '正在切换到 CPU 后台分析…', delegate });
       checkAbort(signal);
       engine = createPoseWorker(signal);
-      try { await engine.request({ type: 'init', delegate, targetPoint }, [], 120000); }
-      catch (cpuError) { checkAbort(signal); throw new Error('本地姿态模型加载失败，请使用新版 Chrome 或 Edge，并确认模型资源完整。' + '（' + cpuError.message + '）'); }
+      try { await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs); }
+      catch (cpuError) { checkAbort(signal); throw new Error(`${model.label}姿态模型加载失败，请使用新版 Chrome 或 Edge，并确认模型资源完整。${model.id==='heavy'?'也可切换标准模式后重试。':''}（${cpuError.message}）`); }
     }
     timing.initializationMs = performance.now() - initializationStarted;
     if (/\.(mp4|m4v|mov)$/i.test(file.name)) {
@@ -196,11 +198,11 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
         // A timed-out parser may still occupy its worker. Recreate it before
         // entering the browser fallback, just as for a mid-stream decode error.
         engine.stop(); engine = createPoseWorker(signal);
-        await engine.request({ type: 'init', delegate, targetPoint }, [], 120000);
+        await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs);
       }
       if (supported) {
         try {
-          const result = await engine.request({ type: 'decode-mp4' }, [], 300000, frame => {
+          const result = await engine.request({ type: 'decode-mp4' }, [], model.analysisTimeoutMs, frame => {
             timing.inferenceMs += frame.inferenceMs;
             const { inferenceMs, ...points } = frame;
             frames.push(points);
@@ -208,7 +210,7 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
           });
           timing.decodeMs = result.timing.decodeMs;
           await engine.request({ type: 'close' });
-          return { frames, width, height, duration, elapsedMs: performance.now() - started, modelVersion: MOTION_MODEL_VERSION, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps, delegate, timing, decoder: 'webcodecs', codec: result.timing.codec, targetTracking: summarizeTargetTracking(frames,{targetPoint}) };
+          return { frames, width, height, duration, elapsedMs: performance.now() - started, modelVersion: model.version, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps, delegate, timing, decoder: 'webcodecs', codec: result.timing.codec, targetTracking: summarizeTargetTracking(frames,{targetPoint}) };
         } catch (error) {
           checkAbort(signal);
           console.warn('Sequential video decoding fell back to HTMLVideo:', error.message);
@@ -217,7 +219,7 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
           engine.stop(); frames.length = 0; timing.inferenceMs = 0;
           onProgress({ stage: 'decoding', progress: 0, message: '正在使用兼容解码方式重新分析…' });
           engine = createPoseWorker(signal);
-          await engine.request({ type: 'init', delegate, targetPoint }, [], 120000);
+          await engine.request({ type: 'init', delegate, targetPoint, model: model.id }, [], model.initTimeoutMs);
         }
       }
     }
@@ -238,7 +240,7 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
       onProgress({ stage: 'analyzing', progress: (index + 1) / times.length, processedFrames: index + 1, totalFrames: times.length, time, delegate, message: '正在逐帧分析动作…' });
     }
     await engine.request({ type: 'close' });
-    return { frames, width, height, duration, elapsedMs: performance.now() - started, modelVersion: MOTION_MODEL_VERSION, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps, delegate, timing, decoder: 'html-video', targetTracking: summarizeTargetTracking(frames,{targetPoint}) };
+    return { frames, width, height, duration, elapsedMs: performance.now() - started, modelVersion: model.version, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps, delegate, timing, decoder: 'html-video', targetTracking: summarizeTargetTracking(frames,{targetPoint}) };
   } finally {
     lifecycle.abort(); externalSignal?.removeEventListener('abort', cancel);
     bitmap?.close(); engine?.stop();

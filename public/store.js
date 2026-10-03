@@ -10,6 +10,7 @@ export function createId() {
 
 let apiUserId = null;
 export function setApiUser(userId) { apiUserId = userId || null; }
+export function getApiUser() { return apiUserId; }
 export async function api(path, options = {}) {
   const response = await fetch('/api' + path, {
     credentials: 'same-origin', ...options,

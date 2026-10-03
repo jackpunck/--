@@ -50,6 +50,8 @@ self.onmessage = async ({ data }) => {
   try {
     if (type === 'init') {
       if (typeof OffscreenCanvas === 'undefined') throw new Error('浏览器不支持后台画布，请使用新版 Chrome 或 Edge。');
+      const { getMotionModel } = await import('./motion-models.js');
+      const model = getMotionModel(data.model);
       trackingHelpers = await import('./motion-tracking.js');
       targetPoint=trackingHelpers.validateTargetPoint(data.targetPoint);targetBox=undefined;lastDiscovery=-Infinity;
       tracker = trackingHelpers.createSubjectTracker({ targetPoint });
@@ -57,7 +59,7 @@ self.onmessage = async ({ data }) => {
       const fileset = await FilesetResolver.forVisionTasks(new URL('wasm', assetBase).href);
       const options = {
         baseOptions: {
-          modelAssetPath: new URL('pose_landmarker_full.task', assetBase).href,
+          modelAssetPath: new URL(model.asset, assetBase).href,
           delegate: data.delegate,
         },
         runningMode: 'VIDEO', numPoses: 4,
@@ -71,7 +73,7 @@ self.onmessage = async ({ data }) => {
       // duplicate estimates for that same person; the global pass retains up
       // to four independent candidates for actual crowd/overlap competition.
       regionPose = await PoseLandmarker.createFromOptions(fileset, {...options,runningMode:'IMAGE',numPoses:1});
-      self.postMessage({ id, delegate: data.delegate });
+      self.postMessage({ id, delegate: data.delegate, modelVersion: model.version });
     } else if (type === 'prepare-source') {
       source?.close(); source = undefined;
       sourceDecoder = await import('./motion-software-decode.js');

@@ -1,4 +1,5 @@
 import {reconcileAchievements} from './server/achievements.mjs';
+import {compute} from './server/compute.mjs';
 import {beijingDate,validTrainingCompletion} from './public/achievements.js';
 import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
@@ -238,6 +239,10 @@ export function createServer(options = {}) {
         const user = requireUser(req);
         if (pathname === '/api/auth/me' && method === 'GET') { send(res, 200, { user: publicUser(user) }); return; }
         checkExpectedUser(req, user);
+        if(pathname==='/api/compute'&&method==='POST') {
+          const body=await readBody(req,8*1024*1024);
+          send(res,200,{result:compute(body)});return;
+        }
         if (pathname === '/api/holidays' && method === 'GET') { const year=Number(new URL(req.url,'http://localhost').searchParams.get('year')); if(!Number.isInteger(year)||year<1900||year>2199)throw new HttpError(400,'节假日年份无效。');send(res,200,await loadHolidayYear(year));return; }
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');

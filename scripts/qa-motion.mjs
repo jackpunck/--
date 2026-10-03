@@ -30,10 +30,13 @@ page.on('request',r=>{requests.push({url:r.url(),method:r.method()});if(/^https?
 const nav=async name=>{if(await page.locator('.mobile-menu').isVisible())await page.locator('.mobile-menu').click();await page.locator(`.nav [data-page="${name}"]`).click();};
 const snapshot=async name=>{await page.screenshot({path:join(dataDir,name+'.png'),fullPage:true});};
 const getReports=async()=>{const r=await context.request.get(base+'/api/state');assert.equal(r.status(),200);return(await r.json()).records.filter(r=>r.kind==='motion-assessment'&&!r.deleted);};
-const analyze=async path=>{
+const analyze=async(path,model)=>{
+ await page.locator('[data-motion-quality]').selectOption(model);
+ assert.equal(await page.locator('[data-motion-results]').isVisible(),false,'Changing models clears the previous result');
  await page.locator('[data-motion-file]').setInputFiles(path);
  await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
  await page.locator('[data-motion-action="analyze"]').click();
+ assert(await page.locator('[data-motion-quality]').isDisabled(),'Model cannot change during inference');
  await page.locator('[data-motion-results]').waitFor({state:'visible',timeout:180000});
  assert.equal(await page.locator('[data-motion-error]').isVisible(),false);
 };
@@ -48,33 +51,37 @@ try{
   await page.locator('.motion-page').waitFor();
  }
  await snapshot('desktop-empty');
+ assert.equal(await page.locator('[data-motion-quality]').inputValue(),'heavy');
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile empty page overflow');await snapshot('mobile-empty');
  await page.setViewportSize({width:1440,height:1000});
- for(const [exercise,path]of clips){
-  console.log('Analyze real clip:',exercise);const started=Date.now();await analyze(path);
+ for(const [exercise,path,model]of clips.flatMap(([exercise,path])=>['heavy','full'].map(model=>[exercise,path,model]))){
+  console.log('Analyze real clip:',exercise,model);const started=Date.now();await analyze(path,model);
   assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'pending');
   assert.match(await page.locator('[data-motion-verdict]').textContent(),/AI 尚未评价/);
   assert.equal(await page.locator('[data-motion-action="save"]').count(),0);
   assert.equal(await page.locator('.motion-score,.motion-checks,.motion-reps,.motion-metric-section').count(),0);
   const observed=await page.evaluate(()=>{
    const output=window.__qaMotionOutput,observations=window.__qaMotionObservations;
-   return {duration:output.duration,frameCount:output.frames.length,measurementCount:observations.measurements.length,quality:observations.quality,analysis:{decoder:output.decoder,elapsedMs:output.elapsedMs,delegate:output.delegate,sampleFps:output.sampleFps,sourceFps:output.sourceFps},
+   return {duration:output.duration,frameCount:output.frames.length,measurementCount:observations.measurements.length,quality:observations.quality,analysis:{modelVersion:output.modelVersion,decoder:output.decoder,elapsedMs:output.elapsedMs,delegate:output.delegate,sampleFps:output.sampleFps,sourceFps:output.sourceFps},
     matchingTimes:observations.measurements.every((row,index)=>row.frameIndex===index&&row.time===output.frames[index].time),
     validMeasurements:observations.measurements.every(row=>['left','right'].every(side=>Object.values(row[side]).length===6&&Object.values(row[side]).every(value=>value===null||Number.isFinite(value)))),fields:Object.keys(observations)};
   });
   assert(observed.frameCount>30);assert.equal(observed.measurementCount,observed.frameCount);
   assert(observed.quality.validFrames>0);assert(observed.matchingTimes);assert(observed.validMeasurements);
+  assert.match(observed.analysis.modelVersion,model==='heavy'?/Heavy float16/:/Full float16/);
+  assert.equal(observed.analysis.sampleFps,15);
+  assert.equal(await page.locator('[data-motion-quality]').isDisabled(),false);
   assert.deepEqual(observed.fields.filter(key=>key!=='targetTracking').sort(),['measurements','quality','version']);
-  measured.push({fixture:exercise,wallMs:Date.now()-started,...observed});
+  measured.push({fixture:exercise,model,wallMs:Date.now()-started,...observed});
   const expected=observed.duration/2;
   await page.locator('[data-motion-video]').evaluate((video,time)=>{video.currentTime=time;},expected);
   await page.waitForFunction(()=>{const video=document.querySelector('[data-motion-video]');return !video.seeking&&video.readyState>=2;});
   assert(Math.abs(await page.locator('[data-motion-video]').evaluate(video=>video.currentTime)-expected)<.15);
   assert(await page.locator('[data-motion-canvas]').evaluate(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((value,index)=>index%4===3&&value>0)),'Real playback draws observed skeleton');
-  await snapshot('desktop-'+exercise);
+  await snapshot('desktop-'+exercise+'-'+model);
   await page.setViewportSize({width:390,height:844});
-  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile result overflow');await snapshot('mobile-'+exercise);
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile result overflow');await snapshot('mobile-'+exercise+'-'+model);
   await page.setViewportSize({width:1440,height:1000});
  }
  assert.equal((await getReports()).length,0,'Unreviewed observations never become a saved AI report');
@@ -107,7 +114,7 @@ try{
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
   await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
   await context.setOffline(true);await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');
-  await analyze(clips[0][1]);assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'pending');
+  await analyze(clips[0][1],'heavy');assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'pending');
   assert.equal(await page.locator('[data-motion-action="save"]').count(),0);
   const offline=await page.evaluate(()=>({count:window.__qaMotionObservations.measurements.length,decoder:window.__qaMotionOutput.decoder}));
   assert.equal(offline.count,measured[0].measurementCount);assert.equal(offline.decoder,measured[0].analysis.decoder);
@@ -118,6 +125,6 @@ try{
  }
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  await writeFile(join(dataDir,'results.json'),JSON.stringify({measured,errors,external,checks:['real-pose-inference','complete-objective-measurements','local-only-media','no-local-verdict-or-save','video-seek-and-skeleton-overlay','cancel-navigate','invalid-codec','desktop-mobile-layout','training-knowledge-entries','failed-logout-recovery',...(process.env.QA_MOTION_OFFLINE==='1'?['offline-objective-analysis']:[])]},null,2));
- console.log(JSON.stringify({dataDir,measured:measured.map(x=>({fixture:x.fixture,frames:x.frameCount,measurements:x.measurementCount,usableRatio:x.quality.usableRatio,analysisMs:x.analysis.elapsedMs,duration:x.duration,delegate:x.analysis.delegate})),errors,external},null,2));
+ console.log(JSON.stringify({dataDir,measured:measured.map(x=>({fixture:x.fixture,model:x.model,frames:x.frameCount,measurements:x.measurementCount,usableRatio:x.quality.usableRatio,analysisMs:x.analysis.elapsedMs,duration:x.duration,delegate:x.analysis.delegate})),errors,external},null,2));
 }catch(error){await snapshot('failure').catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}
 finally{await browser.close();await new Promise(r=>{server.close(r);server.closeAllConnections();});}

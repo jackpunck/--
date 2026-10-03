@@ -1,4 +1,5 @@
 import { analyzeVideo, validateVideoFile, scaledVideoSize, MOTION_VIDEO_LIMITS } from './motion-video.js';
+import { DEFAULT_MOTION_MODEL, getMotionModel } from './motion-models.js';
 import { analyzeMotion } from './motion-analysis.js';
 import { motionExercises, motionFamilies, getMotionExercise } from './motion-catalog.js';
 import { buildMotionEvidence, summarizeMotionAnalysis } from './motion-evidence.js';
@@ -90,6 +91,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   let targetPoint=null, selectingTarget=false, selectionCursor={x:.5,y:.4};
   let preparing=false, preparationController=null, selectionRevision=0;
   let mediaMode='native', preparedPoster=null;
+  let poseModel=DEFAULT_MOTION_MODEL;
   const coachConfig=getCoachConfiguration();
   let useCoach=!!coachConfig.configured;
   const listeners=new AbortController();
@@ -106,6 +108,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
         <div class="motion-target-controls" data-motion-target-controls hidden><div><strong data-motion-target-label>默认跟踪画面中央的训练者</strong><small data-motion-target-help>多人入镜时，可点选第一帧中的自己。分析后查看回放中的目标框。</small></div><button type="button" class="button small" data-motion-action="pick-target">点选训练者</button><button type="button" class="link-button" data-motion-action="reset-target" hidden>恢复默认</button></div>
         <div class="motion-playback-note" data-motion-playback hidden><label><input type="checkbox" data-motion-overlay checked> 显示目标与骨架</label><span>目标与骨架随回放显示</span></div>
         <section class="motion-coach-mode" aria-label="评估方式"><label><input type="checkbox" data-motion-ai-mode ${useCoach?'checked':''} ${coachConfig.configured?'':'disabled'}> 启用 AI 识别与点评</label><p>${coachConfig.configured?`${escapeHtml(coachConfig.provider)} · ${escapeHtml(coachConfig.model)}。${coachConfig.vision?'启用后，会将全部骨架采样、完整本地分析和最多 6 张关键画面发送给该 AI 服务，结合动作要领生成评价与纠正建议。':'当前模型接收全部骨架采样和完整本地分析，生成运动评价与建议；结合图片确认器械和可见姿态需要视觉模型。'}`:'配置动作点评模型后，可结合完整骨架数据与关键画面生成动作评价和纠正建议。'}</p><small>长视频会分段交给 AI 分析后汇总，耗时和调用费用随数据量增加；可随时取消。</small>${typeof openCoachSettings==='function'?'<button type="button" class="link-button" data-motion-action="coach-settings">配置 AI 模型</button>':''}</section>
+        <section class="motion-quality-mode" aria-label="分析精度"><label for="motion-quality">分析精度</label><select id="motion-quality" data-motion-quality aria-describedby="motion-quality-help"><option value="heavy" ${poseModel==='heavy'?'selected':''}>高精度 · 分析较慢</option><option value="full" ${poseModel==='full'?'selected':''}>标准 · 分析较快</option></select><p id="motion-quality-help" data-motion-quality-help></p></section>
         <div class="motion-run-controls" data-motion-controls hidden><button type="button" class="button primary" data-motion-action="analyze" disabled>开始评估</button><button type="button" class="button" data-motion-action="choose">换一段视频</button></div>
         <section class="motion-progress" data-motion-progress hidden aria-label="分析进度"><div><strong data-motion-progress-title>正在准备</strong><span data-motion-percent>0%</span></div><progress max="1" value="0" aria-label="视频分析进度"></progress><p data-motion-progress-message role="status" aria-live="polite">正在载入姿态模型…</p><button type="button" class="button small" data-motion-action="cancel">取消分析</button></section>
         <section class="motion-review-wait" data-motion-review-wait aria-label="AI 核对进度" hidden><p class="motion-coach-status" data-motion-coach-status role="status" aria-live="polite" hidden></p><p class="motion-coach-error" data-motion-coach-error role="alert" hidden></p><div class="motion-coach-actions"><button type="button" class="button small" data-motion-action="cancel-coach" hidden>取消 AI 核对</button><button type="button" class="button" data-motion-action="retry-coach" data-motion-coach-retry hidden>重试 AI 识别与点评</button><button type="button" class="button" data-motion-action="local-result" hidden>稍后进行 AI 评价</button></div></section>
@@ -161,6 +164,8 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     start.disabled=!metadata||!mediaReady()||running||preparing||coachRunning||selectingTarget;
     start.textContent=result?'重新评估':'开始评估';
     find('[data-motion-ai-mode]').disabled=running||preparing||coachRunning||!coachConfig.configured;
+    find('[data-motion-quality]').disabled=running||preparing||coachRunning||saving;
+    find('[data-motion-quality-help]').textContent=poseModel==='heavy'?'使用更大的姿态模型，分析更耗时、占用更多设备内存；首次使用需下载约 31 MB。设备较慢时可切换标准模式。':'使用标准姿态模型，适合手机或性能较低的电脑。两种模式都使用本机算力，切换后需重新评估。';
     find('.motion-input').setAttribute('aria-busy',String(running||preparing||coachRunning));
     find('[data-motion-playback]').hidden=!pipeline;
     find('[data-motion-target-controls]').hidden=!metadata;
@@ -195,12 +200,16 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     if(destroyed||file!==activeFile||!selectingTarget)return;
     find('[data-motion-target-picker]').hidden=false;positionPicker();controls();find('[data-motion-target-picker]').focus({preventScroll:true});
   }
-  function chooseTarget(point) {
-    if(!metadata||running||coachRunning||mediaSeeking())return;
-    cancel();targetPoint=point?{x:Math.max(0,Math.min(1,point.x)),y:Math.max(0,Math.min(1,point.y))}:null;
+  function clearAnalysis() {
+    cancel();
     pipeline=null;observations=null;result=null;saved=false;saving=false;selectedHistory=null;coachError='';
     if(mediaMode==='software'&&preparedPoster)void framePlayer.setSource({poster:preparedPoster,metadata}).catch(()=>{});
     find('[data-motion-results]').hidden=true;stopTargetSelection();drawOverlay();error('');
+  }
+  function chooseTarget(point) {
+    if(!metadata||running||coachRunning||mediaSeeking())return;
+    targetPoint=point?{x:Math.max(0,Math.min(1,point.x)),y:Math.max(0,Math.min(1,point.y))}:null;
+    clearAnalysis();
   }
   async function selectFile(chosen) {
     if(destroyed||!chosen)return;
@@ -272,7 +281,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
         await framePlayer.setSource({poster:preparedPoster,metadata});
         if(destroyed||signal.aborted||revision!==analysisRevision)return;
       }
-      const output=await analyzeVideo(activeFile,{signal,targetPoint:targetPoint?{...targetPoint}:null,onProgress:value=>{if(!destroyed&&revision===analysisRevision)updateProgress(value);}});
+      const output=await analyzeVideo(activeFile,{signal,model:poseModel,targetPoint:targetPoint?{...targetPoint}:null,onProgress:value=>{if(!destroyed&&revision===analysisRevision)updateProgress(value);}});
       if(destroyed||signal.aborted||revision!==analysisRevision)return;
       const assessment=analyzeMotion(output.frames,{width:output.width,height:output.height,duration:output.duration,sourceFps:output.sourceFps});
       if(mediaMode==='software'){
@@ -405,7 +414,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   }
   async function save() {
     if(!result?.coach||!pipeline||awaitingCoach||coachRunning||saved||saving||typeof saveAssessment!=='function')return;
-    error('');saving=true;renderResult(result);
+    error('');saving=true;controls();renderResult(result);
     const currentResult=result;
     const summary=buildMotionAssessmentReport(result,{file,pipeline});
     try {
@@ -414,6 +423,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       if(currentResult===result){saved=true;saving=false;if(!selectedHistory)renderResult(result);}
       notify('报告已保存，原视频未上传。');await refreshHistory();
     } catch(cause) {if(!destroyed&&currentResult===result){saving=false;if(!selectedHistory)renderResult(result);const message=cause?.message||'报告保存失败，请重试。';error(message);notify(message,true);}}
+    finally{if(!destroyed)controls();}
   }
   async function removeReport(index) {
     const report=history[index];if(!report||deletionId||typeof deleteAssessment!=='function')return;
@@ -453,6 +463,13 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   listen(video,'seeking',()=>context?.clearRect(0,0,canvas.width,canvas.height));
   listen(video,'seeked',drawOverlay);listen(video,'timeupdate',drawOverlay);
   listen(find('[data-motion-overlay]'),'change',drawOverlay);
+  listen(find('[data-motion-quality]'),'change',event=>{
+    if(running||preparing||coachRunning||saving){event.target.value=poseModel;return;}
+    poseModel=getMotionModel(event.target.value).id;
+    // A report must never appear to have been generated with the newly selected model.
+    if(metadata)clearAnalysis();
+    controls();
+  });
   listen(find('[data-motion-ai-mode]'),'change',event=>{
     useCoach=event.target.checked;
     if(!useCoach&&awaitingCoach&&pipeline)showLocalResult();
@@ -467,6 +484,6 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     if(delta){event.preventDefault();selectionCursor={x:Math.max(0,Math.min(1,selectionCursor.x+delta[0])),y:Math.max(0,Math.min(1,selectionCursor.y+delta[1]))};positionPicker();}
   });
   listen(window,'resize',()=>{if(selectingTarget)positionPicker();});
-  void refreshHistory();
+  controls();void refreshHistory();
   return {refreshHistory,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
 }

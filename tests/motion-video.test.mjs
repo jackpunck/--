@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { validateVideoFile, validateVideoMetadata, sampleVideoTimes, browserSeekTime, scaledVideoSize, analyzeVideo } from '../public/motion-video.js';
+import { getMotionModel } from '../public/motion-models.js';
+
+test('analysis uses Heavy by default and rejects unknown model paths before opening browser resources', async () => {
+  assert.equal(getMotionModel().id, 'heavy');
+  assert.equal(getMotionModel('full').asset, 'pose_landmarker_full.task');
+  for (const model of ['lite', '../model.task', 'constructor', null, {}, '']) {
+    await assert.rejects(analyzeVideo({ name: 'clip.mp4', size: 20 }, { model }), /分析模式/);
+  }
+});
 
 test('video intake rejects empty, oversize, unsupported and excessive-duration files', () => {
   assert.throws(() => validateVideoFile({ name: 'clip.mp4', size: 0 }));
