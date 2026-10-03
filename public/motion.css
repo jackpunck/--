@@ -28,6 +28,13 @@
 .motion-player{width:100%;height:clamp(250px,34vw,460px);position:relative;background:#1c1f31;border-radius:12px;overflow:hidden;isolation:isolate}
 .motion-player video,.motion-player canvas{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
 .motion-player canvas{position:absolute;inset:0;pointer-events:none}
+.motion-player .motion-frame-surface{pointer-events:auto;outline-offset:-3px}
+.motion-frame-controls{padding:10px 0 0}
+.motion-frame-controls>div{display:flex;align-items:center;gap:10px}
+.motion-frame-controls .button{font-size:10px;min-height:32px;white-space:nowrap;padding:5px 9px}
+.motion-frame-controls input[type=range]{flex:1;min-width:0;width:100%;margin:0;accent-color:var(--motion-blue)}
+.motion-frame-controls output{font-size:10px;white-space:nowrap;color:var(--motion-muted);font-variant-numeric:tabular-nums}
+.motion-frame-controls small{display:block;margin-top:7px;font-size:10px;line-height:1.7;color:var(--motion-muted)}
 .motion-target-picker{position:absolute;z-index:3;cursor:crosshair;border:2px solid #9dafff;box-sizing:border-box;background:#1c1f3108;outline-offset:-5px;touch-action:manipulation}
 .motion-target-picker>span{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;border:2px solid #e0e6ff;border-radius:50%;width:30px;height:30px;color:white;background:#425ddb99;font-size:24px;line-height:1;pointer-events:none}
 .motion-target-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:13px 0 7px;padding:12px;background:#f6f7fd;border:1px solid #e0e4f2;border-radius:9px}

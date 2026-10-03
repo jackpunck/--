@@ -50,6 +50,10 @@ function createPoseWorker(signal) {
       try { pending.onFrame?.(data.frame); } catch (error) { fail(error); }
       return;
     }
+    if (['preview-frame', 'preview-reset', 'progress'].includes(data.type)) {
+      try { pending.onEvent?.(data); } catch (error) { fail(error); }
+      return;
+    }
     const current = pending; pending = undefined;
     if (data.error) current.reject(new Error(data.error)); else current.resolve(data);
   };
@@ -58,18 +62,72 @@ function createPoseWorker(signal) {
   signal?.addEventListener('abort', stop, { once: true });
   return {
     stop,
-    request(data, transfer = [], timeoutMs = 30000, onFrame) {
+    request(data, transfer = [], timeoutMs = 30000, onFrame, onEvent) {
       checkAbort(signal);
       if (stopped) return Promise.reject(aborted());
       if (pending) return Promise.reject(new Error('上一帧尚未处理完成。'));
       return new Promise((resolve, reject) => {
         const id = ++sequence;
         const timer = setTimeout(() => { fail(new Error('姿态模型处理超时，请缩短视频后重试。')); }, timeoutMs);
-        pending = { id, onFrame, resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } };
+        pending = { id, onFrame, onEvent, resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } };
         try { worker.postMessage({ ...data, id }, transfer); } catch (error) { for (const item of transfer) item.close?.(); fail(error); }
       });
     },
   };
+}
+
+async function analyzeSoftwareVideo(file, metadata, { signal, onProgress, targetPoint }) {
+  const started = performance.now(), frames = [], previews = new Map();
+  const totalFrames = sampleVideoTimes(metadata.duration).length;
+  const timing = { initializationMs: 0, decodeMs: 0, inferenceMs: 0 };
+  let engine, delegate = 'GPU', previewStride = 1, previewBytes = 0;
+  const maxPreviewBytes = 64 * 1024 * 1024;
+  const trimPreviews = stride => {
+    previewStride = Math.max(previewStride, stride);
+    for (const [index, frame] of previews) if (index % previewStride) { previewBytes -= frame.blob.size; previews.delete(index); }
+  };
+  const event = data => {
+    checkAbort(signal);
+    if (data.type === 'progress') { onProgress({ stage: 'decoding', ...data.progress }); return; }
+    if (data.type === 'preview-reset') { trimPreviews(data.stride); return; }
+    const frame = data.frame, index = frame.index ?? Math.round(frame.time * 5);
+    if (frame.stride) trimPreviews(frame.stride);
+    if (index % previewStride) return;
+    const blob = new Blob([frame.bytes], { type: 'image/jpeg' });
+    previewBytes += blob.size - (previews.get(index)?.blob.size || 0);
+    previews.set(index, { time: frame.time, blob, width: frame.width, height: frame.height });
+    while (previewBytes > maxPreviewBytes && previews.size > 1) trimPreviews(previewStride * 2);
+  };
+  try {
+    onProgress({ stage: 'loading', progress: 0, totalFrames, processedFrames: 0, message: '正在加载本地姿态模型…', delegate });
+    engine = createPoseWorker(signal);
+    try { await engine.request({ type: 'init', delegate, targetPoint }, [], 120000); }
+    catch (error) {
+      checkAbort(signal); engine.stop(); delegate = 'CPU';
+      onProgress({ stage: 'loading', progress: 0, totalFrames, processedFrames: 0, message: '正在切换到 CPU 后台分析…', delegate });
+      engine = createPoseWorker(signal);
+      await engine.request({ type: 'init', delegate, targetPoint }, [], 120000);
+    }
+    const prepared = await engine.request({ type: 'prepare-source', file, options: { ...metadata, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, maxDimension: MOTION_VIDEO_LIMITS.maxDimension } }, [], 120000, undefined, event);
+    const source = prepared.metadata;
+    validateVideoMetadata(source);
+    if (source.width !== metadata.width || source.height !== metadata.height || Math.abs(source.duration - metadata.duration) > 0.1) throw new Error('视频画面与读取的信息不一致，请重新选择视频。');
+    timing.initializationMs = performance.now() - started;
+    const decoded = await engine.request({ type: 'decode-source' }, [], 600000, frame => {
+      checkAbort(signal);
+      const expectedTime = frames.length / MOTION_VIDEO_LIMITS.sampleFps;
+      if (Math.abs(frame.time - expectedTime) > 0.00001 || frames.length >= totalFrames) throw new Error('视频解码采样时间不连续，请重新分析。');
+      timing.inferenceMs += frame.inferenceMs || 0;
+      const { inferenceMs, ...points } = frame;
+      frames.push(points);
+      onProgress({ stage: 'analyzing', progress: frames.length / totalFrames, processedFrames: frames.length, totalFrames, time: frame.time, delegate, message: '正在直接读取画面并分析动作…' });
+    }, event);
+    checkAbort(signal);
+    if (frames.length !== totalFrames) throw new Error('视频未完整解码，请重新分析或选择其他视频。');
+    timing.decodeMs = decoded.timing?.decodeMs ?? Math.max(0, performance.now() - started - timing.initializationMs - timing.inferenceMs);
+    await engine.request({ type: 'close' });
+    return { frames, ...metadata, elapsedMs: performance.now() - started, modelVersion: MOTION_MODEL_VERSION, sampleFps: MOTION_VIDEO_LIMITS.sampleFps, sourceFps: source.sourceFps ?? null, delegate, timing, decoder: 'ffmpeg-direct', targetTracking: summarizeTargetTracking(frames, { targetPoint }), previewFrames: [...previews.values()].sort((a, b) => a.time - b.time) };
+  } finally { engine?.stop(); }
 }
 
 /** Analyze every 1/15-second position across the entire local video.
@@ -82,6 +140,7 @@ export async function analyzeVideo(file, { signal: externalSignal, onProgress = 
   if (typeof Worker === 'undefined' || typeof createImageBitmap !== 'function') throw new Error('此浏览器不支持后台视频分析，请使用新版 Chrome 或 Edge。');
   const prepared = await prepareMotionVideo(file, { signal: externalSignal, onProgress });
   checkAbort(externalSignal);
+  if (prepared.mode === 'software') return analyzeSoftwareVideo(file, prepared.metadata, { signal: externalSignal, onProgress, targetPoint });
   file = prepared.file;
   const lifecycle = new AbortController(), signal = lifecycle.signal;
   const cancel = () => lifecycle.abort();

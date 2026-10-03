@@ -1,5 +1,5 @@
-// A shared, local playable copy keeps preview, pose sampling and AI stills on
-// the same timeline. Cache only successful preparations; Files are immutable.
+// Keep the original video and a small first-frame preview. Unsupported browser
+// codecs are decoded directly; preparation never re-encodes an entire video.
 export const MOTION_VIDEO_LIMITS = Object.freeze({ maxBytes: 200 * 1024 * 1024, maxDuration: 120, sampleFps: 15, maxDimension: 960 });
 export const MOTION_VIDEO_ACCEPT = 'video/mp4,video/quicktime,video/webm,video/x-matroska,video/x-msvideo,video/3gpp,video/3gpp2,video/mpeg,video/mp2t,video/ogg,video/x-ms-wmv,video/x-flv,video/vnd.dlna.mpeg-tts,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.3g2,.mpg,.mpeg,.ts,.m2ts,.mts,.ogv,.wmv,.flv';
 const preparedVideos = new WeakMap();
@@ -63,23 +63,20 @@ export async function prepareMotionVideo(file, { signal, onProgress = () => {} }
   validateVideoFile(file); checkAbort(signal);
   const cached = preparedVideos.get(file);
   if (cached) return cached;
-  let metadata, compatible = file, converted = false;
+  let metadata, poster, mode = 'native';
   try { metadata = await readPlayableMetadata(file, signal); }
   catch (error) {
     checkAbort(signal);
     if (error.code !== 'MOTION_VIDEO_DECODE') throw error;
-    const { convertMotionVideo } = await import('./motion-transcode.js');
+    const { inspectMotionSource } = await import('./motion-source.js');
     checkAbort(signal);
-    compatible = await convertMotionVideo(file, { signal, onProgress });
-    metadata = await readPlayableMetadata(compatible, signal);
-    // Unsupported video can expose only its audio track's duration here. The
-    // conversion worker checks the actual video timeline before returning.
-    converted = true;
+    ({ metadata, poster } = await inspectMotionSource(file, { signal, onProgress }));
+    validateVideoMetadata(metadata);
+    mode = 'software';
   }
   checkAbort(signal);
-  const result = { file: compatible, originalFile: file, metadata, converted };
+  const result = { file, originalFile: file, metadata, poster, mode, converted: false };
   preparedVideos.set(file, result);
-  if (compatible !== file) preparedVideos.set(compatible, result);
   return result;
 }
 

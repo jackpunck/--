@@ -66,7 +66,7 @@ function installNativeMedia(t, { metadata = { duration: 8, width: 1080, height: 
     videos.push(video);
     return video;
   } });
-  replaceGlobal(t, 'Worker', class { constructor() { workers.push(true); throw new Error('A natively decoded clip must not start conversion'); } });
+  replaceGlobal(t, 'Worker', class { constructor() { workers.push(true); throw new Error('A natively decoded clip must not start a software decoder'); } });
   t.mock.method(URL, 'createObjectURL', () => {
     const url = `blob:motion-test-${createdUrls.length}`;
     createdUrls.push(url);
@@ -143,7 +143,7 @@ test('natively supported phone video stays intact and can be prepared again afte
   const result = await prepareMotionVideo(file);
   assert.equal(result.file, file);
   assert.equal(result.originalFile, file);
-  assert.equal(result.converted, false);
+  assert.equal(result.mode, 'native');
   assert.deepEqual(result.metadata, { duration: 8, width: 1080, height: 1920 });
   media.assertReleased();
   const opened = media.videos.length;
@@ -158,6 +158,34 @@ test('natively supported phone video stays intact and can be prepared again afte
   media.assertReleased();
 });
 
+test('audio-track-only browser success falls back to source images without creating another video', async t => {
+  const media = installNativeMedia(t, { metadata: { duration: 13.003333, width: 0, height: 0 } });
+  const workers = [];
+  globalThis.Worker = class {
+    constructor(url) { this.url = String(url); this.terminated = 0; workers.push(this); }
+    postMessage(message) {
+      this.message = message;
+      queueMicrotask(() => this.onmessage({ data: { type: 'done', metadata: { duration: 13.005, width: 1920, height: 1080, sourceFps: 59.98 }, frames: [{ time: 0, width: 1280, height: 720, bytes: new Uint8Array([255, 216, 255, 217]) }] } }));
+    }
+    terminate() { this.terminated++; }
+  };
+  const original = new File(['hevc video fixture'], 'phone.mov', { type: 'video/quicktime' });
+  t.after(() => releasePreparedMotionVideo(original));
+  const prepared = await prepareMotionVideo(original);
+  assert.equal(prepared.mode, 'software');
+  assert.equal(prepared.file, original);
+  assert.equal(prepared.originalFile, original);
+  assert.equal(prepared.poster.type, 'image/jpeg');
+  assert.deepEqual(prepared.metadata, { duration: 13.005, width: 1920, height: 1080, sourceFps: 59.98 });
+  assert.equal(workers.length, 1);
+  assert.equal(workers[0].message.file, original);
+  assert.equal(workers[0].terminated, 1);
+  assert.equal((await prepareMotionVideo(original)), prepared, 'analysis and evidence must share source metadata');
+  assert.equal(workers.length, 1);
+  assert.equal(media.createdUrls.length, 1, 'only the native capability probe opens a temporary media URL');
+  media.assertReleased();
+});
+
 test('cancelling a pending browser read releases its video and object URL', async t => {
   const media = installNativeMedia(t, { holdLoad: true });
   const controller = new AbortController();
@@ -168,15 +196,15 @@ test('cancelling a pending browser read releases its video and object URL', asyn
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(media.videos.length, 1);
-  assert.deepEqual(media.workers, [], 'cancellation must not trigger a fallback conversion');
+  assert.deepEqual(media.workers, [], 'cancellation must not trigger a fallback software decoder');
   media.assertReleased();
 });
 
-test('known excessive duration stops preparation before conversion and releases browser resources', async t => {
+test('known excessive duration stops preparation before fallback decoding and releases browser resources', async t => {
   const media = installNativeMedia(t, { metadata: { duration: 121, width: 1080, height: 1920 } });
   const file = new File(['video fixture'], 'phone.mov', { type: 'video/quicktime' });
   t.after(() => releasePreparedMotionVideo(file));
   await assert.rejects(prepareMotionVideo(file), /120/);
-  assert.deepEqual(media.workers, [], 'transcoding cannot make an overlong clip eligible');
+  assert.deepEqual(media.workers, [], 'software decoding cannot make an overlong clip eligible');
   media.assertReleased();
 });

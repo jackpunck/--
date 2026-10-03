@@ -140,26 +140,40 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
   const video = document.createElement('video'), canvas = document.createElement('canvas');
   video.preload = 'auto'; video.muted = true; video.playsInline = true;
   const prepared = await prepareMotionVideo(file, { signal, onProgress });
-  const url = URL.createObjectURL(prepared.file);
-  let observation, lastImageTime = null;
+  const software = prepared.mode === 'software';
+  const url = software ? null : URL.createObjectURL(prepared.file);
+  let observation, sourceBitmap, lastImageTime = null;
   try {
-    await waitForMedia(video, 'loadedmetadata', signal, () => { video.src = url; video.load(); });
-    const duration = video.duration, width = video.videoWidth, height = video.videoHeight;
+    if (!software) await waitForMedia(video, 'loadedmetadata', signal, () => { video.src = url; video.load(); });
+    const { duration, width, height } = software ? prepared.metadata : { duration: video.duration, width: video.videoWidth, height: video.videoHeight };
     validateVideoMetadata({ duration, width, height });
     if (Math.abs(duration - pipeline.duration) > Math.max(0.1, duration * 0.001) || width !== pipeline.width || height !== pipeline.height) throw new Error('视频与分析结果不一致，请重新分析当前视频。');
-    if (video.readyState < 2) await waitForMedia(video, 'loadeddata', signal);
+    if (!software && video.readyState < 2) await waitForMedia(video, 'loadeddata', signal);
+    let decodedImages;
+    if (software) {
+      const { readMotionSourceFrames } = await import('./motion-source.js');
+      decodedImages = await readMotionSourceFrames(file, selected.map(item => item.sourceTime ?? item.poseTime), { signal, maxDimension: 1280, onProgress: value => onProgress({ ...value, stage: 'evidence' }) });
+      if (decodedImages.length !== selected.length) throw new Error('关键图片未完整提取，请重试。');
+    }
     const result = { version: 'motion-evidence-v2', video: { width, height, duration, sampleFps: summary.sampleFps, sourceFps: summary.sourceFps }, summary, images: [], byteLength: 0 };
     const perImageBudget = Math.floor((budget - jsonBytes(result) - 20000) / selected.length);
     for (const [index, item] of selected.entries()) {
       checkAbort(signal);
-      observation = observePresentedFrame(video, signal);
-      // Prefer the pose's actual source PTS, when available; seek-time epsilon
-      // compensates Chromium microsecond truncation without changing poseTime.
-      const seek = browserSeekTime(item.sourceTime ?? item.poseTime, duration);
-      const didSeek = Math.abs(video.currentTime - seek) > 0.000001;
-      if (didSeek) await waitForMedia(video, 'seeked', signal, () => { video.currentTime = seek; });
-      const presentedTime = await observation.promise; observation = undefined; checkAbort(signal);
-      const imageTime = presentedTime ?? (didSeek ? null : lastImageTime); lastImageTime = imageTime;
+      let imageTime;
+      if (software) {
+        const decoded = decodedImages[index];
+        if (Math.abs(decoded.time - (item.sourceTime ?? item.poseTime)) > 0.00001) throw new Error('关键图片时间与分析结果不一致，请重新分析。');
+        imageTime = finite(decoded.sourceTime) ? decoded.sourceTime : null;
+      } else {
+        observation = observePresentedFrame(video, signal);
+        // Prefer the pose's actual source PTS, when available; seek-time epsilon
+        // compensates Chromium microsecond truncation without changing poseTime.
+        const seek = browserSeekTime(item.sourceTime ?? item.poseTime, duration);
+        const didSeek = Math.abs(video.currentTime - seek) > 0.000001;
+        if (didSeek) await waitForMedia(video, 'seeked', signal, () => { video.currentTime = seek; });
+        const presentedTime = await observation.promise; observation = undefined; checkAbort(signal);
+        imageTime = presentedTime ?? (didSeek ? null : lastImageTime); lastImageTime = imageTime;
+      }
       const time = imageTime ?? item.poseTime;
       const mapping = { requestedTime: item.requestedTime, poseTime: item.poseTime, sourceTime: item.sourceTime };
       const duplicate = result.images.find(image => Math.round(image.time * 1e6) === Math.round(time * 1e6));
@@ -173,11 +187,14 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
       // The remaining target crops preserve detail for posture checks.
       const framing = index === 0 || index === selected.length - 1 ? 'equipment-context' : 'target-detail';
       const box = item.subjectTracking?.bbox, crop = evidenceCropRegion(framing === 'equipment-context' ? null : box);
-      const cropWidth = (crop.xMax - crop.xMin) * width, cropHeight = (crop.yMax - crop.yMin) * height;
+      if (software) { sourceBitmap = await createImageBitmap(decodedImages[index].blob); checkAbort(signal); }
+      const source = sourceBitmap || video, sourceWidth = software ? sourceBitmap.width : width, sourceHeight = software ? sourceBitmap.height : height;
+      const cropWidth = (crop.xMax - crop.xMin) * sourceWidth, cropHeight = (crop.yMax - crop.yMin) * sourceHeight;
       const size = scaledVideoSize(cropWidth, cropHeight, MOTION_EVIDENCE_LIMITS.maxDimension);
       canvas.width = size.width; canvas.height = size.height;
       const context = canvas.getContext('2d'); if (!context) throw new Error('浏览器无法读取视频画面。');
-      context.drawImage(video, crop.xMin * width, crop.yMin * height, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      context.drawImage(source, crop.xMin * sourceWidth, crop.yMin * sourceHeight, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      sourceBitmap?.close(); sourceBitmap = undefined;
       if (box) {
         const x = (box.xMin - crop.xMin) / (crop.xMax - crop.xMin) * canvas.width, y = (box.yMin - crop.yMin) / (crop.yMax - crop.yMin) * canvas.height;
         const boxWidth = (box.xMax - box.xMin) / (crop.xMax - crop.xMin) * canvas.width, boxHeight = (box.yMax - box.yMin) / (crop.yMax - crop.yMin) * canvas.height;
@@ -195,6 +212,6 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
     if (result.byteLength >= budget) throw new Error('关键帧请求超过大小限制。');
     checkAbort(signal); return result;
   } finally {
-    observation?.cancel(); video.pause(); video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url); canvas.width = canvas.height = 0;
+    sourceBitmap?.close(); observation?.cancel(); video.pause(); video.removeAttribute('src'); video.load(); if (url) URL.revokeObjectURL(url); canvas.width = canvas.height = 0;
   }
 }

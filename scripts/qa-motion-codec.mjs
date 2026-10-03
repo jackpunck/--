@@ -1,4 +1,4 @@
-// Real browser regression for phone-video compatibility. No AI requests or source edits.
+// Real browser regression for direct source decoding. No AI requests or source edits.
 // QA_PLAYWRIGHT, QA_BROWSER and QA_FFMPEG can override the existing local tools.
 import assert from 'node:assert/strict';
 import {access,mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
@@ -52,7 +52,7 @@ const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.QA_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
 await context.addInitScript(()=>{
- window.__qaMediaCalls=[];window.__qaWorkerEvents=[];window.__qaHeld=[];
+ window.__qaMediaCalls=[];window.__qaWorkerEvents=[];window.__qaHeld=[];window.__qaPreparedFiles=new Map();
  const Original=window.Worker;
  window.Worker=class extends Original{
   constructor(url,options){super(url,options);this.__qaUrl=String(url);window.__qaWorkerEvents.push({action:'created',url:this.__qaUrl});}
@@ -67,29 +67,32 @@ export async function prepareMotionVideo(file,options={}){
  if(file.name===${JSON.stringify(basename(mov))})window.__qaOriginalMov=file;
  try{
   if(window.__qaHoldPreparation){
-   options.onProgress?.({stage:'converting',progress:0,message:'QA controlled preparation delay'});
+   options.onProgress?.({stage:'decoding',progress:0,message:'QA controlled preparation delay'});
    await new Promise((resolve,reject)=>{const abort=()=>reject(new DOMException('QA preparation cancelled','AbortError'));options.signal?.addEventListener('abort',abort,{once:true});window.__qaHeld.push(()=>{options.signal?.removeEventListener('abort',abort);resolve();});if(options.signal?.aborted)abort();});
   }
-  const result=await actualPrepareMotionVideo(file,options);record.status='fulfilled';record.converted=result.converted;record.sameFile=result.file===file;record.metadata=result.metadata;record.outputName=result.file.name;return result;
+  const result=await actualPrepareMotionVideo(file,options);record.status='fulfilled';record.mode=result.mode;record.sameFile=result.file===file;record.metadata=result.metadata;record.outputName=result.file.name;record.poster=result.poster?{type:result.poster.type,size:result.poster.size}:null;window.__qaPreparedFiles.set(file.name,{input:file,result});return result;
  }catch(error){record.status='rejected';record.error={name:error.name,message:error.message};throw error;}
 }`}));
 const video=await readFile(join(root,'public/motion-video.js'),'utf8');
 await context.route(/\/motion-video\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:video.replace('export async function analyzeVideo(','async function actualAnalyzeVideo(')+'\nexport async function analyzeVideo(...args){window.__qaAnalysisInput=args[0].name;const result=await actualAnalyzeVideo(...args);window.__qaPipeline=result;return result;}'}));
 const analysis=await readFile(join(root,'public/motion-analysis.js'),'utf8');
 await context.route(/\/motion-analysis\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:analysis.replace('export function analyzeMotion(','function actualAnalyzeMotion(')+'\nexport function analyzeMotion(...args){const result=actualAnalyzeMotion(...args);window.__qaObservations=result;return result;}'}));
+const core=await readFile(join(root,'public/vendor/ffmpeg/ffmpeg-core.js'),'utf8');
+assert(core.includes('function exec(..._args){'));
+await context.route(/\/vendor\/ffmpeg\/ffmpeg-core\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:core.replace('function exec(..._args){','function exec(..._args){console.info("QA_FFMPEG_EXEC "+JSON.stringify(_args));')}));
 const page=await context.newPage();page.setDefaultTimeout(15000);
-const errors=[],requests=[],external=[],checks=[],formatResults=[];
+const errors=[],requests=[],external=[],checks=[],formatResults=[],ffmpegCommands=[];
 page.on('pageerror',error=>errors.push(error.message));
 page.on('request',request=>{const url=request.url();requests.push({method:request.method(),url});if(/^https?:/.test(url)&&!url.startsWith(origin))external.push(url);});
-page.on('console',message=>{if(['error','warning'].includes(message.type()))console.log('Browser:',message.text().slice(0,6000));});
+page.on('console',message=>{const text=message.text();if(text.startsWith('QA_FFMPEG_EXEC ')){const args=JSON.parse(text.slice(15));ffmpegCommands.push(args);console.log('Source decoder command:',JSON.stringify(args));return;}if(['error','warning'].includes(message.type()))console.log('Browser:',text.slice(0,6000));});
 const nav=async name=>{await page.locator(`.nav [data-page="${name}"]`).click();};
 const ready=async()=>{
- await page.waitForFunction(()=>{const video=document.querySelector('[data-motion-video]'),error=document.querySelector('[data-motion-error]');return (error&&!error.hidden)||(video?.videoWidth>0&&video.videoHeight>0&&video.readyState>=2&&!document.querySelector('[data-motion-action="analyze"]')?.disabled);},{},{timeout:300000});
+ await page.waitForFunction(()=>{const error=document.querySelector('[data-motion-error]'),name=document.querySelector('[data-motion-metadata] strong')?.textContent;return (error&&!error.hidden)||(window.__qaPreparedFiles.has(name)&&!document.querySelector('[data-motion-action="analyze"]')?.disabled);},{},{timeout:60000});
  assert.equal(await page.locator('[data-motion-error]').isVisible(),false,await page.locator('[data-motion-error]').textContent());
- return page.locator('[data-motion-video]').evaluate(video=>({width:video.videoWidth,height:video.videoHeight,duration:video.duration}));
+ return page.evaluate(()=>{const name=document.querySelector('[data-motion-metadata] strong').textContent;const prepared=window.__qaPreparedFiles.get(name).result;return {...prepared.metadata,mode:prepared.mode};});
 };
 const releaseHeld=async()=>page.evaluate(()=>{window.__qaHoldPreparation=false;for(const release of window.__qaHeld.splice(0))release();});
-let report,motion=null,cancellation=null;
+let report,motion=null,cancellation=null,analysisCancellation=null;
 const progressTimer=setInterval(()=>page.evaluate(()=>({stage:document.querySelector('[data-motion-progress-title]')?.textContent,message:document.querySelector('[data-motion-progress-message]')?.textContent,progress:document.querySelector('[data-motion-percent]')?.textContent,error:document.querySelector('[data-motion-error]')?.textContent})).then(value=>console.log('Browser progress:',JSON.stringify(value))).catch(()=>{}),30000);
 try{
  const registration=await context.request.post(origin+'/api/auth/register',{data:{name:'视频兼容回归',email:`codec-${Date.now()}@example.test`,password:'codec-qa-password-123'}});assert.equal(registration.status(),201);
@@ -99,21 +102,36 @@ try{
  if(!formatsOnly){
  console.log('Real phone MOV: prepare, complete pose analysis, and evidence');
  const started=Date.now();await page.locator('[data-motion-file]').setInputFiles(mov);const preview=await ready();
- assert(preview.width>0&&preview.height>0);assert(Math.abs(preview.duration-13.003333)<.16);
+ const preparationMs=Date.now()-started;
+ assert.equal(preview.mode,'software');assert(preview.width>0&&preview.height>0);assert(Math.abs(preview.duration-13.003333)<.01);
  assert.equal(await page.locator('[data-motion-metadata] strong').textContent(),basename(mov));
- await page.locator('[data-motion-action="analyze"]').click();await page.locator('[data-motion-results]').waitFor({state:'visible',timeout:300000});
- assert.equal(await page.locator('[data-motion-error]').isVisible(),false);
+ assert(await page.locator('[data-motion-frame-surface]').isVisible());assert.equal(await page.locator('[data-motion-video]').getAttribute('src'),null);
+ await page.screenshot({path:join(dataDir,'phone-mov-poster.png'),fullPage:true});
+ const analysisStarted=Date.now();
+ await page.locator('[data-motion-action="analyze"]').click();
+ await page.waitForFunction(()=>{const error=document.querySelector('[data-motion-error]'),results=document.querySelector('[data-motion-results]');return (error&&!error.hidden)||(results&&!results.hidden);},{},{timeout:180000});
+ const analysisMs=Date.now()-analysisStarted,evidenceStarted=Date.now();
+ assert.equal(await page.locator('[data-motion-error]').isVisible(),false,await page.locator('[data-motion-error]').textContent());
  motion=await page.evaluate(async()=>{
   const pipeline=window.__qaPipeline,observations=window.__qaObservations;
   const {buildMotionEvidence}=await import('/motion-evidence.js');
   const evidence=await buildMotionEvidence(window.__qaOriginalMov,pipeline,observations);
-  return {inputName:window.__qaAnalysisInput,width:pipeline.width,height:pipeline.height,duration:pipeline.duration,sampleFps:pipeline.sampleFps,frames:pipeline.frames.length,measurements:observations.measurements.length,validMeasurements:observations.quality.validFrames,decoder:pipeline.decoder,matchingTimes:observations.measurements.every((row,index)=>row.frameIndex===index&&row.time===pipeline.frames[index].time),evidence:{video:evidence.video,images:evidence.images.map(image=>({time:image.time,width:image.width,height:image.height,mime:image.mimeType,jpeg:image.dataUrl.startsWith('data:image/jpeg;base64,/9j/')})),bytes:evidence.byteLength},mediaCalls:window.__qaMediaCalls};
+  return {inputName:window.__qaAnalysisInput,width:pipeline.width,height:pipeline.height,duration:pipeline.duration,sampleFps:pipeline.sampleFps,frames:pipeline.frames.length,measurements:observations.measurements.length,validMeasurements:observations.quality.validFrames,decoder:pipeline.decoder,previewFrames:pipeline.previewFrames?.map(frame=>({time:frame.time,width:frame.width,height:frame.height,blobType:frame.blob?.type,blobBytes:frame.blob?.size})),matchingTimes:observations.measurements.every((row,index)=>row.frameIndex===index&&row.time===pipeline.frames[index].time),evidence:{video:evidence.video,images:evidence.images.map(image=>({time:image.time,width:image.width,height:image.height,mime:image.mimeType,jpeg:image.dataUrl.startsWith('data:image/jpeg;base64,/9j/')})),bytes:evidence.byteLength},mediaCalls:window.__qaMediaCalls};
  });
+ motion.timing={preparationMs,analysisMs,evidenceMs:Date.now()-evidenceStarted,completeMs:Date.now()-started,previousTranscodeCompleteMs:147853};
+ assert.equal(motion.decoder,'ffmpeg-direct');assert(motion.previewFrames.length>=50);assert(motion.previewFrames.every(frame=>frame.blobBytes>0&&frame.blobType.startsWith('image/')&&frame.width>0&&frame.height>0));
  assert.equal(motion.inputName,basename(mov));assert.equal(motion.frames,Math.ceil(motion.duration*motion.sampleFps));assert(motion.frames>=190&&motion.frames<=200);assert.equal(motion.frames,motion.measurements);assert(motion.validMeasurements>0);assert(motion.matchingTimes);
  assert.equal(motion.width,preview.width);assert.equal(motion.height,preview.height);assert.equal(motion.evidence.video.width,motion.width);assert.equal(motion.evidence.video.height,motion.height);assert(Math.abs(motion.evidence.video.duration-motion.duration)<.001);
  assert.equal(motion.evidence.images.length,6);assert(motion.evidence.images.every(image=>image.jpeg&&image.mime==='image/jpeg'&&image.width>0&&image.height>0));
+ assert(motion.mediaCalls.every(call=>call.sameFile&&call.outputName===call.name),'preparation retains the original File');
+ // The software view presents sampled analysis images, without creating a second video.
+ await page.locator('[data-motion-frame-seek]').evaluate(input=>{input.value=String(Number(input.max)*.6);input.dispatchEvent(new Event('input',{bubbles:true}));});
+ await page.waitForFunction(()=>Number(document.querySelector('[data-motion-frame-seek]')?.value)>7);
+ assert(await page.locator('[data-motion-frame-surface]').evaluate(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((value,index)=>index%4===3&&value>0)));
+ const beforePlaying=await page.locator('[data-motion-frame-seek]').inputValue();
+ await page.locator('[data-motion-frame-play]').click();await page.waitForFunction(time=>Number(document.querySelector('[data-motion-frame-seek]')?.value)>Number(time)+.2,beforePlaying);await page.locator('[data-motion-frame-play]').click();
  await page.screenshot({path:join(dataDir,'phone-mov-analysis.png'),fullPage:true});checks.push('real-phone-hevc-complete-pose-and-six-jpeg-evidence');
- console.log(JSON.stringify({phoneMov:{...preview,frames:motion.frames,measurements:motion.measurements,evidenceImages:motion.evidence.images.length,elapsedMs:Date.now()-started}}));
+ console.log(JSON.stringify({phoneMov:{...preview,frames:motion.frames,measurements:motion.measurements,evidenceImages:motion.evidence.images.length,timing:motion.timing}}));
  }
  for(const test of fixtures){
   console.log('Compatibility fixture:',test.name);await page.locator('[data-motion-file]').setInputFiles(test.path);const metadata=await ready();
@@ -121,38 +139,62 @@ try{
   if(test.width){assert.equal(metadata.width,test.width);assert.equal(metadata.height,test.height);}
   if(test.ratio)assert(Math.abs(metadata.width/metadata.height-test.ratio)<.01);
   const prepared=await page.evaluate(name=>window.__qaMediaCalls.filter(item=>item.name===name&&item.status==='fulfilled').at(-1),basename(test.path));
-  if(test.direct){assert.equal(prepared.converted,false);assert.equal(prepared.sameFile,true);}
+  assert.equal(prepared.sameFile,true);assert.equal(prepared.outputName,basename(test.path));
+  if(test.direct)assert.equal(prepared.mode,'native');
   if(test.rotation){
-   const colors=await page.locator('[data-motion-video]').evaluate(video=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=2;const context=canvas.getContext('2d');context.drawImage(video,0,0,2,2);const rgba=Array.from(context.getImageData(0,0,2,2).data);return rgba.filter((_,index)=>index%4!==3);});
+   const colors=await page.evaluate(async()=>{const name=document.querySelector('[data-motion-metadata] strong').textContent,prepared=window.__qaPreparedFiles.get(name).result,bitmap=prepared.mode==='software'?await createImageBitmap(prepared.poster):null;const canvas=document.createElement('canvas');canvas.width=canvas.height=2;const context=canvas.getContext('2d');context.drawImage(bitmap||document.querySelector('[data-motion-video]'),0,0,2,2);bitmap?.close();const rgba=Array.from(context.getImageData(0,0,2,2).data);return rgba.filter((_,index)=>index%4!==3);});
    assert(colors[2]>colors[0]+100&&colors[6]>colors[8]+100,'Rotation preserves blue top/red bottom');
   }
-  const tail=await page.locator('[data-motion-video]').evaluate(async video=>{
-   const time=Math.max(0,video.duration-.08);
+  const tail=await page.evaluate(async()=>{
+   const name=document.querySelector('[data-motion-metadata] strong').textContent,{input,result}=window.__qaPreparedFiles.get(name),duration=result.metadata.duration;
+   const time=Math.max(0,(Math.ceil(duration*15)-2)/15);
+   if(result.mode==='software'){
+    const {readMotionSourceFrames}=await import('/motion-source.js');
+    const frames=await readMotionSourceFrames(input,[0,time],{maxDimension:1280});
+    const observed=[];for(const frame of frames){const bitmap=await createImageBitmap(frame.blob);observed.push({time:frame.time,width:bitmap.width,height:bitmap.height});bitmap.close();}
+    if(observed.length!==2||observed[0].time!==0)throw new Error('Direct source frame selection incomplete');
+    return {...observed[1],expectedTime:time};
+   }
+   const video=document.querySelector('[data-motion-video]');
    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Tail seek timed out')),5000);video.addEventListener('seeked',()=>{clearTimeout(timer);resolve();},{once:true});video.currentTime=time;});
-   const bitmap=await createImageBitmap(video);const result={time:video.currentTime,width:bitmap.width,height:bitmap.height};bitmap.close();return result;
+   const bitmap=await createImageBitmap(video);const frame={time:video.currentTime,width:bitmap.width,height:bitmap.height,expectedTime:time};bitmap.close();return frame;
   });
-  assert(Math.abs(tail.time-(metadata.duration-.08))<.001);assert(tail.width>0&&tail.height>0);
-  formatResults.push({name:test.name,...metadata,converted:prepared.converted});
+  assert(Math.abs(tail.time-tail.expectedTime)<.001);assert(tail.width>0&&tail.height>0);
+  formatResults.push({name:test.name,...metadata,mode:prepared.mode,tail});
  }
  checks.push('mp4-direct','hevc-portrait-rotation','4k-phone','all-sixteen-file-extensions','vfr-and-pq-hdr-tail-frames');
  if(!formatsOnly){
  await page.locator('[data-motion-file]').setInputFiles(h264);await ready();
- const ordinary=await page.evaluate(name=>window.__qaMediaCalls.filter(item=>item.name===name&&item.status==='fulfilled').at(-1),basename(h264));assert.equal(ordinary.converted,false);assert.equal(ordinary.sameFile,true);
+ const ordinary=await page.evaluate(name=>window.__qaMediaCalls.filter(item=>item.name===name&&item.status==='fulfilled').at(-1),basename(h264));assert.equal(ordinary.mode,'native');assert.equal(ordinary.sameFile,true);
  for(const input of [audioOnly,{name:'broken.mp4',mimeType:'video/mp4',buffer:Buffer.from('not a video')}]){
   console.log('Reject invalid video:',typeof input==='string'?basename(input):input.name);
   await page.locator('[data-motion-file]').setInputFiles(input);await page.locator('[data-motion-error]').waitFor({state:'visible',timeout:120000});assert(await page.locator('[data-motion-action="analyze"]').isDisabled());assert.equal(await page.locator('[data-motion-results]').isVisible(),false);
  }
  checks.push('audio-only-and-corrupt-input-rejected');
- // Cancel a real worker after creation, with a fresh File identity and no cached conversion.
+ // Cancel a real software decoder after creation, with a fresh original File.
  cancellation=await page.evaluate(async()=>{
   const {prepareMotionVideo}=await import('/motion-media.js');const source=window.__qaOriginalMov;
   const fresh=new File([source],'cancel-real.mov',{type:source.type});const controller=new AbortController();
   const before=window.__qaWorkerEvents.length;let timer;
-  const interval=setInterval(()=>{if(window.__qaWorkerEvents.slice(before).some(item=>item.action==='created'&&item.url.includes('motion-transcode-worker'))){clearInterval(interval);controller.abort();}},5);
+  const interval=setInterval(()=>{if(window.__qaWorkerEvents.slice(before).some(item=>item.action==='created'&&item.url.includes('motion-source-worker'))){clearInterval(interval);controller.abort();}},5);
   timer=setTimeout(()=>controller.abort(),15000);
   try{await prepareMotionVideo(fresh,{signal:controller.signal});return {unexpectedSuccess:true};}catch(error){return {name:error.name,workers:window.__qaWorkerEvents.slice(before)};}finally{clearInterval(interval);clearTimeout(timer);}
  });
- assert.equal(cancellation.name,'AbortError');assert(cancellation.workers.some(item=>item.action==='created'&&item.url.includes('motion-transcode-worker')));assert(cancellation.workers.some(item=>item.action==='terminated'&&item.url.includes('motion-transcode-worker')));checks.push('real-conversion-worker-aborted-and-terminated');
+ assert.equal(cancellation.name,'AbortError');assert(cancellation.workers.some(item=>item.action==='created'&&item.url.includes('motion-source-worker')));assert(cancellation.workers.some(item=>item.action==='terminated'&&item.url.includes('motion-source-worker')));checks.push('real-source-worker-aborted-and-terminated');
+ analysisCancellation=await page.evaluate(async()=>{
+  const {analyzeVideo}=await import('/motion-video.js');
+  const {prepareMotionVideo}=await import('/motion-media.js');
+  const source=window.__qaPreparedFiles.get('phone-portrait.mov').input;
+  const fresh=new File([source],'cancel-inference.mov',{type:source.type}),controller=new AbortController(),before=window.__qaWorkerEvents.length;
+  let processed=0,outcome;
+  try{await analyzeVideo(fresh,{signal:controller.signal,onProgress:value=>{processed=value.processedFrames??processed;if(processed>=2)controller.abort();}});outcome={unexpectedSuccess:true};}
+  catch(error){outcome={name:error.name,message:error.message};}
+  const next=window.__qaPreparedFiles.get('landscape.mp4').input;
+  const prepared=await prepareMotionVideo(new File([next],'after-cancel.mp4',{type:next.type}));
+  return {...outcome,processed,workers:window.__qaWorkerEvents.slice(before),next:{mode:prepared.mode,...prepared.metadata}};
+ });
+ assert.equal(analysisCancellation.name,'AbortError');assert(analysisCancellation.processed>=2);assert.equal(analysisCancellation.next.mode,'native');
+ assert(analysisCancellation.workers.some(item=>item.action==='created'&&item.url.includes('/motion-worker.js')));assert(analysisCancellation.workers.some(item=>item.action==='terminated'&&item.url.includes('/motion-worker.js')));checks.push('abort-during-real-software-pose-inference-and-read-next-file');
  // Hold only these three preparations so UI lifecycle races are deterministic.
  for(const action of ['cancel','replace','navigate']){
   console.log('Preparation lifecycle:',action);await page.evaluate(()=>{window.__qaHoldPreparation=true;});await page.locator('[data-motion-file]').setInputFiles(mov);
@@ -170,8 +212,10 @@ try{
  }
  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
  assert.equal(requests.filter(item=>item.method==='POST'&&/\/api\/(motion\/coach|attachments)/.test(item.url)).length,0);
- assert(requests.some(item=>item.url.includes('motion-transcode-worker')));checks.push('local-conversion-assets-no-video-upload-no-ai');
- report={dataDir,checks,motion,formats:formatResults,cancellation,errors,external,resources:requests.filter(item=>/transcode|ffmpeg/.test(item.url)).map(item=>item.url.replace(origin,''))};
+ assert(requests.some(item=>item.url.includes('motion-source-worker')));assert(!requests.some(item=>item.url.includes('motion-transcode')));
+ assert(ffmpegCommands.length>0);assert(ffmpegCommands.every(args=>!args.some(value=>/libx264|compatible\.mp4|h264_nvenc/.test(String(value)))),'direct source decoding must not encode an H.264 copy');
+ checks.push('local-source-decoding-no-video-encoding-no-upload-no-ai');
+ report={dataDir,checks,motion,formats:formatResults,cancellation,analysisCancellation,errors,external,ffmpegCommands,resources:requests.filter(item=>/motion-source|ffmpeg/.test(item.url)).map(item=>item.url.replace(origin,''))};
  await writeFile(join(dataDir,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({dataDir,checks,formats:formatResults,errors,external},null,2));
-}catch(error){await page.screenshot({path:join(dataDir,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(join(dataDir,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,errors,external,formatResults,browser:await page.evaluate(()=>({mediaCalls:window.__qaMediaCalls,workers:window.__qaWorkerEvents,error:document.querySelector('[data-motion-error]')?.textContent,progress:document.querySelector('[data-motion-progress-message]')?.textContent})).catch(()=>null)},null,2));console.error('Codec QA artifacts:',dataDir);throw error;}
+}catch(error){await page.screenshot({path:join(dataDir,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(join(dataDir,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,errors,external,formatResults,ffmpegCommands,motion,browser:await page.evaluate(()=>({mediaCalls:window.__qaMediaCalls,workers:window.__qaWorkerEvents,error:document.querySelector('[data-motion-error]')?.textContent,progress:document.querySelector('[data-motion-progress-message]')?.textContent})).catch(()=>null)},null,2));console.error('Codec QA artifacts:',dataDir);throw error;}
 finally{clearInterval(progressTimer);await browser.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}

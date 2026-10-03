@@ -2,9 +2,9 @@
 
 Vendored ESM builds, served locally and available offline. No runtime CDN requests.
 
-## Local video compatibility
+## Local video decoding
 
-- `ffmpeg/`: official `@ffmpeg/core` 0.12.10 single-thread UMD and WebAssembly, loaded only when the browser cannot read a video picture. See `ffmpeg/NOTICE.txt` and its bundled license files. The original video is mounted read-only in a disposable local worker; no video upload or runtime CDN is used. Asset restoration and integrity verification: `node scripts/setup-motion-codec.mjs` / `node scripts/setup-motion-codec.mjs --verify`.
+- `ffmpeg/`: official `@ffmpeg/core` 0.12.10 single-thread UMD and WebAssembly, loaded only when the browser cannot read a video picture. See `ffmpeg/NOTICE.txt` and its bundled license files. The original video is mounted read-only in a disposable local worker and decoded into frames for synchronous pose inference, sampled JPEG replay and AI evidence. No intermediate MP4, video upload or runtime CDN is used. Asset restoration and integrity verification: `node scripts/setup-motion-codec.mjs` / `node scripts/setup-motion-codec.mjs --verify`.
 
 - marked 18.0.14: https://registry.npmjs.org/marked/-/marked-18.0.14.tgz (`package/lib/marked.esm.js`). MIT license in marked-LICENSE.md.
 - DOMPurify 3.4.16: https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz (`package/dist/purify.es.mjs`). Apache-2.0 or MPL-2.0 license in DOMPurify-LICENSE.

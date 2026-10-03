@@ -7,6 +7,7 @@ let tracker;
 let targetPoint, targetBox, lastDiscovery=-Infinity, trackingHelpers;
 let busy = false;
 let sequential;
+let sourceDecoder, source;
 const assetBase = new URL('./vendor/mediapipe/', self.location.href);
 
 function analyzeFrame(image, timestampMs) {
@@ -71,6 +72,24 @@ self.onmessage = async ({ data }) => {
       // to four independent candidates for actual crowd/overlap competition.
       regionPose = await PoseLandmarker.createFromOptions(fileset, {...options,runningMode:'IMAGE',numPoses:1});
       self.postMessage({ id, delegate: data.delegate });
+    } else if (type === 'prepare-source') {
+      source?.close(); source = undefined;
+      sourceDecoder = await import('./motion-software-decode.js');
+      source = await sourceDecoder.prepareMotionSource(data.file);
+      self.postMessage({ id, metadata: source.metadata });
+    } else if (type === 'decode-source') {
+      if (!pose || !source) throw new Error('原视频解码尚未初始化。');
+      try {
+        const timing = sourceDecoder.decodePreparedMotion(source, (canvas, target) => {
+          const result = analyzeFrame(canvas, target.time * 1000);
+          self.postMessage({ id, type: 'frame-result', frame: { time: target.time, ...result } });
+        }, {
+          maxDimension: data.options?.maxDimension || 960,
+          onPreview: frame => self.postMessage({ id, type: 'preview-frame', frame }, [frame.bytes.buffer]),
+          onPreviewReset: stride => self.postMessage({ id, type: 'preview-reset', stride }),
+        });
+        self.postMessage({ id, timing });
+      } finally { source.close(); source = undefined; }
     } else if (type === 'prepare-mp4') {
       const { prepareMp4 } = await import('./motion-decode.js');
       const prepared = await prepareMp4(data.file, data.options);
@@ -90,6 +109,7 @@ self.onmessage = async ({ data }) => {
         self.postMessage({ id, ...analyzeFrame(data.bitmap, data.timestampMs) });
       } finally { data.bitmap.close(); }
     } else if (type === 'close') {
+      source?.close(); source = undefined;
       pose?.close(); regionPose?.close(); pose = regionPose = tracker = undefined;
       self.postMessage({ id });
     } else throw new Error('未知的姿态分析请求。');
