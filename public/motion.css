@@ -176,6 +176,9 @@ button.motion-time:hover{border-color:#aebdf2;background:#e7edff;color:var(--mot
 .motion-coach .motion-section-head h3{margin:0;font-size:15px}
 .motion-coach>p,.motion-coach-evaluation{font-size:12px;color:#626e93;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere}
 .motion-coach-evaluation{margin-bottom:18px}
+.motion-coach-identification{padding:12px 14px;border:1px solid #dbe1f7;border-radius:9px;background:#fff}
+.motion-coach-identification>span{display:block;margin:5px 0}
+.motion-coach-identification>.motion-time{margin:4px 4px 0 0}
 .motion-coach-limitations{font-size:11px;line-height:1.9;color:#9093a5;padding-left:18px;margin:16px 0}
 .motion-coach-source{font-size:10px;color:#939ab0;line-height:1.8;display:block;margin-top:14px;overflow-wrap:anywhere}
 .motion-coach-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}

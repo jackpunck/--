@@ -5,7 +5,7 @@
  * Thresholds need calibration against independently labelled real recordings.
  */
 import {motionFamilies, getMotionExercise, getMotionFamily} from './motion-catalog.js';
-export const MOTION_RULE_VERSION = 'motion-rules-2.0.0';
+export const MOTION_RULE_VERSION = 'motion-rules-2.1.0';
 
 const SIDES = [[11, 13, 15, 23, 25, 27], [12, 14, 16, 24, 26, 28]];
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
@@ -187,6 +187,16 @@ function identifyPatterns(features) {
   const wristUp = ratio(features, f => f.wrist && f.wrist.y < f.shoulder.y - torso * 0.15);
   const wristLow = ratio(features, f => f.wrist && f.wrist.y > f.shoulder.y + torso * 0.35);
   const elbowShift = range(features.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null));
+  // A crop can hide the seated legs while preserving the entire pulling arm.
+  // Require the elbow to move back against the extended wrist's projected
+  // direction. Wrist-to-shoulder shortening alone also occurs in a curl.
+  const extendedAngle = qField(features, 'elbowAngle', 0.75), flexedAngle = qField(features, 'elbowAngle', 0.25);
+  const extendedArm = features.filter(f => Number.isFinite(f.elbowAngle) && f.elbowAngle >= extendedAngle);
+  const flexedArm = features.filter(f => Number.isFinite(f.elbowAngle) && f.elbowAngle <= flexedAngle);
+  const wristRetraction = quantile(extendedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5) - quantile(flexedArm.map(f => distance(f.wrist, f.shoulder) / torso), 0.5);
+  const wristForward = quantile(extendedArm.map(f => f.wrist ? (f.wrist.x - f.shoulder.x) / torso : null), 0.5);
+  const elbowRetraction = (quantile(extendedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5) - quantile(flexedArm.map(f => f.elbow ? (f.elbow.x - f.shoulder.x) / torso : null), 0.5)) * Math.sign(wristForward);
+  const croppedPull = finiteRatio(features, 'kneeAngle') < 0.5 && Math.abs(wristForward) > 0.25 && elbowRetraction > 0.18 && wristRetraction > 0.18 && shoulderMove < 0.25;
   const patterns = [];
   const add = (family, evidence, confidence = 0.82) => patterns.push({family, confidence, evidence});
   const legacy = classifyWindow(features);
@@ -199,7 +209,7 @@ function identifyPatterns(features) {
   }
   if (legacy.id === 'pushup') add('pushup', '水平身体、手脚支撑、肩部升降与屈肘共同变化', legacy.confidence);
   if (!patterns.length && e >= 18 && finiteRatio(features, 'elbowAngle') >= 0.65) {
-    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) add('row', '屈肘拉回，肘部相对躯干前后移动');
+    if (ratio(features, f => f.horizontal) < 0.3 && (seated || bent || croppedPull) && wristLow > 0.6 && elbowShift > 0.18 && hipMove < 0.3 && wristUp < 0.2) add('row', '屈肘拉回，肘部相对躯干前后移动');
     else if (qField(features, 'armElevation', 0.25) > 120 && a < 25) add('overhead-extension', '上臂保持过顶，肘部反复屈伸');
     else if (wristUp > 0.35 && vertical > 0.6) {
       add('overhead-press', '手臂在头上屈伸，单靠骨架无法确定推或拉');
@@ -285,9 +295,17 @@ function detectPatternReps(segments, family, exerciseId) {
   const [key, direction, minimum] = spec;
   const reps = []; let partial = 0;
   for (const segment of segments) {
-    const signal = segment.map((f, i) => Number.isFinite(f[key]) ? quantile(segment.slice(Math.max(0, i - 1), i + 2).filter(g => Math.abs(g.time - f.time) <= 0.12).map(g => g[key]), 0.5) * direction : null);
-    const lo = quantile(signal, 0.08), hi = quantile(signal, 0.92), span = hi - lo;
+    let signal = segment.map((f, i) => Number.isFinite(f[key]) ? quantile(segment.slice(Math.max(0, i - 1), i + 2).filter(g => Math.abs(g.time - f.time) <= 0.12).map(g => g[key]), 0.5) * direction : null);
+    let lo = quantile(signal, 0.08), hi = quantile(signal, 0.92);
+    const span = hi - lo;
     if (span < minimum) continue;
+    // A press may begin at either endpoint. Pick one baseline per continuous
+    // segment; running both directions would count overlapping half cycles.
+    const firstEndpoint = signal.find(value => Number.isFinite(value) && (value <= lo + span * 0.12 || value >= hi - span * 0.12));
+    if (family === 'horizontal-press' && firstEndpoint >= hi - span * 0.12) {
+      signal = signal.map(value => Number.isFinite(value) ? -value : null);
+      [lo, hi] = [-hi, -lo];
+    }
     const base = lo + span * 0.12, departure = lo + span * 0.3;
     let anchor = null, active = null;
     for (let i = 0; i < segment.length; i++) {
@@ -478,12 +496,26 @@ export function analyzeMotion(frames, {width, height, duration, sourceFps, exerc
   const intervals = ordered.slice(1).map((f, i) => f.time - ordered[i].time);
   const medianInterval = quantile(intervals, 0.5);
   const maxGap = Math.min(0.35, Math.max(0.18, medianInterval * 2.1));
-  const side = mean(ordered.map(f => mean(SIDES[0].map(i => confidence(f.landmarks?.[i]))))) >= mean(ordered.map(f => mean(SIDES[1].map(i => confidence(f.landmarks?.[i]))))) ? 0 : 1;
-  const timeline = ordered.map(f => {
+  const sideFeatures = [0, 1].map(candidate => ordered.map(f => {
     const tracking = f.subjectTracking;
     const locked = !tracking || (tracking.status === 'locked' && tracking.confidence >= 0.65 && typeof tracking.trackId === 'string' && tracking.trackId.length > 0);
-    return {time: f.time, feature: locked ? frameFeatures(f, side, width, height) : null};
-  });
+    return locked ? frameFeatures(f, candidate, width, height) : null;
+  }));
+  let side = mean(ordered.map(f => mean(SIDES[0].map(i => confidence(f.landmarks?.[i]))))) >= mean(ordered.map(f => mean(SIDES[1].map(i => confidence(f.landmarks?.[i]))))) ? 0 : 1;
+  const sideCoverage = sideFeatures.map(features => features.filter(Boolean).length / ordered.length);
+  // Confidence averaged over visible limbs must not favour a side whose torso
+  // cannot be observed. Both sides still obey the original coverage threshold.
+  if (sideCoverage[side] < 0.7 && sideCoverage[1 - side] >= 0.7) side = 1 - side;
+  if (getMotionExercise(typeof exerciseHint === 'string' ? exerciseHint : exerciseHint?.exerciseId)?.family === 'row') {
+    // A single-arm row's support arm can be clearer yet stationary. Select one
+    // sufficiently observed moving arm for the whole clip, never per frame.
+    const activeSides = [0, 1].filter(candidate => {
+      const observed = sideFeatures[candidate].filter(f => f && Number.isFinite(f.elbowAngle));
+      return observed.length / ordered.length >= 0.7 && fieldRange(observed, 'elbowAngle') >= 18;
+    });
+    if (activeSides.length === 1) side = activeSides[0];
+  }
+  const timeline = ordered.map((f, i) => ({time: f.time, feature: sideFeatures[side][i]}));
   const allFeatures = timeline.map(f => f.feature).filter(Boolean);
   const hasTracking = ordered.some(f => f.subjectTracking);
   const targetCoverage = hasTracking ? ratio(ordered, f => f.subjectTracking?.status === 'locked' && f.subjectTracking.confidence >= 0.65 && typeof f.subjectTracking.trackId === 'string' && f.subjectTracking.trackId.length > 0) : null;

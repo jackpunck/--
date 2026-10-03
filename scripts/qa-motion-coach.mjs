@@ -6,10 +6,12 @@ import {access,mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {startServer} from '../server.mjs';
+import {motionExercises} from '../public/motion-catalog.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const clip=resolve(process.argv[2]||join(root,'.qa/motion-fixtures/squat.mp4'));
-await access(clip);await mkdir(join(root,'.qa'),{recursive:true});
+const reportsOnly=process.argv.includes('--reports-only');
+const clip=resolve(process.argv.slice(2).find(arg=>!arg.startsWith('--'))||join(root,'.qa/motion-fixtures/squat.mp4'));
+if(!reportsOnly)await access(clip);await mkdir(join(root,'.qa'),{recursive:true});
 const dataDir=await mkdtemp(join(root,'.qa','motion-coach-ui-'));
 const fixture=JSON.parse(await readFile(join(root,'tests/fixtures/motion-squat-real.json'),'utf8'));
 const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:fixture.modelVersion,elapsedMs:1,decoder:'QA replay of real pose observations',frames:fixture.frames.map(([time,points])=>{
@@ -20,7 +22,7 @@ const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:fixtur
 const source=await readFile(join(root,'public/motion-video.js'),'utf8');
 const replay=source.replace('export async function analyzeVideo(', 'async function unusedAnalyzeVideo(')+`\nexport async function analyzeVideo(file,{signal,onProgress,targetPoint}={}){window.__qaMotionTarget=targetPoint;if(signal?.aborted)throw new DOMException('Aborted','AbortError');onProgress?.({progress:1});return ${JSON.stringify(pipeline)};}`;
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'精细模型与动作开发/node_modules/playwright/index.mjs'))));
-const calls=[],errors=[],external=[],browserRequests=[];let upstreamMode='success',pendingRelease=null;
+const calls=[],errors=[],external=[],browserRequests=[];let upstreamMode='success',pendingRelease=null,equipmentAction=null;
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(url,options)=>{
  assert(new URL(url).pathname.endsWith('/chat/completions'));
@@ -33,6 +35,7 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
  const times=input.frames.map(frame=>frame.time),visual=times.length>0;
  const local=input.analysis.checks?.find(check=>check.status!=='unobservable');
  const output={action:{exerciseId:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2)},overallEvaluation:'先减轻负重，保持躯干稳定，再逐步增加动作深度。<img src=x onerror=alert(1)>',checks:visual?[{code:'SPINE_NEUTRAL',status:'fail',severity:'severe',time:times[1],evidenceTimes:[times[1]],evidence:'测试画面证据：最低点出现明显腰背弯曲。',correction:'下一组先降低负重，收紧腹部，保持可控制的深度。'}]:[{code:local?.code||'SQUAT_DEPTH',status:'fail',evidence:'文本模型不应新增视觉事实。',correction:'依据已检测的幅度，放慢下降并保持控制。'},{code:'SPINE_NEUTRAL',status:'pass',evidence:'无图假设必须被拒绝。'}],limitations:['此响应来自 QA 模拟模型，仅验证功能链路。']};
+ if(equipmentAction)Object.assign(output,{action:equipmentAction,checks:[],overallEvaluation:'QA 模拟识别响应，仅验证器械证据、报告显示与保存。'});
  return json({choices:[{message:{content:JSON.stringify(output)}}]});
 }});
 const base=`http://127.0.0.1:${server.address().port}`;
@@ -66,11 +69,14 @@ try{
  const provider={id:'motion-qa',presetId:'openai',apiKey:'QA-fixture-key-no-external-request',models:[{id:'qa-motion-vision',vision:true},{id:'qa-motion-text',vision:false}]};
  assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
  await page.goto(base);await page.locator('#chat-input').waitFor();await nav('motion');
- assert.equal(await page.locator('.motion-catalog li').count(),25);
+ assert.equal(await page.locator('.motion-catalog li').count(),motionExercises.length);
  assert.equal(await page.locator('[data-motion-ai-mode]').isChecked(),true);
+ if(!reportsOnly){
  await analyze();await shot('desktop-visual');
  assert.equal(calls.length,1);assert.equal(calls[0].model,'qa-motion-vision');assert(calls[0].imageCount>=2&&calls[0].imageCount<=6);assert(calls[0].imageBytes<=2*1024*1024);
  assert(calls[0].input.analysis.checks.length>0);assert(!JSON.stringify(calls[0].input.analysis).includes('landmarks'));
+ const contextFrames=calls[0].input.analysis.evidenceFrames.filter(frame=>frame.framing==='equipment-context');
+ assert.equal(contextFrames.length,2);assert(contextFrames.every(frame=>frame.crop.xMin===0&&frame.crop.yMin===0&&frame.crop.xMax===1&&frame.crop.yMax===1));
  assert.match(await page.locator('.motion-coach').textContent(),/关键画面 \+ 检测证据/);
  assert.equal(await page.locator('.motion-coach img').count(),0);assert(!(await page.locator('.motion-results').textContent()).includes('[object Object]'));
  const target=page.locator('.motion-coach [data-motion-action="seek"]').first(),time=Number(await target.getAttribute('data-time'));await target.click();
@@ -95,6 +101,32 @@ try{
  await analyze({selectTarget:true});assert.equal(calls.at(-1).model,'qa-motion-text');assert.equal(calls.at(-1).imageCount,0);await save();checks.push('manual-target-first-frame-letterbox-coordinates');
  stored=(await reports()).find(r=>r.data.coach?.mode==='evidence-only');assert(stored);assert(!stored.data.coach.checks.some(c=>c.code==='SPINE_NEUTRAL'&&c.status==='pass'));checks.push('settings-four-task-routing','text-only-sends-no-images','text-cannot-confirm-neutral');
  await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-coach-evaluation').waitFor();assert.equal(await page.locator('[data-motion-action="seek"]').count(),0);checks.push('coach-report-reloads');
+ }
+ // Mock equipment responses pass through the real HTTP contract and report storage.
+ // They are fixtures, not recognition-accuracy measurements.
+ assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
+ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=';
+ const changes=[];
+ for(const [id,equipment,support]of [['bench','dumbbell','flat-bench'],['barbell-bench','barbell','flat-bench'],['smith-bench','smith-machine','flat-bench'],['machine-row','machine','seated']]){
+  equipmentAction={exerciseId:id,status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment,support,movement:id==='machine-row'?'row':'horizontal-press',laterality:'bilateral',evidence:'两个提供画面中可见同一训练者的负重、支撑面与推拉变化。',evidenceTimes:[1,2]}};
+  const response=await context.request.post(base+'/api/motion/coach',{data:{duration:3,analysis:{status:'insufficient',quality:{reasons:['LOW_POSE_COVERAGE']},reps:[],checks:[]},keyframes:[1,2].map(time=>({time,mimeType:'image/png',data:png}))}});
+  assert.equal(response.status(),200);const review=await response.json();assert.equal(review.action.exerciseId,id);assert.equal(review.assessment.exerciseId,id);assert.equal(review.assessment.score,null);
+  changes.push({id:`motion:equipment-qa-${id}`,kind:'motion-assessment',baseVersion:0,data:{...review.assessment,createdAt:new Date().toISOString(),video:{duration:3}}});
+ }
+ equipmentAction=null;
+ assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes}})).status(),200);
+ await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.waitForFunction(count=>document.querySelectorAll('.motion-history-item').length>=count,changes.length);
+ for(const {data}of changes){
+  const exercise=motionExercises.find(item=>item.id===data.exerciseId);
+  const item=page.locator('.motion-history-item').filter({has:page.locator('strong',{hasText:exercise.name})});
+  await item.locator('[data-motion-action="history"]').click();
+  assert.equal(await page.locator('#motion-result-title').textContent(),exercise.name);
+  assert.match(await page.locator('.motion-coach-identification').textContent(),/负重、支撑面与推拉变化/);
+  assert.equal(await page.locator('[data-motion-action="exercise"]').count(),exercise.hasTeaching?1:0);
+  assert.equal(await page.locator('.motion-coach-identification [data-motion-action="seek"]').count(),0);
+ }
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await shot('mobile-equipment-report');
+ checks.push('equipment-contract-http','identified-name-without-pose-score','equipment-observations-persist','equipment-history-display','no-missing-3d-link');
  assert.equal(browserRequests.filter(r=>r.method==='POST'&&r.url.includes('/api/attachments')).length,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  await writeFile(join(dataDir,'results.json'),JSON.stringify({checks,calls:calls.map(({input,...call})=>({...call,frameTimes:input.frames.map(f=>f.time),checkCount:input.analysis.checks.length})),errors,external},null,2));console.log(JSON.stringify({dataDir,checks,errors,external},null,2));
 }catch(error){await shot('failure').catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}

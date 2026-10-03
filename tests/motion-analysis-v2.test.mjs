@@ -5,13 +5,14 @@ import {motionExercises, motionCheckCodes, motionFamilies, getMotionExercise} fr
 
 // Kinematic fixtures assert geometry, temporal boundaries and abstention. They
 // are deliberately not labelled real people or an accuracy benchmark.
-function clip(kind, {cycles = 2, fps = 15, amplitude = 1, shrug = 0, headMove = 0, hideHead = false, mirror = false} = {}) {
+function clip(kind, {cycles = 2, fps = 15, amplitude = 1, shrug = 0, headMove = 0, hideHead = false, mirror = false, phaseOffset = 0} = {}) {
   const frames = [], duration = cycles * 4;
   for (let n = 0; n <= duration * fps; n++) {
-    const time = n / fps, p = (1 - Math.cos((time % 4) * Math.PI / 2)) / 2 * amplitude;
+    const time = n / fps, p = (1 - Math.cos(((time + phaseOffset) % 4) * Math.PI / 2)) / 2 * amplitude;
     let s = [350, 230], h = [350, 450], k = [350, 625], a = [350, 800], e, w, ear = [350, 170];
     let armElevation = 10, elbowAngle = 170;
     if (kind === 'curl') elbowAngle = 170 - 110 * p;
+    if (kind === 'drifting-curl') {elbowAngle = 175 - 95 * p; armElevation = 30 * p;}
     if (kind === 'overhead') { armElevation = 95 + 65 * p; elbowAngle = 70 + 100 * p; }
     if (kind === 'overhead-extension') {armElevation = 165; elbowAngle = 175 - 95 * p;}
     if (kind === 'lateral') {armElevation = 5 + 85 * p; elbowAngle = 175;}
@@ -50,9 +51,10 @@ function clip(kind, {cycles = 2, fps = 15, amplitude = 1, shrug = 0, headMove = 
 const run=(kind, options={}, hint)=>{const c=clip(kind,options);return analyzeMotion(c.frames,{...c.options,exerciseHint:hint});};
 const check=(r,code)=>r.checks.find(c=>c.code===code);
 
-test('catalogue covers all 25 existing IDs and 17 families with bounded weight and permitted checks',()=>{
-  assert.equal(motionExercises.length,25);assert.equal(Object.keys(motionFamilies).length,17);
-  assert.equal(new Set(motionExercises.map(x=>x.id)).size,25);
+test('catalogue preserves 25 teaching IDs and includes 32 assessment IDs with 17 families',()=>{
+  assert.equal(motionExercises.length,32);assert.equal(Object.keys(motionFamilies).length,17);
+  assert.equal(new Set(motionExercises.map(x=>x.id)).size,32);
+  assert.equal(motionExercises.filter(e=>e.hasTeaching).length,25);
   for(const e of motionExercises){assert.equal(e.checks.reduce((s,c)=>s+c.weight,0),100);assert.ok(e.checks.every(c=>motionCheckCodes.includes(c.code)));}
   assert.ok(!getMotionExercise('lateral-raise').requiredChecks.includes('UPPER_ARM_STABILITY'));
 });
@@ -82,6 +84,76 @@ test('row shoulder elevation is a temporal measured failure distinct from unknow
   assert.ok(shrug.evidence.value>0.14);assert.ok(shrug.evidence.duration>=0.2);assert.ok(shrug.time>0);
   assert.equal(check(bad,'SPINE_NEUTRAL').status,'unobservable');assert.ok(bad.score<=49);
   assert.equal(check(run('row',{shrug:50,mirror:true},'row'),'ROW_SHRUG').status,'fail');
+});
+
+test('a cropped seated row retains continuous pull evidence without inventing visible legs',()=>{
+  for(const mirror of [false,true]){
+    const c=clip('row',{mirror});
+    for(const frame of c.frames)for(const index of [25,26,27,28,29,30,31,32])frame.landmarks[index]=null;
+    const r=analyzeMotion(c.frames,{...c.options,exerciseHint:'row'});
+    assert.equal(r.exerciseFamily,'row',JSON.stringify(r));assert.equal(r.exerciseId,'row');assert.equal(r.attemptCount,2);
+    assert.ok(!r.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+  }
+});
+
+test('cropping a curl with forward upper-arm drift does not turn elbow flexion into a row',()=>{
+  for(const mirror of [false,true])for(const cropped of [false,true]){
+    const c=clip('drifting-curl',{mirror});
+    if(cropped)for(const frame of c.frames)for(const index of [25,26,27,28,29,30,31,32])frame.landmarks[index]=null;
+    const base=analyzeMotion(c.frames,c.options),hinted=analyzeMotion(c.frames,{...c.options,exerciseHint:'curl'});
+    assert.equal(base.exerciseFamily,'elbow-isolation',JSON.stringify({mirror,cropped,...base}));
+    assert.equal(hinted.exerciseId,'curl');assert.equal(hinted.attemptCount,2);
+    assert.ok(!hinted.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+    const wrong=analyzeMotion(c.frames,{...c.options,exerciseHint:'row'});
+    assert.equal(wrong.attemptCount,0);assert.ok(wrong.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+  }
+});
+
+test('cropping legs does not turn a lateral raise into a hinted row or bypass missing hips',()=>{
+  const c=clip('lateral');
+  for(const frame of c.frames)for(const index of [25,26,27,28,29,30,31,32])frame.landmarks[index]=null;
+  const r=analyzeMotion(c.frames,{...c.options,exerciseHint:'row'});
+  assert.equal(r.attemptCount,0);assert.ok(r.quality.reasons.includes('EXERCISE_HINT_CONFLICT'));
+  const row=clip('row');
+  for(const frame of row.frames)for(const index of [23,24])frame.landmarks[index]=null;
+  const hidden=analyzeMotion(row.frames,{...row.options,exerciseHint:'row'});
+  assert.equal(hidden.attemptCount,0);assert.ok(hidden.quality.reasons.includes('LOW_POSE_COVERAGE'));
+});
+
+function singleArmRow({activeSide=0,hiddenStart=Infinity,hiddenEnd=-Infinity,mirror=false}={}) {
+  const c=clip('row',{mirror}),moving=[11+activeSide,13+activeSide,15+activeSide,23+activeSide,25+activeSide,27+activeSide];
+  for(const frame of c.frames){
+    for(const index of moving)frame.landmarks[index].visibility=0.95;
+    for(const index of [13+(1-activeSide),15+(1-activeSide)])frame.landmarks[index]={...c.frames[0].landmarks[index]};
+    if(frame.time>hiddenStart&&frame.time<hiddenEnd)for(const index of [13+activeSide,15+activeSide])frame.landmarks[index].visibility=0.2;
+  }
+  return c;
+}
+
+test('a visible active row arm is selected over a slightly clearer stationary support arm',()=>{
+  for(const activeSide of [0,1])for(const mirror of [false,true]){
+    const c=singleArmRow({activeSide,mirror}),r=analyzeMotion(c.frames,{...c.options,exerciseHint:'dumbbell-row'});
+    assert.equal(r.exerciseId,'dumbbell-row');assert.equal(r.attemptCount,2,JSON.stringify({activeSide,mirror,...r}));
+  }
+});
+
+test('a more confident support side without a visible hip cannot block the observable row side',()=>{
+  const c=singleArmRow();
+  for(const frame of c.frames){
+    for(const index of [11,13,15,23,25,27])frame.landmarks[index].visibility=0.75;
+    frame.landmarks[24]=null;
+  }
+  const base=analyzeMotion(c.frames,c.options),hinted=analyzeMotion(c.frames,{...c.options,exerciseHint:'dumbbell-row'});
+  assert.ok(!base.quality.reasons.includes('LOW_POSE_COVERAGE'),JSON.stringify(base));assert.equal(base.attemptCount,2);
+  assert.equal(hinted.exerciseId,'dumbbell-row');assert.equal(hinted.attemptCount,2);
+  assert.equal(base.quality.usableRatio,1);assert.equal(hinted.quality.usableRatio,1);
+});
+
+test('an invisible active arm cannot borrow the support arm or join repetitions across a gap',()=>{
+  const hidden=singleArmRow({hiddenStart:-1,hiddenEnd:9}),missing=analyzeMotion(hidden.frames,{...hidden.options,exerciseHint:'dumbbell-row'});
+  assert.equal(missing.attemptCount,0);
+  const c=singleArmRow({hiddenStart:1.4,hiddenEnd:2.6}),r=analyzeMotion(c.frames,{...c.options,exerciseHint:'dumbbell-row'});
+  assert.equal(r.attemptCount,1,JSON.stringify(r));assert.ok(r.reps.every(rep=>!(rep.start<1.4&&rep.end>2.6)));
 });
 
 test('head movement and hidden head abstain from shrug judgement rather than awarding pass',()=>{
@@ -131,8 +203,29 @@ test('horizontal press, reverse fly, bridge and crunch retain their movement fam
   }
 });
 
+test('horizontal presses count each complete cycle from either extended or flexed starting position',()=>{
+  for(const id of ['bench','incline-bench','chest-press'])for(const phaseOffset of [0,2])for(const cycles of [1,2]){
+    const r=run('horizontal',{phaseOffset,cycles},id);
+    assert.equal(r.attemptCount,cycles,JSON.stringify({id,phaseOffset,cycles,...r}));
+    assert.ok(r.reps.every(rep=>rep.start<rep.bottom&&rep.bottom<rep.end));
+    assert.ok(r.reps.every((rep,index)=>!index||rep.start>=r.reps[index-1].end));
+  }
+});
 
-test('all 25 catalogue IDs have a reachable compatible-hint recipe with complete attempts',()=>{
+test('horizontal press half cycles and hidden phases never become complete repetitions',()=>{
+  for(const phaseOffset of [0,2]){
+    const c=clip('horizontal',{cycles:1,phaseOffset}),half=c.frames.filter(frame=>frame.time<=2);
+    assert.equal(analyzeMotion(half,{...c.options,duration:2,exerciseHint:'bench'}).attemptCount,0);
+    const gapped=clip('horizontal',{phaseOffset});
+    for(const frame of gapped.frames.filter(frame=>frame.time>1.4&&frame.time<2.6))for(const index of [13,14,15,16])frame.landmarks[index]=null;
+    const r=analyzeMotion(gapped.frames,{...gapped.options,exerciseHint:'bench'});
+    assert.equal(r.attemptCount,1,JSON.stringify({phaseOffset,...r}));assert.ok(r.reps.every(rep=>!(rep.start<1.4&&rep.end>2.6)));
+  }
+  assert.equal(run('horizontal',{phaseOffset:1},'bench').attemptCount,1);
+});
+
+
+test('all 32 assessment IDs have a reachable synthetic compatible-hint recipe with complete attempts',()=>{
   const familyKinds={'elbow-isolation':'curl','horizontal-press':'horizontal','vertical-pull':'overhead',row:'row','overhead-press':'overhead','lateral-raise':'lateral','reverse-fly':'reverse','overhead-extension':'overhead-extension',hinge:'hinge',lunge:'lunge','knee-isolation':'knee',bridge:'bridge',plank:'plank',crunch:'crunch',calf:'calf'};
   // Squat/push-up use independent linked-segment cases in the existing suite.
   for(const exercise of motionExercises.filter(e=>!['squat','pushup'].includes(e.family))){

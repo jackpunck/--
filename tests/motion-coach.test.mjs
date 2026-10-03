@@ -136,7 +136,7 @@ test('family-only advice preserves a provisional score without claiming an exerc
   const explained=sanitizeMotionCoachResponse({checks:[{code:'ROW_ROM',status:'pass',correction:'保持可控制的拉回幅度。'}]},{analysis:base,mode:'evidence-only'});
   assert.equal(explained.checks.length,1);
   const merged=mergeCoachAssessment(base,explained);assert.equal(merged.exerciseId,null);assert.equal(merged.score,69);assert.equal(merged.scoreStatus,'provisional');assert.equal(merged.requiresVisualConfirmation,true);
-  const visual=sanitizeMotionCoachResponse({action:{exerciseId:'row',status:'identified',confidence:'high',evidenceTimes:[1,2]},checks:[{code:'SPINE_NEUTRAL',status:'fail',severity:'severe',time:2,evidenceTimes:[2],evidence:'这一关键帧可见明显的躯干外形变化。'}]},{analysis:base,mode:'visual',keyframes:frames});
+  const visual=sanitizeMotionCoachResponse({action:{exerciseId:'row',status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:'cable',support:'seated',movement:'row',laterality:'bilateral',evidence:'训练者坐在座椅上，双手拉动与低位绳索连接的握把。',evidenceTimes:[1,2]}},checks:[{code:'SPINE_NEUTRAL',status:'fail',severity:'severe',time:2,evidenceTimes:[2],evidence:'这一关键帧可见明显的躯干外形变化。'}]},{analysis:base,mode:'visual',keyframes:frames});
   const checked=mergeCoachAssessment(base,visual);assert.equal(checked.reps[0].checks.find(check=>check.code==='SPINE_NEUTRAL').status,'fail');assert(checked.reps[0].score<=49);
   assert.equal(checked.reps[1].checks.find(check=>check.code==='SPINE_NEUTRAL').status,'unobservable');assert.equal(checked.reps[1].score,69);assert.equal(checked.reps[1].scoreStatus,'provisional');assert.equal(checked.qualifiedRepCount,0);
   assert(checked.scoreCoverage<1,'Two pictures cannot establish full clip coverage');

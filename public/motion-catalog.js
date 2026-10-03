@@ -1,6 +1,6 @@
 /** Versioned evaluation catalogue. Thresholds are application screening rules,
  * not clinical cut-offs. Equipment and grip cannot be inferred from 33 points. */
-export const MOTION_CATALOG_VERSION = 'motion-catalog-2.0.0';
+export const MOTION_CATALOG_VERSION = 'motion-catalog-2.1.0';
 const definitions = [
   ['SQUAT_DEPTH', '下蹲幅度', false, true, 'side'],
   ['SQUAT_TORSO_LEAN', '下降与起身过程的躯干前倾', false, true, 'side'],
@@ -80,9 +80,36 @@ const entries = [
   ['plank', '平板支撑', 'plank', 'direct'], ['crunch', '卷腹', 'crunch', 'direct'],
   ['calf-raise', '站姿提踵', 'calf', 'direct'],
 ];
-export const motionExercises = Object.freeze(entries.map(([id, name, family, localRecognition]) => {
+const recognitionEntries = [
+  ['barbell-bench', '杠铃卧推', 'horizontal-press', 'family'],
+  ['incline-barbell-bench', '上斜杠铃卧推', 'horizontal-press', 'family'],
+  ['smith-bench', '史密斯卧推', 'horizontal-press', 'family'],
+  ['incline-smith-bench', '上斜史密斯卧推', 'horizontal-press', 'family'],
+  ['barbell-row', '杠铃俯身划船', 'row', 'family'],
+  ['machine-row', '器械划船', 'row', 'family'],
+  ['chest-supported-row', '胸托划船', 'row', 'family'],
+];
+const teachingIds = new Set(entries.map(([id]) => id));
+// These describe required image observations, never facts inferred from poses.
+const recognitionDefinitions = {
+  bench: [['dumbbell'], ['flat-bench'], ['bilateral']],
+  'incline-bench': [['dumbbell'], ['incline-bench'], ['bilateral']],
+  'chest-press': [['machine'], ['seated'], ['bilateral']],
+  row: [['cable'], ['seated'], ['bilateral']],
+  'dumbbell-row': [['dumbbell'], ['single-arm-supported'], ['unilateral']],
+  'barbell-bench': [['barbell'], ['flat-bench'], ['bilateral']],
+  'incline-barbell-bench': [['barbell'], ['incline-bench'], ['bilateral']],
+  'smith-bench': [['smith-machine'], ['flat-bench'], ['bilateral']],
+  'incline-smith-bench': [['smith-machine'], ['incline-bench'], ['bilateral']],
+  'barbell-row': [['barbell'], ['bent-over'], ['bilateral']],
+  'machine-row': [['machine'], ['seated', 'chest-supported'], ['unilateral', 'bilateral']],
+  'chest-supported-row': [['dumbbell', 'barbell'], ['chest-supported'], ['unilateral', 'bilateral']],
+};
+export const motionExercises = Object.freeze([...entries, ...recognitionEntries].map(([id, name, family, localRecognition]) => {
   const checks = Object.freeze(recipes[family].map(([code, weight]) => Object.freeze({...motionCheckDefinitions[code], weight})));
-  return Object.freeze({id, name, family, familyName: motionFamilies[family], localRecognition, requiredView: 'per-check', checks, requiredChecks: Object.freeze(checks.map(check => check.code))});
+  const description = recognitionDefinitions[id];
+  const recognitionRules = description ? Object.freeze({equipment: Object.freeze(description[0]), support: Object.freeze(description[1]), movement: family, laterality: Object.freeze(description[2])}) : undefined;
+  return Object.freeze({id, name, family, familyName: motionFamilies[family], localRecognition, hasTeaching: teachingIds.has(id), ...(recognitionRules ? {recognitionRules} : {}), requiredView: 'per-check', checks, requiredChecks: Object.freeze(checks.map(check => check.code))});
 }));
 export const getMotionExercise = id => motionExercises.find(exercise => exercise.id === id) || null;
 export const getMotionFamily = family => motionExercises.filter(exercise => exercise.family === family);

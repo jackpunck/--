@@ -169,7 +169,7 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
     validateVideoMetadata({ duration, width, height });
     if (Math.abs(duration - pipeline.duration) > Math.max(0.1, duration * 0.001) || width !== pipeline.width || height !== pipeline.height) throw new Error('视频与分析结果不一致，请重新分析当前视频。');
     if (video.readyState < 2) await waitForMedia(video, 'loadeddata', signal);
-    const result = { version: 'motion-evidence-v1', video: { width, height, duration, sampleFps: summary.sampleFps, sourceFps: summary.sourceFps }, summary, images: [], byteLength: 0 };
+    const result = { version: 'motion-evidence-v2', video: { width, height, duration, sampleFps: summary.sampleFps, sourceFps: summary.sourceFps }, summary, images: [], byteLength: 0 };
     const perImageBudget = Math.floor((budget - jsonBytes(result) - 20000) / selected.length);
     for (const [index, item] of selected.entries()) {
       checkAbort(signal);
@@ -190,7 +190,10 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
         onProgress({ stage: 'evidence', processedFrames: index + 1, totalFrames: selected.length, progress: (index + 1) / selected.length });
         continue;
       }
-      const box = item.subjectTracking?.bbox, crop = evidenceCropRegion(box);
+      // Two distant views retain benches, bar ends, rails and cable origins.
+      // The remaining target crops preserve detail for posture checks.
+      const framing = index === 0 || index === selected.length - 1 ? 'equipment-context' : 'target-detail';
+      const box = item.subjectTracking?.bbox, crop = evidenceCropRegion(framing === 'equipment-context' ? null : box);
       const cropWidth = (crop.xMax - crop.xMin) * width, cropHeight = (crop.yMax - crop.yMin) * height;
       const size = scaledVideoSize(cropWidth, cropHeight, MOTION_EVIDENCE_LIMITS.maxDimension);
       canvas.width = size.width; canvas.height = size.height;
@@ -205,7 +208,7 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
         context.fillStyle = '#111'; context.font = 'bold 14px sans-serif'; context.fillText('TARGET', 9, 20);
       }
       const dataUrl = await jpegDataUrl(canvas, perImageBudget, signal);
-      result.images.push({ ...item, time, imageTime, timePrecision: imageTime === null ? 'seek-target' : 'source-pts', frameMappings: [mapping], crop, width: canvas.width, height: canvas.height, mimeType: 'image/jpeg', dataUrl });
+      result.images.push({ ...item, time, imageTime, timePrecision: imageTime === null ? 'seek-target' : 'source-pts', frameMappings: [mapping], framing, crop, width: canvas.width, height: canvas.height, mimeType: 'image/jpeg', dataUrl });
       onProgress({ stage: 'evidence', processedFrames: index + 1, totalFrames: selected.length, progress: (index + 1) / selected.length });
     }
     summary.evidenceFrames = result.images.map(({ dataUrl, ...metadata }) => metadata);
