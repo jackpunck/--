@@ -73,16 +73,17 @@ function exerciseOptions() {
 
 /** Local video analysis owns its media, abort controller and render loop. */
 export function mountMotionView(container,{saveAssessment,listAssessments,deleteAssessment,openExercise,getCoachConfiguration=()=>({configured:false,vision:false}),reviewAssessment,openCoachSettings,notify=()=>{}}={}) {
-  let destroyed=false, file=null, objectUrl=null, pipeline=null, displayFrames=null, observations=null, result=null, controller=null;
+  let destroyed=false, suspended=false, file=null, objectUrl=null, pipeline=null, displayFrames=null, observations=null, result=null, controller=null;
   let running=false, saved=false, saving=false, selectedHistory=null, history=[], historyRevision=0, reportOpenRevision=0, animationId=0, analysisRevision=0;
   let metadata=null, lastAnnouncement=0, deletionId=null, historyRead=null;
   let coachController=null, coachRunning=false, awaitingCoach=false, coachMessage='', coachError='', coachRevision=0;
   let selectedExerciseId='', reviewCache=null;
   let targetPoint=null, selectingTarget=false, selectionCursor={x:.5,y:.4};
   let preparing=false, preparationController=null, selectionRevision=0;
-  let mediaMode='native', preparedPoster=null;
-  const coachConfig=getCoachConfiguration();
-  const coachReady=coachConfig.configured&&coachConfig.vision===true&&typeof reviewAssessment==='function';
+  let mediaMode='native', preparedPoster=null, framePlayerDisabled=null;
+  let coachConfig=getCoachConfiguration()||{};
+  let coachReady=coachConfig.configured&&coachConfig.vision===true&&typeof reviewAssessment==='function';
+  function coachDescription(){return coachReady?`${coachConfig.provider||''} · ${coachConfig.model||''}。AI 按你选择的动作，结合骨架时序、客观测量统计和关键画面，评价可见姿态并给出纠正建议。`:coachConfig.configured?'当前动作点评模型不支持图片或暂不可用。请配置支持图片的 AI 模型后开始评估。':'请先配置支持图片的 AI 模型，再开始动作评估。';}
   const listeners=new AbortController();
   container.innerHTML=`<section class="motion-page" aria-label="视频动作评估">
     <header class="motion-heading"><div><span class="eyebrow">MOVEMENT CHECK</span><h1>看清动作，练得更稳。</h1><p>选择一段训练视频，了解动作是否标准，以及应该怎样调整。</p></div><span class="motion-local-badge"><span aria-hidden="true">●</span> 原视频留在本机</span></header>
@@ -97,12 +98,12 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
         <div class="motion-frame-controls" data-motion-frame-controls hidden><div><button type="button" class="button small" data-motion-frame-play disabled>播放回放</button><input type="range" data-motion-frame-seek min="0" max="0" value="0" step="0.01" aria-label="分析画面回放位置" disabled><output data-motion-frame-time>0:00.0 / 0:00.0</output></div><small data-motion-frame-caption>已读取首帧，开始评估后可回看动作画面。</small></div>
         <div class="motion-target-controls" data-motion-target-controls hidden><div><strong data-motion-target-label>自动选择训练者</strong><small data-motion-target-help>多人入镜时，可点选第一帧中的自己。分析后请确认目标框始终是自己。</small></div><button type="button" class="button small" data-motion-action="pick-target">点选训练者</button><button type="button" class="link-button" data-motion-action="reset-target" hidden>恢复默认</button></div>
         <div class="motion-playback-note" data-motion-playback hidden><label><input type="checkbox" data-motion-overlay checked> 显示目标与骨架</label><span>目标与骨架随回放显示</span></div>
-        <section class="motion-coach-mode" aria-label="评估方式"><strong>选择动作 → 视频分析 → AI 评价</strong><p>${coachReady?`${escapeHtml(coachConfig.provider)} · ${escapeHtml(coachConfig.model)}。AI 按你选择的动作，结合骨架时序、客观测量统计和关键画面，评价可见姿态并给出纠正建议。`:coachConfig.configured?'当前动作点评模型不支持图片或暂不可用。请配置支持图片的 AI 模型后开始评估。':'请先配置支持图片的 AI 模型，再开始动作评估。'}</p><small>视频在你的设备上分析，首次需下载分析模型。AI 接收关键骨架时序与统计、最多 6 张关键画面及对应时间；看不清的关键细节会提示无法判断，可随时取消。</small>${typeof openCoachSettings==='function'?'<button type="button" class="link-button" data-motion-action="coach-settings">配置 AI 模型</button>':''}</section>
+        <section class="motion-coach-mode" aria-label="评估方式"><strong>选择动作 → 视频分析 → AI 评价</strong><p data-motion-coach-description>${escapeHtml(coachDescription())}</p><small>视频在你的设备上分析，首次需下载分析模型。AI 接收关键骨架时序与统计、最多 6 张关键画面及对应时间；看不清的关键细节会提示无法判断，可随时取消。</small>${typeof openCoachSettings==='function'?'<button type="button" class="link-button" data-motion-action="coach-settings">配置 AI 模型</button>':''}</section>
         <div class="motion-run-controls" data-motion-controls hidden><button type="button" class="button primary" data-motion-action="analyze" disabled>开始评估</button><button type="button" class="button" data-motion-action="choose">换一段视频</button></div>
         <section class="motion-progress" data-motion-progress hidden aria-label="分析进度"><div><strong data-motion-progress-title>正在准备</strong><span data-motion-percent>0%</span></div><progress max="1" value="0" aria-label="视频分析进度"></progress><p data-motion-progress-message role="status" aria-live="polite">正在载入姿态模型…</p><button type="button" class="button small" data-motion-action="cancel">取消分析</button></section>
         <section class="motion-review-wait" data-motion-review-wait aria-label="AI 核对进度" hidden><p class="motion-coach-status" data-motion-coach-status role="status" aria-live="polite" hidden></p><p class="motion-coach-error" data-motion-coach-error role="alert" hidden></p><div class="motion-coach-actions"><button type="button" class="button small" data-motion-action="cancel-coach" hidden>取消 AI 核对</button><button type="button" class="button" data-motion-action="retry-coach" data-motion-coach-retry hidden>评价所选动作</button></div></section>
         <div class="motion-error" data-motion-error role="alert" hidden></div>
-        <p class="motion-privacy">原视频留在你的设备。身体骨架、客观测量和截图交给项目服务器临时处理；你选择的动作、关键骨架时序与统计、选定截图和对应时间会发送到配置的 AI 服务。保存的报告只保留评价与证据时间。</p>
+        <p class="motion-privacy">原视频留在你的设备。身体骨架、客观测量和截图交给项目服务器临时处理；你选择的动作、关键骨架时序与统计、选定截图和对应时间会发送到配置的 AI 服务。保存的报告只保留评价与证据时间。站内切换页面会保留当前视频与评估进度；刷新或关闭浏览器前请保存报告，原视频之后需重新选择。</p>
       </section>
       <aside class="motion-guide" aria-labelledby="motion-guide-title"><span class="motion-step">拍摄建议</span><h2 id="motion-guide-title">动作是否标准，<br>下一组怎样调整。</h2><ol><li><span>01</span><div><strong>拍清全身和器械</strong><p>肩、髋、手脚都尽量入镜，让 AI 看清动作过程和器械位置。</p></div></li><li><span>02</span><div><strong>固定手机，减少遮挡</strong><p>多人入镜时可在第一帧点选自己，避免其他人和镜面干扰。</p></div></li><li><span>03</span><div><strong>保留完整动作过程</strong><p>建议录下 3–8 次，包含开始、转折和回程，便于给出具体纠正建议。</p></div></li></ol><p class="motion-guide-foot">AI 按所选动作，结合骨架与画面评价动作过程。看不清或证据不足时，会说明还需要补充什么画面。</p></aside>
     </div>
@@ -116,12 +117,37 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   const context=canvas.getContext('2d');
   const listen=(target,type,handler,options={})=>target.addEventListener(type,handler,{...options,signal:listeners.signal});
   function error(message) { const element=find('[data-motion-error]'); element.hidden=!message; element.textContent=message||''; }
+  function announce(message,isError=false){if(!destroyed&&!suspended)notify(message,isError);}
+  function scrollTo(selector,options){if(!destroyed&&!suspended)find(selector).scrollIntoView(options);}
   const framePlayer=createMotionFramePlayer({canvas:frameSurface,button:find('[data-motion-frame-play]'),range:find('[data-motion-frame-seek]'),time:find('[data-motion-frame-time]'),onFrame:()=>{if(!destroyed){controls();drawOverlay();}},onError:cause=>{if(!destroyed)error(cause?.message||'分析画面读取失败，请重新评估。');}});
   const mediaReady=()=>mediaMode==='software'?framePlayer.ready:video.readyState>=2;
   const mediaSeeking=()=>mediaMode==='software'?framePlayer.seeking:video.seeking;
   const mediaTime=()=>mediaMode==='software'?framePlayer.currentTime:video.currentTime;
   const mediaSurface=()=>mediaMode==='software'?frameSurface:video;
   function pauseMedia(){video.pause();framePlayer.pause();}
+  function suspend(){
+    if(destroyed||suspended)return;
+    suspended=true;video.pause();cancelAnimationFrame(animationId);animationId=0;
+    // A disabled player cannot be playing. Repeated pause would instead cancel
+    // an in-flight setSource bitmap and make video preparation return false.
+    if(!framePlayerDisabled)framePlayer.pause();
+    controls();
+  }
+  function refreshConfiguration(){
+    if(destroyed)return;
+    coachConfig=getCoachConfiguration()||{};
+    coachReady=coachConfig.configured&&coachConfig.vision===true&&typeof reviewAssessment==='function';
+    find('[data-motion-coach-description]').textContent=coachDescription();
+    if(coachReady&&coachError==='请先配置支持图片的动作点评 AI 模型。')coachError='';
+    controls();
+    const activeHistory=selectedHistory&&history.find(report=>report.id===selectedHistory);
+    if(activeHistory)renderResult(activeHistory,true);else renderLiveResult();
+  }
+  function resume(){
+    if(destroyed)return;
+    suspended=false;refreshConfiguration();drawOverlay();
+    if(selectingTarget)positionPicker();
+  }
   function seekMedia(time){pauseMedia();if(mediaMode==='software')return framePlayer.seek(time);video.currentTime=Math.max(0,Math.min(metadata?.duration||0,time));return Promise.resolve();}
   function releaseMedia() {
     releasePreparedMotionVideo(file);
@@ -141,7 +167,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     find('[data-motion-coach-error]').textContent=coachError;
     find('[data-motion-action="cancel-coach"]').hidden=!coachRunning;
     find('[data-motion-coach-retry]').hidden=!waiting||coachRunning;
-    find('[data-motion-coach-retry]').disabled=!selectedExerciseId||saving;
+    find('[data-motion-coach-retry]').disabled=!selectedExerciseId||saving||!coachReady;
     find('[data-motion-coach-retry]').textContent=coachError?'重试 AI 评价':'评价所选动作';
   }
   function renderLiveResult() {updateCoachStatus();if(!selectedHistory&&result)renderResult(result);}
@@ -163,7 +189,9 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     find('[data-motion-action="pick-target"]').textContent=selectingTarget?'取消点选':'点选训练者';
     find('[data-motion-target-label]').textContent=selectingTarget?'在第一帧中点选训练者上半身':targetPoint?'已指定训练者位置，将持续跟踪该目标':'自动选择训练者';
     find('[data-motion-target-help]').textContent=selectingTarget?'点击画面确认；也可用方向键移动标记，按回车确认。':'多人入镜时，可点选第一帧中的自己。分析后请确认目标框始终是自己。';
-    framePlayer.setDisabled(running||preparing||selectingTarget);
+    const disabled=suspended||running||preparing||selectingTarget;
+    if(framePlayerDisabled!==disabled){framePlayerDisabled=disabled;framePlayer.setDisabled(disabled);}
+    video.controls=!suspended&&!selectingTarget;
     find('[data-motion-frame-caption]').textContent=pipeline?.previewFrames?.length?'分析画面回放 · 采样画面，无声音':'已读取首帧，开始评估后可回看动作画面。';
     updateCoachStatus();
   }
@@ -174,6 +202,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     return {left:(rect.width-width)/2,top:(rect.height-height)/2,width,height,screenLeft:rect.left+(rect.width-width)/2,screenTop:rect.top+(rect.height-height)/2};
   }
   function positionPicker() {
+    if(suspended||destroyed)return;
     const box=pickerGeometry();if(!box)return;
     Object.assign(find('[data-motion-target-picker]').style,{left:box.left+'px',top:box.top+'px',width:box.width+'px',height:box.height+'px'});
     Object.assign(find('[data-motion-target-marker]').style,{left:(selectionCursor.x*100)+'%',top:(selectionCursor.y*100)+'%'});
@@ -186,7 +215,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     const activeFile=file;controls();
     try{await seekMedia(0);}catch{if(!destroyed&&file===activeFile)stopTargetSelection();return;}
     if(destroyed||file!==activeFile||!selectingTarget)return;
-    find('[data-motion-target-picker]').hidden=false;positionPicker();controls();find('[data-motion-target-picker]').focus({preventScroll:true});
+    find('[data-motion-target-picker]').hidden=false;positionPicker();controls();if(!suspended)find('[data-motion-target-picker]').focus({preventScroll:true});
   }
   function clearAnalysis() {
     cancel();
@@ -264,17 +293,18 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     if(now-lastAnnouncement>900||progress===1) {
       lastAnnouncement=now;
       const processed=value.processedFrames??value.processed,total=value.totalFrames??value.total;
-      find('[data-motion-progress-message]').textContent=value.message||(total?`已分析 ${processed||0} / ${total} 帧，请保持当前页面打开。`:'正在准备本机分析，请稍候。');
+      find('[data-motion-progress-message]').textContent=value.message||(total?`已分析 ${processed||0} / ${total} 帧，可切换站内页面，请勿刷新或关闭标签页。`:'正在准备本机分析，请稍候。');
     }
   }
   async function run() {
+    refreshConfiguration();
     if(!selectedExerciseId||!file||!metadata||running||preparing||coachRunning||saving||selectingTarget||destroyed||!coachReady)return;
     if(pipeline&&observations){await runCoach();return;}
     cancel();const revision=analysisRevision, activeFile=file;
     controller=new AbortController();const signal=controller.signal;
     running=true;awaitingCoach=true;result=null;pipeline=null;displayFrames=null;observations=null;reviewCache=null;saved=false;saving=false;selectedHistory=null;coachError='';
     pauseMedia();context?.clearRect(0,0,canvas.width,canvas.height);
-    error('');find('[data-motion-results]').hidden=true;controls();updateProgress({stage:'loading',progress:0,message:'首次使用需要下载姿态模型，请保持当前页面打开。'});
+    error('');find('[data-motion-results]').hidden=true;controls();updateProgress({stage:'loading',progress:0,message:'首次使用需要下载姿态模型，可切换站内页面，请勿刷新或关闭标签页。'});
     try {
       if(mediaMode==='software'&&preparedPoster){
         await framePlayer.setSource({poster:preparedPoster,metadata});
@@ -303,6 +333,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     }
   }
   async function runCoach() {
+    refreshConfiguration();
     if(destroyed||!selectedExerciseId||!file||!pipeline||!observations||!result||coachRunning||saving)return;
     if(!coachReady){
       awaitingCoach=true;coachError='请先配置支持图片的动作点评 AI 模型。';
@@ -330,11 +361,11 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       result.targetTracking=pipeline.targetTracking;
       result.coachEvidence={frameTimes:keyframes.map(({time})=>time),includesImages:keyframes.length>0,fullPoseFrameCount:poseData.frameCount};
       saved=false;saving=false;awaitingCoach=false;coachMessage='';coachRunning=false;coachController=null;
-      controls();renderLiveResult();notify('AI 动作点评已完成。');
+      controls();renderLiveResult();announce('AI 动作点评已完成。');
     }catch(cause){
       if(!current())return;
       coachRunning=false;coachController=null;coachMessage='';coachError=cause?.message||'AI 评价失败，请重试。';
-      controls();renderLiveResult();notify(coachError,true);
+      controls();renderLiveResult();announce(coachError,true);
     }
   }
   function nearestFrame(time) {
@@ -345,7 +376,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     return Math.abs(frame.time-time)<=Math.max(.18,1.5/(pipeline.sampleFps||15))?frame:null;
   }
   function drawOverlay() {
-    if(!context||destroyed)return;
+    if(!context||destroyed||suspended)return;
     context.clearRect(0,0,canvas.width,canvas.height);
     if(mediaSeeking())return;
     if(!find('[data-motion-overlay]').checked)return;
@@ -359,7 +390,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     }
     drawMotionOverlay(context,frame?.wholebodyLandmarks,canvas.width,canvas.height);
   }
-  function playbackLoop() { if(destroyed)return;drawOverlay();if(!video.paused&&!video.ended)animationId=requestAnimationFrame(playbackLoop); }
+  function playbackLoop() { if(destroyed||suspended)return;drawOverlay();if(!video.paused&&!video.ended)animationId=requestAnimationFrame(playbackLoop); }
   function timestampButton(time,label,canSeek) {return canSeek&&finite(time)?`<button type="button" class="motion-time" data-motion-action="seek" data-time="${time}" aria-label="跳转到 ${escapeHtml(preciseClock(time))} 查看${escapeHtml(label)}">${preciseClock(time)} <span aria-hidden="true">↗</span></button>`:`<span class="motion-time">${preciseClock(time)}</span>`;}
   function feedbackHtml(report,canSeek) {
     const items=motionFeedback(report);if(!items.length)return '';
@@ -373,7 +404,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     return `<section class="motion-coach" aria-label="AI 动作评价">${selection?`<div class="motion-selection-notice is-${selection.status}" data-motion-selection-check="${selection.status}"><strong>你选择的动作：${escapeHtml(selection.name)}</strong><p>${escapeHtml(selection.message)}</p>${selection.evidence?`<p>${escapeHtml(selection.evidence)}</p>`:''}${selection.evidenceTimes.some(time=>time<=duration)?`<div class="motion-feedback-times">${[...new Set(selection.evidenceTimes)].filter(time=>time<=duration).map(time=>timestampButton(time,'动作选择核对',canSeek)).join(' ')}</div>`:''}</div>`:''}<div class="motion-verdict is-${verdict.status}" data-motion-verdict="${verdict.status}"><span class="motion-step">动作评价</span><h3>${verdict.label}</h3><p class="${coach?'motion-coach-evaluation':'motion-coach-pending'}">${escapeHtml(verdict.summary)}</p></div>
       ${feedbackHtml(report,canSeek)}
       ${coach&&verdict.status==='uncertain'&&Array.isArray(coach.limitations)&&coach.limitations.length?`<p class="motion-evaluation-help">${coach.limitations.slice(0,2).map(escapeHtml).join('；')}</p>`:''}
-      ${available&&!coachRunning?`<div class="motion-coach-actions">${coachConfig.configured?`<button type="button" class="button${coach?'':' primary'}" data-motion-action="coach" ${!selectedExerciseId||saving?'disabled':''}>${coach?'重新评价':'让 AI 评价所选动作'}</button>`:typeof openCoachSettings==='function'?'<button type="button" class="button primary" data-motion-action="coach-settings">配置动作点评模型</button>':''}</div>`:''}
+      ${available&&!coachRunning?`<div class="motion-coach-actions">${coachReady?`<button type="button" class="button${coach?'':' primary'}" data-motion-action="coach" ${!selectedExerciseId||saving?'disabled':''}>${coach?'重新评价':'让 AI 评价所选动作'}</button>`:typeof openCoachSettings==='function'?'<button type="button" class="button primary" data-motion-action="coach-settings">配置动作点评模型</button>':''}</div>`:''}
     </section>`;
   }
   function renderResult(report,fromHistory=false) {
@@ -415,12 +446,13 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     }
     const report=values?.find(item=>item.id===id);
     if(!report){
-      selectedHistory=null;find('[data-motion-results]').hidden=true;find('[data-motion-results]').replaceChildren();
+      selectedHistory=null;
+      if(result)renderLiveResult();else{find('[data-motion-results]').hidden=true;find('[data-motion-results]').replaceChildren();}
       const message=values?'这份动作评估报告已删除或不存在。':'读取动作评估报告失败，请重试。';
-      error(message);notify(message,true);return false;
+      error(message);announce(message,true);return false;
     }
     error('');selectedHistory=report.id;renderResult(report,true);
-    find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});
+    scrollTo('[data-motion-results]',{behavior:'smooth',block:'start'});
     return true;
   }
   function renderHistory() {
@@ -436,15 +468,15 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       await saveAssessment(summary);
       if(destroyed)return;
       if(currentResult===result){saved=true;saving=false;if(!selectedHistory)renderResult(result);}
-      notify('报告已保存，原视频未上传。');await refreshHistory();
-    } catch(cause) {if(!destroyed&&currentResult===result){saving=false;if(!selectedHistory)renderResult(result);const message=cause?.message||'报告保存失败，请重试。';error(message);notify(message,true);}}
+      announce('报告已保存，原视频未上传。');await refreshHistory();
+    } catch(cause) {if(!destroyed&&currentResult===result){saving=false;if(!selectedHistory)renderResult(result);const message=cause?.message||'报告保存失败，请重试。';error(message);announce(message,true);}}
     finally{if(!destroyed)controls();}
   }
   async function removeReport(index) {
     const report=history[index];if(!report||deletionId||typeof deleteAssessment!=='function')return;
     deletionId=report.id;renderHistory();
-    try {await deleteAssessment(report.id);if(destroyed)return;if(selectedHistory===report.id){selectedHistory=null;if(result)renderResult(result);else find('[data-motion-results]').hidden=true;}notify('报告已删除。');await refreshHistory();}
-    catch(cause){if(!destroyed){const message=cause?.message||'删除报告失败，请重试。';error(message);notify(message,true);}}
+    try {await deleteAssessment(report.id);if(destroyed)return;if(selectedHistory===report.id){selectedHistory=null;if(result)renderResult(result);else find('[data-motion-results]').hidden=true;}announce('报告已删除。');await refreshHistory();}
+    catch(cause){if(!destroyed){const message=cause?.message||'删除报告失败，请重试。';error(message);announce(message,true);}}
     finally{deletionId=null;if(!destroyed)renderHistory();}
   }
   listen(root,'click',event=>{
@@ -460,20 +492,20 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     else if(action==='pick-target')void beginTargetSelection();
     else if(action==='reset-target')chooseTarget(null);
     else if(action==='exercise')openExercise?.(button.dataset.exercise);
-    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){reportOpenRevision++;selectedHistory=report.id;renderResult(report,true);find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});}}
+    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){reportOpenRevision++;selectedHistory=report.id;renderResult(report,true);scrollTo('[data-motion-results]',{behavior:'smooth',block:'start'});}}
     else if(action==='live-result'){reportOpenRevision++;selectedHistory=null;if(result)renderResult(result);}
     else if(action==='delete')void removeReport(Number(button.dataset.history));
-    else if(action==='seek'&&pipeline){context?.clearRect(0,0,canvas.width,canvas.height);void seekMedia(Number(button.dataset.time)||0).catch(()=>{});mediaSurface().focus({preventScroll:true});find('[data-motion-player]').scrollIntoView({behavior:'smooth',block:'center'});}
+    else if(action==='seek'&&pipeline){context?.clearRect(0,0,canvas.width,canvas.height);void seekMedia(Number(button.dataset.time)||0).catch(()=>{});if(!suspended)mediaSurface().focus({preventScroll:true});scrollTo('[data-motion-player]',{behavior:'smooth',block:'center'});}
   });
   listen(fileInput,'change',()=>{selectFile(fileInput.files?.[0]);fileInput.value='';});
   listen(exerciseSelect,'change',()=>chooseExercise(exerciseSelect.value));
   listen(find('.motion-input'),'dragover',event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy';find('.motion-input').classList.add('is-dragover');}});
   listen(find('.motion-input'),'dragleave',event=>{if(!find('.motion-input').contains(event.relatedTarget))find('.motion-input').classList.remove('is-dragover');});
-  listen(find('.motion-input'),'drop',event=>{event.preventDefault();find('.motion-input').classList.remove('is-dragover');const files=event.dataTransfer?.files;if(files?.length>1)notify('一次评估一段视频，已选择第一个文件。');selectFile(files?.[0]);});
+  listen(find('.motion-input'),'drop',event=>{event.preventDefault();find('.motion-input').classList.remove('is-dragover');const files=event.dataTransfer?.files;if(files?.length>1)announce('一次评估一段视频，已选择第一个文件。');selectFile(files?.[0]);});
   listen(video,'loadedmetadata',metadataReady);
   listen(video,'loadeddata',metadataReady);
   listen(video,'error',()=>{if(mediaMode==='native'&&file&&objectUrl){metadata=null;controls();error('视频画面读取失败，请重新选择视频。');}});
-  listen(video,'play',()=>{cancelAnimationFrame(animationId);playbackLoop();});
+  listen(video,'play',()=>{cancelAnimationFrame(animationId);if(suspended){video.pause();return;}playbackLoop();});
   listen(video,'pause',()=>{cancelAnimationFrame(animationId);drawOverlay();});
   listen(video,'seeking',()=>context?.clearRect(0,0,canvas.width,canvas.height));
   listen(video,'seeked',drawOverlay);listen(video,'timeupdate',drawOverlay);
@@ -488,5 +520,5 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   });
   listen(window,'resize',()=>{if(selectingTarget)positionPicker();});
   controls();void refreshHistory();
-  return {refreshHistory,openReport,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
+  return {refreshHistory,openReport,suspend,resume,refreshConfiguration,hasUnsavedWork:()=>!destroyed&&!!file&&!saved,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
 }

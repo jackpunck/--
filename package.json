@@ -29,6 +29,7 @@
     "motion:assets": "node scripts/setup-motion-assets.mjs --verify && node scripts/setup-motion-codec.mjs --verify && node scripts/setup-motion-onnx.mjs --verify",
     "qa:motion": "node scripts/qa-motion-onnx.mjs",
     "qa:motion:coach": "node scripts/qa-motion-coach.mjs",
+    "qa:motion:navigation": "node scripts/qa-motion-navigation.mjs",
     "qa:motion:target": "node scripts/qa-motion-target.mjs",
     "qa:motion:codec": "node scripts/qa-motion-codec.mjs",
     "qa:motion:decode-boundaries": "node scripts/qa-motion-source-boundaries.mjs",
@@ -40,6 +41,6 @@
     "check:motion:onnx": "node --check public/motion-rtmw.js && node --check scripts/setup-motion-onnx.mjs && node --check scripts/qa-motion-onnx.mjs && node --check scripts/qa-motion-rtmw.mjs",
     "check:motion:assessment": "node --check server/motion-coach-context.mjs && node --check server/motion-coach-temporal.mjs && node --check server/motion-coach-visual.mjs && node --check server/motion-coach-guided.mjs && node --check scripts/motion-dataset-benchmark.mjs && node --check scripts/motion-dataset-provider.mjs && node --check scripts/motion-dataset-report.mjs && node --check scripts/qa-motion-dataset.mjs && node --check scripts/motion-dataset-reference.mjs && node --check scripts/motion-dataset-guided.mjs && node --check scripts/motion-dataset-guided-prepare.mjs && node --check scripts/motion-dataset-guided-report.mjs && node --check scripts/motion-dataset-guided-audit.mjs",
     "qa:chat:motion": "node scripts/qa-chat-motion.mjs",
-    "check:chat:motion": "node --check public/chat-motion.js && node --check public/chat-motion-result.js && node --check public/motion-report.js && node --check server/chat-motion.mjs && node --check scripts/qa-chat-motion.mjs"
+    "check:chat:motion": "node --check public/chat-motion.js && node --check public/chat-motion-result.js && node --check public/motion-report.js && node --check server/chat-motion.mjs && node --check scripts/qa-chat-motion.mjs && node --check scripts/qa-motion-navigation.mjs"
   }
 }

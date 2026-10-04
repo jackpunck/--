@@ -19,7 +19,7 @@ const defaultTrainingExercise = id => structuredClone(defaultExercises[id]);
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
-import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=11';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=12';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {createProviderSettings} from './provider-settings.js?v=1';
@@ -67,8 +67,12 @@ try { state.sidebarCollapsed = localStorage.getItem('fitness:sidebar-collapsed')
 const knowledgeDrafts = {};
 const modelViewer = new ModelViewer();
 let motionView = null;
-let motionContainer = null;
-function closeMotionView() { motionView?.destroy(); motionView=null; motionContainer=null; }
+let motionRoot = null;
+let motionStore = null;
+// Route rendering replaces #page. Keep the same account's media and analysis
+// instance outside that DOM subtree until the user returns to the motion page.
+function suspendMotionView() { motionView?.suspend(); motionRoot?.remove(); }
+function closeMotionView() { motionView?.destroy(); motionRoot?.remove(); motionView=null; motionRoot=null; motionStore=null; }
 let landingCleanup = null;
 let communityController = null;
 let navigationVersion = 0;
@@ -218,6 +222,7 @@ async function saveProviderConfiguration(payload,version,form) {
   }
 }
 function showComputeUnavailable(message='无法连接计算服务器。请恢复网络后重试。') {
+  suspendMotionView();
   $('#app').innerHTML=`<main class="content"><section class="card"><h1>等待计算服务器</h1><p>${esc(message)}</p><p>浏览器中的已保存记录仍保留，恢复连接后可以继续使用。</p><button type="button" class="button primary" id="retry-local-service">重新连接</button></section></main>`;
   $('#retry-local-service').addEventListener('click',()=>location.reload());
 }
@@ -253,7 +258,7 @@ function renderAuth() {
 
 async function render() {
  if(!communityOnlyPage()&&!await readyComputed())return;
-  closeMotionView();
+  suspendMotionView();
   setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
@@ -281,7 +286,7 @@ function renderSidebarHistory() {
 }
 async function renderPage() {
  if(!communityOnlyPage()&&!await readyComputed())return;
- if(state.page!=='motion')closeMotionView();
+ if(state.page!=='motion')suspendMotionView();
   if(state.page==='community'){
     if(!profile()){$('#page').innerHTML='<div class="empty" role="status">完成基本资料后，即可进入循序社区。</div>';return;}
     communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
@@ -293,8 +298,11 @@ async function renderPage() {
 }
 function renderMotion() {
  const container=$('#page');
- if(motionView&&motionContainer===container){motionView.refreshHistory?.();return;}
- closeMotionView();motionContainer=container;
+ if(motionView&&motionStore===state.store){
+   if(motionRoot.parentNode!==container)container.replaceChildren(motionRoot);
+   motionView.resume();void motionView.refreshHistory();return;
+ }
+ closeMotionView();motionStore=state.store;
  const store=state.store;
  motionView=mountMotionView(container,{
    saveAssessment:async data=>{
@@ -317,6 +325,7 @@ function renderMotion() {
    openCoachSettings:()=>{state.setting='ai';void navigate('settings');},
    notify:toast,
  });
+ motionRoot=container.querySelector('.motion-page');
 }
 function title(name,desc,actions='') { return `<div class="page-title"><div><h1>${name}</h1><p>${desc}</p></div>${actions}</div>`; }
 function macros(current,target,compact=false) {
@@ -2013,6 +2022,11 @@ $('#modal').addEventListener('cancel',()=>{if($('#provider-form'))clearProviderD
 window.addEventListener('online',()=>state.store?.sync().then(()=>{toast('已恢复网络，记录已同步');}).catch(e=>toast(e.message,true)));
 matchMedia('(max-width:700px)').addEventListener('change',()=>{if(state.user&&state.page==='settings'&&state.setting==='achievements'){state.achievementPage=0;renderAchievements();}});
 window.addEventListener('offline',()=>{if(state.store){state.store.status='offline';updateSync();}});
+window.addEventListener('beforeunload',event=>{
+ if(motionStore===state.store&&motionView?.hasUnsavedWork()){
+   event.preventDefault();event.returnValue='';
+ }
+});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateSidebarQuote();if(state.store&&navigator.onLine)state.store.sync().catch(()=>{});}});
 setInterval(()=>{if(!document.hidden){updateSidebarQuote();if(state.store&&navigator.onLine)state.store.sync().catch(()=>{});}},30000);
 boot().catch(error=>{$('#app').innerHTML=`<div class="boot"><h2>暂时无法打开健身空间</h2><p>${esc(error.message)}</p><a class="button primary" href="/">重新加载</a></div>`;});
