@@ -1,0 +1,27 @@
+/* The selected movement symbol is shared by the homepage and workspace. */
+.brand-symbol,
+:root[data-theme="workspace"] .brand-symbol,
+.auth-story .brand-symbol {
+  width: 39px;
+  height: 43px;
+  flex: none;
+  background: transparent;
+  border-radius: 0;
+}
+.brand-symbol > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.landing-brand { align-items: center; }
+.landing-brand > .landing-logo { display: block; width: 43px; height: 43px; flex: none; object-fit: contain; }
+.message.assistant .message-icon,
+:root[data-theme="workspace"] .message.assistant .message-icon { background: transparent; padding: 0; }
+.message-icon > .assistant-logo { display: block; width: 30px; height: 30px; object-fit: contain; }
+.chat-orb { width: 220px; height: 220px; animation: none; }
+.chat-orb > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.boot .brand-symbol { width: 64px; height: 64px; }
+.weekly-seal,
+.achievement-stamp > img,
+.achievement-detail-intro > img,
+.achievement-next > img { object-fit: contain; }
+@media (max-width: 700px) {
+  .landing-brand > .landing-logo { width: 34px; height: 34px; }
+  .chat-orb { width: 140px; height: 140px; }
+}

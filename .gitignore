@@ -85,6 +85,9 @@ storageState*.json
 storage-state*.json
 auth-state*.json
 
+# Generated logo drafts and comparison previews
+/output/logo-concepts/
+
 # Editor, OS, and Office temporary files
 .idea/
 .vscode/
