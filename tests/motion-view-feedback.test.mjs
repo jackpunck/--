@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {motionVerdict, motionFeedback, motionCoachProgress, buildMotionAssessmentReport} from '../public/motion-view.js';
+import {motionVerdict, motionFeedback, motionCoachProgress, motionSelectionNotice, buildMotionAssessmentReport} from '../public/motion-view.js';
 
 const finding=(status,extra={})=>({status,source:'combined',title:'肩髋同步',evidence:'起身时肩部先于髋部移动。',correction:'收紧腹部，让肩髋一起起身。',evidenceTimes:[1.2],...extra});
 
@@ -70,4 +70,31 @@ test('new saved reports retain AI advice and exclude all local judgments and raw
  assert.equal(report.coach.coverage.measurementCount,1);
  assert(!/"(?:score|checks|reps|measurements|poseData|repetitionCount)":/.test(JSON.stringify(report)));
  report.coach.feedback[0].evidenceTimes[0]=1.5;assert.equal(source.coach.feedback[0].evidenceTimes[0],1.2);
+});
+
+test('guided reports preserve user selection and its visual check without raw data',()=>{
+ const action={exerciseId:'barbell-deadlift',name:'杠铃硬拉',family:'hinge',status:'selected',confidence:null,source:'user',secret:'omit'};
+ const selectionCheck={status:'mismatch',evidenceTimes:[.5],evidence:'画面中训练者躺在长凳上。',rawFrames:[1],confidence:'high'};
+ const report=buildMotionAssessmentReport({exerciseId:action.exerciseId,exerciseName:action.name,recognitionSource:'user',coach:{mode:'guided',action,selectionCheck}},{file:{name:'clip.mp4',size:20},pipeline:{width:100,height:100,duration:1}});
+ assert.equal(report.recognitionSource,'user');assert.equal(report.coach.mode,'guided');
+ assert.deepEqual(report.coach.action,{exerciseId:action.exerciseId,name:action.name,family:'hinge',status:'selected',confidence:null,source:'user'});
+ assert.deepEqual(report.coach.selectionCheck,{status:'mismatch',evidenceTimes:[.5],evidence:selectionCheck.evidence});
+ report.coach.selectionCheck.evidenceTimes.push(.7);assert.deepEqual(selectionCheck.evidenceTimes,[.5]);
+});
+
+test('mismatched guided action keeps the selected name and asks for correction',()=>{
+ const report={recognitionSource:'user',exerciseId:'barbell-deadlift',recognitionConflict:true,coach:{action:{source:'user',exerciseId:'barbell-deadlift'},selectionCheck:{status:'mismatch',evidenceTimes:[1,-1,NaN],evidence:'画面中可见推胸动作。'}}};
+ const notice=motionSelectionNotice(report);
+ assert.equal(notice.name,'杠铃硬拉');assert.equal(notice.status,'mismatch');assert.match(notice.message,/核对动作类型/);assert.deepEqual(notice.evidenceTimes,[1]);
+ assert.equal(motionSelectionNotice({recognitionSource:'visual',coach:{action:{status:'identified'}}}),null);
+ assert.equal(motionSelectionNotice({...report,coach:{action:{source:'user'}}}).status,'uncertain');
+});
+
+test('guided mismatch or unknown selection never presents corrections for that exercise',()=>{
+ for(const status of ['mismatch','uncertain',undefined]) {
+  const report={coach:{mode:'guided',selectionCheck:{status},feedback:[finding('good'),finding('improve'),finding('uncertain',{title:'器械被遮挡'})]}};
+  assert.deepEqual(motionFeedback(report),[],'Even uncertain feedback may contain a correction for the wrong exercise');
+ }
+ const report={coach:{mode:'guided',selectionCheck:{status:'consistent'},coverage:{complete:true},verdict:{status:'needs-improvement',summary:'需要控制动作。'},feedback:[finding('improve')]}};
+ assert.equal(motionFeedback(report)[0].status,'improve');
 });

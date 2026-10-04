@@ -30,10 +30,11 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
  aiCalls.push({input,imageCount:images.length,imageBytes:images.reduce((sum,item)=>sum+Buffer.from(item.image_url.url.split(',')[1],'base64').length,0)});
  const times=input.frames.map(frame=>frame.time);
  const output={action:{exerciseId:'squat',name:'徒手深蹲',family:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2),evidence:'两帧可见同一训练者屈膝下蹲并起身。'},verdict:{status:'needs-improvement',summary:'这组动作需要调整，请先改善躯干控制。'},feedback:[],limitations:['这是本地 QA 模拟视觉响应，不是对真实动作的评价。']};
- if(input.stage==='full-data'||input.stage==='temporal-evidence'||input.stage==='visual-keyframes'){
+ if(input.stage==='guided-evidence')output.selectionCheck={status:'consistent',imageIndices:[0],evidence:'当前截图与用户所选深蹲动作一致。'};
+ if(input.stage==='full-data'||input.stage==='temporal-evidence'||input.stage==='visual-keyframes'||input.stage==='guided-evidence'){
   if(times.length)output.feedback.push({title:'下一组保持躯干控制',status:'improve',source:'visual',evidenceTimes:[times[0]],evidence:'测试画面中可见躯干位置变化。',correction:'下一组降低负重，收紧腹部并缓慢完成动作。',priority:1});
   const indices=input.evidence?.sourceFrameIndices||input.data?.frameIndices||[];
-  if(indices.length)output.feedback.push({title:'保持肩髋同步',status:'improve',source:'pose',frameIndices:indices.slice(0,2),evidence:'骨架记录了肩髋位置随时间变化。',correction:'下一组让肩髋平稳同步移动。',priority:2});
+  if(indices.length)output.feedback.push({title:'保持肩髋同步',status:'improve',source:input.stage==='guided-evidence'?'combined':'pose',frameIndices:indices.slice(0,2),...(input.stage==='guided-evidence'?{imageIndices:[0]}:{}),evidence:'截图与骨架记录了肩髋位置随时间变化。',correction:'下一组让肩髋平稳同步移动。',priority:2});
  }else if(input.stage==='synthesis')output.feedback=input.data.reviewedParts.flatMap(part=>part.report.feedback||[]).slice(0,3);
  return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(output)}}]}),{headers:{'Content-Type':'application/json'}});
 }});
@@ -97,7 +98,10 @@ try{
    if(config.ui){
     await page.locator('.nav [data-page="motion"]').click();
     assert.equal(await page.locator('[data-motion-quality],[data-motion-ai-mode],[data-motion-recognition]').count(),0);
-    await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
+    await page.locator('[data-motion-file]').setInputFiles(clip);
+    assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'An exercise must be selected before review');
+    await page.locator('[data-motion-exercise]').selectOption('squat');
+    await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
     await page.screenshot({path:join(dataDir,'ui-desktop-before.png'),fullPage:true});
     await page.locator('[data-motion-action="analyze"]').click();
     await page.locator('.motion-coach-evaluation').waitFor({timeout:300000});
@@ -148,17 +152,22 @@ try{
    assert.match(output.stats.modelVersion,/RTMW-L/);assert.equal(output.stats.frames,output.stats.expectedFrames);assert(output.stats.observedFrames>=8);assert(output.stats.pointsIntact);assert.equal(output.stats.hasRecognition,false);
    assert.equal(output.body.poseData.schemaVersion,config.ui?3:2);assert.equal(output.body.poseData.frames.length,output.stats.frames);assert(output.body.fullAnalysis.quality.validFrames>0);assert(output.body.keyframes.length>=2&&output.body.keyframes.length<=6);
    validateMotionCoachRequest(JSON.parse(JSON.stringify(output.body)));
-   assert.equal(output.report.coach.verdict.status,'needs-improvement');assert.equal(output.report.coach.mode,'visual');assert.equal(output.report.coach.coverage.reviewedFrameCount,config.ui?0:output.stats.frames);
+   assert.equal(output.report.coach.verdict.status,'needs-improvement');assert.equal(output.report.coach.mode,config.ui?'guided':'visual');assert.equal(output.report.coach.coverage.reviewedFrameCount,output.stats.frames);
    assert(!JSON.stringify(output.report).includes('wholebodyLandmarks'));assert(!Object.hasOwn(output.report.analysis,'actionRecognition'));
    const calls=aiCalls.slice(callStart),full=calls.filter(call=>call.input.stage==='full-data');
    if(config.ui){
     assert.equal(output.stats.sampleFps,7.5);
-    assert.equal(output.body.reviewMode,'efficient');assert.equal(output.body.poseData.format,'rtmw-body17-full');
-    assert.equal(calls.length,1);assert.equal(calls[0].input.stage,'visual-keyframes');
+    assert.equal(output.body.reviewMode,'guided');assert.equal(output.body.selectedExerciseId,'squat');assert.equal(output.body.poseData.format,'rtmw-body17-full');
+    assert.equal(calls.length,1);assert.equal(calls[0].input.stage,'guided-evidence');
     assert.equal(calls[0].imageCount,output.body.keyframes.length);
     assert.equal(output.report.coach.coverage.sourceFrameCount,output.stats.frames);
-    assert.equal(output.report.coach.coverage.strategy,'visual-keyframes');
-    assert(!JSON.stringify(calls[0].input).includes('measurements'),'visual-first review does not let projection angles bias visual findings');
+    assert.equal(output.report.coach.coverage.strategy,'guided-evidence');
+    assert.equal(output.report.recognitionSource,'user');assert.equal(output.report.coach.action.status,'selected');
+    assert.equal(output.report.coach.action.source,'user');assert.equal(output.report.coach.action.confidence,null);
+    assert.equal(output.report.coach.selectionCheck.status,'consistent');
+    assert.equal(calls[0].input.evidence.frames.length,output.stats.frames,'This short clip supplies all body17 samples');
+    assert.equal(calls[0].input.evidence.measurements.length,output.stats.frames,'Measured angles reach the model');
+    assert.equal(output.report.coach.coverage.summarizedMeasurementCount,output.stats.frames);
    }else{
    assert.equal(new Set(full.flatMap(call=>call.input.data.frameIndices)).size,output.stats.frames,'Every sampled pose frame reaches AI');
    assert.equal(full[0].imageCount,output.body.keyframes.length,'All extracted images reach AI');assert(full.slice(1).every(call=>call.imageCount===0));

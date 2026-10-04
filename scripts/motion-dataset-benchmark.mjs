@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';
 import {readdir, readFile, realpath, stat} from 'node:fs/promises';
 import {extname, isAbsolute, relative, resolve, sep} from 'node:path';
+import {getMotionExercise} from '../public/motion-catalog.js';
 
 export const BENCHMARK_VERSION = 'motion-dataset-benchmark-v1';
 const definitions = [
@@ -66,6 +67,7 @@ export function resolvePredictedExercise(action) {
 }
 
 export function scoreMotionPrediction(item, coach) {
+  if(coach?.mode==='guided'||coach?.action?.status==='selected')return scoreGuidedPrediction(item,coach);
   const predictedExercise = resolvePredictedExercise(coach?.action);
   const expectedQuality = expectedVerdict(item);
   const actionCorrect = predictedExercise === item.exercise;
@@ -88,6 +90,22 @@ export function scoreMotionPrediction(item, coach) {
     correctionAccuracy: null,
     correctionReviewStatus: expectedQuality === 'needs-improvement' ? 'requires-independent-review' : 'not-scored',
   };
+}
+
+export function scoreGuidedPrediction(item,coach) {
+  const selected=getMotionExercise(item.selectedExerciseId),action=coach?.action;
+  const selectionHonored=!!selected&&action?.status==='selected'&&action.source==='user'&&action.confidence===null
+    &&action.exerciseId===selected.id&&action.name===selected.name&&action.family===selected.family;
+  const selectionCheck=['consistent','mismatch','uncertain'].includes(coach?.selectionCheck?.status)?coach.selectionCheck.status:'__missing__';
+  const expectedQuality=item.qualityLabel==='author_good'?'standard':item.qualityLabel==='author_bad'?'needs-improvement':null;
+  const predictedVerdict=coach?.verdict?.status||null;
+  const validEvaluation=selectionHonored&&selectionCheck==='consistent'&&['standard','needs-improvement'].includes(predictedVerdict);
+  const actionable=(coach?.feedback||[]).some(f=>f.status==='improve'&&f.correction?.trim()&&f.evidence?.trim()&&f.evidenceTimes?.some(Number.isFinite));
+  return {evaluationMode:'guided',selectedExerciseId:item.selectedExerciseId||null,selectionHonored,selectionCheck,validEvaluation,
+    expectedExercise:item.exercise,predictedExercise:null,actionCorrect:null,familyCorrect:null,jointCorrect:null,
+    expectedVerdict:expectedQuality,predictedVerdict,qualityCorrect:expectedQuality===null?null:validEvaluation&&predictedVerdict===expectedQuality,
+    correctionPresent:actionable,badClipWithCorrection:expectedQuality==='needs-improvement'?validEvaluation&&predictedVerdict===expectedQuality&&actionable:null,
+    specificFault:item.specificFault||null,correctionAccuracy:null,correctionReviewStatus:expectedQuality==='needs-improvement'?'requires-independent-review':'not-scored'};
 }
 
 function confusion(rows, expected, predicted) {
@@ -137,7 +155,8 @@ function percentiles(values) {
   const at = percentile => sorted.length ? sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] : null;
   return {count: sorted.length, p50: at(.5), p95: at(.95), max: sorted.at(-1) ?? null};
 }
-export function summarizeDatasetResults(rows, {minimumAccuracy = .85, mode = 'coach', acceptance = 'rate'} = {}) {
+export function summarizeDatasetResults(rows, {minimumAccuracy = .85, mode = 'coach', acceptance = 'rate', reviewMode} = {}) {
+  if(mode==='coach'&&(reviewMode==='guided'||rows.some(row=>row.score?.evaluationMode==='guided'||row.coach?.mode==='guided')))return summarizeGuidedDatasetResults(rows,{minimumAccuracy,acceptance});
   const groups = key => Object.fromEntries([...new Set(rows.map(row => row.expected[key] ?? 'unknown'))].sort()
     .map(value => [value, rates(rows.filter(row => (row.expected[key] ?? 'unknown') === value))]));
   const overall = rates(rows);
@@ -174,6 +193,42 @@ export function summarizeDatasetResults(rows, {minimumAccuracy = .85, mode = 'co
       'Specific correction accuracy needs independent human review; this benchmark measures only evidence-linked correction presence.',
       ...(rows.some(row => row.replayedPose) ? ['Replay timing totals combine the original genuine extraction timings with the fresh coaching run. They are not a single uninterrupted UI wall-clock measurement.'] : []),
       'A selected subset cannot establish full-dataset accuracy; same-subject views are correlated.']};
+}
+
+export function summarizeGuidedDatasetResults(rows,{minimumAccuracy=.85,acceptance='rate'}={}){
+  const metric=(items,key)=>({correct:items.filter(r=>r.score?.[key]===true).length,total:items.length,
+    rate:items.length?items.filter(r=>r.score?.[key]===true).length/items.length:null});
+  const author=rows.filter(r=>['author_good','author_bad'].includes(r.expected.qualityLabel));
+  const rates=items=>{
+    const attempted=items.filter(r=>r.status!=='pending');
+    const labeled=attempted.filter(r=>['author_good','author_bad'].includes(r.expected.qualityLabel));
+    const good=labeled.filter(r=>r.expected.qualityLabel==='author_good'),bad=labeled.filter(r=>r.expected.qualityLabel==='author_bad');
+    return {clips:items.length,completed:items.filter(r=>r.status==='ok').length,publishedClips:items.filter(r=>r.status==='ok').length,failed:items.filter(r=>r.status==='error').length,pending:items.filter(r=>r.status==='pending').length,
+      attempted:attempted.length,selectedActionHonored:metric(attempted,'selectionHonored'),validSelectedEvaluation:metric(attempted,'validEvaluation'),quality:metric(labeled,'qualityCorrect'),
+      badClipWithCorrection:metric(bad,'badClipWithCorrection'),
+      qualityBalancedAccuracy:good.length&&bad.length?(metric(good,'qualityCorrect').rate+metric(bad,'qualityCorrect').rate)/2:null,
+      qualityConfusion:confusion(attempted,r=>r.expected.qualityLabel==='author_good'?'standard':r.expected.qualityLabel==='author_bad'?'needs-improvement':'__unlabeled__',r=>r.score?.predictedVerdict||'__unknown__'),
+      selectionCheckCounts:confusion(attempted,()=> 'selected',r=>r.score?.selectionCheck||'__missing__')};
+  };
+  const overall=rates(rows),exercises=[...new Set(rows.map(r=>r.expected.exercise))].sort(),byExercise=Object.fromEntries(exercises.map(e=>[e,rates(rows.filter(r=>r.expected.exercise===e))]));
+  const covered=exercises.filter(e=>rows.some(r=>r.expected.exercise===e&&r.status==='ok'&&r.score?.validEvaluation));
+  const tested=exercises.filter(e=>rows.some(r=>r.expected.exercise===e&&r.status!=='pending'));
+  const complete=rows.length>0&&overall.pending===0;
+  return {evaluationMode:'guided',accuracyMeasured:true,recognitionAccuracyMeasured:false,overall,byExercise,
+    byQuality:Object.fromEntries([...new Set(rows.map(r=>r.expected.qualityLabel))].sort().map(q=>[q,rates(rows.filter(r=>r.expected.qualityLabel===q))])),
+    formReferences:{authorLabels:{...rates(author),plannedAuthorLabeledClips:author.length}},coverage:{requestedExercises:exercises.length,testedClasses:tested.length,testedExerciseIds:tested,evaluatedClasses:covered.length,evaluatedExercises:covered.length,evaluatedExerciseIds:covered,
+      missingEvaluationExerciseIds:exercises.filter(e=>!covered.includes(e)),majorityOfPlannedClasses:covered.length>exercises.length/2,meaning:'At least one completed, consistent, decided evaluation per user-selected action; not recognition or verified correction accuracy.'},
+    correctionReview:{automaticallyScored:false,specificAuthorFaultClips:rows.filter(r=>r.expected.specificFault).length,authorBadWithoutSpecificFault:author.filter(r=>r.expected.qualityLabel==='author_bad'&&!r.expected.specificFault).length,
+      note:'Author verdict agreement and correction presence do not establish correct fault identification. Correction correspondence remains unscored pending independent review.'},
+    gate:{acceptance:'informational',complete,passed:null,
+      legacyInformational:{acceptance,minimumAccuracy,passed:complete&&covered.length===exercises.length&&overall.quality.rate!==null&&overall.quality.rate>=minimumAccuracy},
+      meaning:'No numeric accuracy threshold represents user acceptance. Majority coverage is reported as a coverage fact only; quality and correction correctness remain separate.'},
+    timingMs:Object.fromEntries(['pose','evidence','coach','total'].map(stage=>[stage,percentiles(rows.map(r=>r.timing?.[stage]))])),
+    limitations:['Action type is supplied by the user and is not scored as recognition.','Unlabeled demonstrations and mixed tutorials are excluded from form accuracy, including unverified assistant references.',
+      'Errors, uncertainty, and rejected selections remain in the relevant denominators.','Prior clips and subjects may be reused: this development run is separate from the historical frozen holdout.',
+      'Planned but unexecuted clips remain pending in planned coverage; they count as neither successes nor failures and are excluded from observed quality accuracy.',
+      'A correction matching the author specific fault requires independent review; label agreement alone is insufficient.',
+      ...(rows.some(r=>r.replayedPose)?['Replay totals combine original extraction and fresh coaching; they are not continuous UI timings.']:[])]};
 }
 
 export async function hashFile(path) {

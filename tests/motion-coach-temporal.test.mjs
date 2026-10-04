@@ -104,6 +104,54 @@ test('window statistics preserve late motion, exact values and valid global sour
   assert(evidence.statisticSourceTimes.some(([index, time]) => index === 897 && time === input.poseData.frames[897].time));
 });
 
+test('compact guided numbers declare approximation without promoting missing or unreliable observations', () => {
+  const input = fixture(20);
+  input.poseData.frames[0].landmarks[11] = [-.000001,1.000001,.5499999];
+  input.poseData.frames[1].landmarks[11] = [.123456789,.987654321,.55000001];
+  input.poseData.frames[2].landmarks[11] = [null,.2,.9,1];
+  input.poseData.frames[3].landmarks[11] = [.1,.2,1.0000001];
+  input.poseData.frames[0].subjectTracking = {status:'locked',trackId:'fixture',confidence:.6499999};
+  input.fullAnalysis.measurements[0].left.kneeAngle = 11.123456789;
+  const original = JSON.stringify(input);
+  const {evidence,allowedAnalysisPaths} = buildMotionTemporalEvidence(input,{maxChars:24000,compactNumbers:true,minFrames:12});
+  const shoulder = evidence.poseSchema.landmarkIndices.indexOf(11);
+  assert.deepEqual(evidence.frames[0].landmarks[shoulder],[-.000001,1.000001,.549]);
+  assert.deepEqual(evidence.frames[1].landmarks[shoulder],[.12346,.98765,.55]);
+  assert.equal(evidence.frames[2].landmarks[shoulder][0],null);
+  assert.equal(evidence.frames[3].landmarks[shoulder][2],1.0000001);
+  assert.equal(evidence.frames[0].subjectTracking.confidence,.649);
+  assert.equal(evidence.poseSchema.measurementDecimals,2);
+  assert.equal(evidence.poseSchema.measurementPrecision,'approximate-rounded');
+  assert.equal(evidence.poseSchema.visibilityPrecision,'floor-3-decimals-in-range');
+  assert.equal(evidence.measurements[0][evidence.measurementColumns.indexOf('left.kneeAngle')],11.12);
+  const statistic = evidence.windows[0].statistics.find(item=>item.path.join('.')==='left.kneeAngle');
+  assert.equal(statistic.values[2],11.12);
+  assert(allowedAnalysisPaths.some(path=>path.join('.')==='measurements.0.left.kneeAngle'));
+  assert.equal(JSON.stringify(input),original);
+});
+
+test('compact 120-second evidence remains bounded with full source windows and distributed frame coverage', () => {
+  const input = fixture(1800);
+  const {evidence} = buildMotionTemporalEvidence(input,{maxChars:24000,compactNumbers:true,minFrames:12});
+  assert(JSON.stringify(evidence).length<=24000);
+  assert(evidence.sourceFrameIndices.length>=24);
+  assert.equal(evidence.sourceFrameIndices[0],0);
+  assert.equal(evidence.sourceFrameIndices.at(-1),1799);
+  assert.equal(evidence.windows.reduce((sum,window)=>sum+window.sourceFrameCount,0),1800);
+  assert.equal(evidence.summarizedMeasurementCount,1800);
+});
+
+test('compact evidence can reduce below the legacy 24-frame floor without dropping source coverage', () => {
+  const input = fixture(900);
+  for (const frame of input.poseData.frames) frame.subjectTracking = {status:'locked',trackId:'x'.repeat(80),confidence:.9,bbox:{xMin:.1,yMin:.1,xMax:.9,yMax:.9}};
+  const {evidence} = buildMotionTemporalEvidence(input,{maxChars:16000,compactNumbers:true,minFrames:12});
+  assert(JSON.stringify(evidence).length<=16000);
+  assert(evidence.frames.length>=12&&evidence.frames.length<24);
+  assert.equal(evidence.sourceFrameIndices[0],0);
+  assert.equal(evidence.sourceFrameIndices.at(-1),899);
+  assert.equal(evidence.windows.reduce((sum,window)=>sum+window.sourceFrameCount,0),900);
+});
+
 test('a smaller budget remains bounded while summarizing every source measurement', () => {
   const input = fixture(1800), {evidence} = buildMotionTemporalEvidence(input, {maxChars: 20000});
   assert(JSON.stringify(evidence).length <= 20000);

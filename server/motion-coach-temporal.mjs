@@ -11,6 +11,19 @@ const angleNames = ['elbowAngle', 'shoulderAngle', 'hipAngle', 'kneeAngle', 'bod
 const channels = ['left', 'right'].flatMap(side => angleNames.map(angle => [side, angle]));
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const coordinateValue = value => finite(value) ? value < 0 || value > 1 ? value : Number(value.toFixed(5)) : null;
+// Downward precision never promotes a response below a reliability threshold.
+// Values outside the declared range retain their original invalidity.
+const compactResponse = value => finite(value) && value >= 0 && value <= 1 ? Math.floor(value * 1000) / 1000 : value;
+const compactAngle = value => finite(value) ? Number(value.toFixed(2)) : value;
+function compactTracking(value) {
+  const result = {...value};
+  if (finite(result.confidence)) result.confidence = compactResponse(result.confidence);
+  if (result.bbox) {
+    const bbox = Object.fromEntries(Object.entries(result.bbox).map(([key, coordinate]) => [key, coordinateValue(coordinate)]));
+    if (bbox.xMin < bbox.xMax && bbox.yMin < bbox.yMax) result.bbox = bbox;
+  }
+  return result;
+}
 
 function selectFrames(input, limit, overview) {
   const count = input.poseData.frames.length;
@@ -48,7 +61,7 @@ function selectFrames(input, limit, overview) {
   return [...selected].sort((a, b) => a - b);
 }
 
-function summarizeMeasurements(input, windowCount) {
+function summarizeMeasurements(input, windowCount, displayAngle = value => value) {
   const buckets = Array.from({length: windowCount}, () => []);
   const rows = input.fullAnalysis.measurements;
   rows.forEach((row, index) => buckets[Math.min(windowCount - 1, Math.floor(row.time / input.duration * windowCount))].push(index));
@@ -69,7 +82,7 @@ function summarizeMeasurements(input, windowCount) {
       }
       const references = [present[0], present.at(-1), minimum, maximum];
       for (const index of references) record(index, side, angle);
-      return [{path: [side, angle], values: [present.length, ...references.flatMap(index => [index, rows[index][side][angle]])]}];
+      return [{path: [side, angle], values: [present.length, ...references.flatMap(index => [index, displayAngle(rows[index][side][angle])])]}];
     });
     return {startTime: windowIndex * input.duration / windowCount, endTime: (windowIndex + 1) * input.duration / windowCount,
       sourceFrameCount: indices.length, statistics};
@@ -80,22 +93,25 @@ function summarizeMeasurements(input, windowCount) {
 /** One bounded evidence package: selected body observations plus statistics
  * computed over EVERY source measurement. This is explicitly not a claim that
  * a model inspected all raw 133-point frames. Coordinates have a declared
- * precision; angle statistics retain their original measured numeric values. */
-export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_LIMITS.maxChars} = {}) {
+ * precision; guided transport can explicitly round numeric displays while
+ * reference selection and validation retain the original measurements. */
+export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_LIMITS.maxChars, compactNumbers = false, minFrames = 24} = {}) {
   if (!Number.isSafeInteger(maxChars) || maxChars < 16000) throw new Error('时序证据预算至少为 16000 个字符。');
+  if (typeof compactNumbers !== 'boolean' || !Number.isInteger(minFrames) || minFrames < 12 || minFrames > 24) throw new Error('时序证据精度或最少帧数无效。');
   const overview = buildMotionSequenceContext(input);
+  const displayAngle = compactNumbers ? compactAngle : value => value;
   let frameLimit = MOTION_TEMPORAL_LIMITS.maxFrames, windowCount = Math.min(MOTION_TEMPORAL_LIMITS.maxWindows, Math.max(1, Math.ceil(input.duration / 2)));
   for (;;) {
     const sourceFrameIndices = selectFrames(input, frameLimit, overview);
-    const {windows, allowed, sourceTimes} = summarizeMeasurements(input, windowCount);
+    const {windows, allowed, sourceTimes} = summarizeMeasurements(input, windowCount, displayAngle);
     const frames = sourceFrameIndices.map(frameIndex => {
       const frame = input.poseData.frames[frameIndex];
       const landmarks = jointIndices.map(index => {
         const point = frame.landmarks?.[index];
-        return Array.isArray(point) ? point.slice(0, 3).map((value, field) => point[3] & (1 << field) ? null : field === 2 ? value : coordinateValue(value)) : null;
+        return Array.isArray(point) ? point.slice(0, 3).map((value, field) => point[3] & (1 << field) ? null : field === 2 ? compactNumbers ? compactResponse(value) : value : coordinateValue(value)) : null;
       });
       return {frameIndex, time: frame.time, ...(finite(frame.sourceTime) ? {sourceTime: frame.sourceTime} : {}),
-        ...(frame.subjectTracking ? {subjectTracking: frame.subjectTracking} : {}), landmarks};
+        ...(frame.subjectTracking ? {subjectTracking: compactNumbers ? compactTracking(frame.subjectTracking) : frame.subjectTracking} : {}), landmarks};
     });
     const measurements = sourceFrameIndices.map(index => {
       const row = input.fullAnalysis.measurements[index];
@@ -104,7 +120,7 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
         if (!finite(value)) return null;
         const path = ['measurements', index, side, angle];
         allowed.set(JSON.stringify(path), path);
-        return value;
+        return displayAngle(value);
       })];
     });
     const evidence = {strategy: 'temporal-evidence', sourceFrameCount: input.poseData.frames.length,
@@ -112,7 +128,8 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
       poseSchema: {profile: 'fitness-body17', width: input.poseData.width, height: input.poseData.height, sampleFps: input.poseData.sampleFps,
         ...(input.poseData.modelVersion ? {modelVersion: input.poseData.modelVersion} : {}),
         landmarkIndices: jointIndices, landmarkNames: jointIndices.map(index => input.poseData.landmarkNames[index]),
-        pointFields: ['x', 'y', 'visibility'], coordinateDecimals: 5, outOfBoundsCoordinates: 'original', visibilityPrecision: 'original',
+        pointFields: ['x', 'y', 'visibility'], coordinateDecimals: 5, outOfBoundsCoordinates: 'original', visibilityPrecision: compactNumbers ? 'floor-3-decimals-in-range' : 'original',
+        ...(compactNumbers ? {measurementDecimals: 2, measurementPrecision: 'approximate-rounded', trackingConfidencePrecision: 'floor-3-decimals-in-range', trackingBoxDecimals: 5} : {}),
         coordinates: input.poseData.coordinates, ...(input.poseData.targetTracking ? {targetTracking: input.poseData.targetTracking} : {})},
       frames, measurementColumns: ['frameIndex', 'time', ...channels.map(path => path.join('.'))], measurements,
       windowStatisticColumns: ['sampleCount', 'firstFrameIndex', 'firstValue', 'lastFrameIndex', 'lastValue', 'minimumFrameIndex', 'minimumValue', 'maximumFrameIndex', 'maximumValue'],
@@ -122,6 +139,7 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
     // JSON string, lose a measurement window or misstate what was reviewed.
     if (frameLimit > 24 && input.duration >= 2) frameLimit -= 8;
     else if (windowCount > 1) windowCount--;
+    else if (frameLimit > minFrames && input.duration >= 2) frameLimit = Math.max(minFrames, frameLimit - 8);
     else throw new HttpError(413, '时序证据过大，请缩短视频后重新评估。');
   }
 }

@@ -4,7 +4,9 @@ import * as catalogue from '../public/motion-catalog.js';
 import {compactMotionAnalysis, confirmedMotionAction, motionCoachActionCatalog, sanitizeMotionCoachResponse, mergeCoachAssessment} from '../public/motion-contract.js';
 
 const teachingIds = ['squat','pushup','curl','bench','incline-bench','chest-press','lat-pulldown','row','dumbbell-row','pullup','shoulder-press','lateral-raise','reverse-fly','triceps','overhead-triceps','hammer-curl','goblet-squat','rdl','lunge','leg-curl','leg-extension','glute-bridge','plank','crunch','calf-raise'];
-const additionalIds = ['barbell-deadlift','bodyweight-pullup','barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row'];
+const additionalIds = ['barbell-deadlift','bodyweight-pullup','barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row',
+  'bilateral-dumbbell-row','alternating-dumbbell-curl','dumbbell-side-bend','barbell-curl','barbell-squat','front-squat','smith-squat','barbell-romanian-deadlift','barbell-shoulder-press',
+  'standing-dumbbell-press','barbell-lunge','dumbbell-lunge','walking-lunge','lying-leg-curl','seated-leg-curl','leg-press','dumbbell-kickback','dumbbell-skullcrusher','dip','barbell-hip-thrust','face-pull','hanging-knee-raise','hanging-leg-raise','seated-calf-raise'];
 const frames = [{time: 1}, {time: 2}, {time: 3}];
 const action = extra => ({exerciseId: 'barbell-bench', name: '杠铃卧推', family: 'horizontal-press', status: 'identified', confidence: 'high', evidenceTimes: [1, 2], evidence: '目标仰卧于凳面，双手将同一根杠铃推离胸部。', ...extra});
 const sanitize = (value, options = {}) => sanitizeMotionCoachResponse(value, {mode: 'visual', keyframes: frames, ...options});
@@ -18,8 +20,8 @@ function assertNoLegacyFields(value) {
 }
 
 test('catalogue preserves teaching names and adds identity hints without evaluation rules', () => {
-  assert.equal(catalogue.motionExercises.length, 34);
-  assert.equal(new Set(catalogue.motionExercises.map(item => item.id)).size, 34);
+  assert.equal(catalogue.motionExercises.length, teachingIds.length + additionalIds.length);
+  assert.equal(new Set(catalogue.motionExercises.map(item => item.id)).size, teachingIds.length + additionalIds.length);
   assert.deepEqual(catalogue.motionExercises.filter(item => item.hasTeaching).map(item => item.id), teachingIds);
   assert.deepEqual(catalogue.motionExercises.filter(item => !item.hasTeaching).map(item => item.id), additionalIds);
   assert.equal(catalogue.getMotionExercise('bench').name, '哑铃卧推');

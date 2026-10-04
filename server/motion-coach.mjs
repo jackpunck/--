@@ -4,6 +4,8 @@ import {validateMotionPoseData, validateFullMotionAnalysis} from '../public/moti
 import {completeFullMotionCoach} from './motion-coach-full.mjs';
 import {completeTemporalMotionCoach} from './motion-coach-temporal.mjs';
 import {completeVisualMotionCoach} from './motion-coach-visual.mjs';
+import {completeGuidedMotionCoach} from './motion-coach-guided.mjs';
+import {getMotionExercise} from '../public/motion-catalog.js';
 
 export const MOTION_COACH_REQUEST_BYTES = 40 * 1024 * 1024;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -34,7 +36,9 @@ function imageDimensions(bytes, type) {
 
 /** Frames are transient request data: this endpoint never creates attachments. */
 export function validateMotionCoachRequest(body) {
-  if(body?.reviewMode!==undefined&&!['full','efficient','temporal'].includes(body.reviewMode))throw new HttpError(400,'动作评估模式无效。');
+  if(body?.reviewMode!==undefined&&!['full','efficient','temporal','guided'].includes(body.reviewMode))throw new HttpError(400,'动作评估模式无效。');
+  if(body?.reviewMode==='guided'&&(typeof body.selectedExerciseId!=='string'||!getMotionExercise(body.selectedExerciseId)))throw new HttpError(400,'请先选择有效的动作类型。');
+  if(body?.selectedExerciseId!==undefined&&body.reviewMode!=='guided')throw new HttpError(400,'所选动作只能用于按动作类型评价。');
   if(body?.stream!==undefined&&typeof body.stream!=='boolean')throw new HttpError(400,'动作评价进度设置无效。');
   if(!body||typeof body!=='object'||Array.isArray(body)||!finite(body.duration)||body.duration<=0||body.duration>120)throw new HttpError(400,'请提供 120 秒以内视频的有效时长。');
   if(!body.poseData||!body.fullAnalysis)throw new HttpError(400,'请刷新页面并重新提取完整骨架数据后评估。');
@@ -65,11 +69,12 @@ export function validateMotionCoachRequest(body) {
   if(fullAnalysis.quality.totalFrames!==poseData.frameCount||fullAnalysis.measurements.length!==poseData.frames.length)throw new HttpError(400,'客观测量与骨架帧数不一致，请重新分析当前视频。');
   if(fullAnalysis.measurements.some((row,index)=>row.frameIndex!==index||Math.abs(row.time-poseData.frames[index].time)>0.000001))throw new HttpError(400,'客观测量与骨架时间不一致，请重新分析当前视频。');
   const analysis=compactMotionAnalysis({...body.analysis,quality:fullAnalysis.quality});
-  return {duration:body.duration,analysis,keyframes,poseData,fullAnalysis,...(body.reviewMode?{reviewMode:body.reviewMode}:{}),...(body.stream===true?{stream:true}:{})};
+  return {duration:body.duration,analysis,keyframes,poseData,fullAnalysis,...(body.reviewMode?{reviewMode:body.reviewMode}:{}),...(body.reviewMode==='guided'?{selectedExerciseId:body.selectedExerciseId}:{}),...(body.stream===true?{stream:true}:{})};
 }
 
-/** The UI defaults to visual evidence; detailed observation modes remain explicit. */
+/** Guided reviews use the user's selection; existing automatic routes remain compatible. */
 export async function completeMotionCoach(options){
+  if(options.input?.reviewMode==='guided')return completeGuidedMotionCoach(options);
   if(options.input?.reviewMode==='efficient')return completeVisualMotionCoach(options);
   if(options.input?.reviewMode==='temporal')return completeTemporalMotionCoach(options);
   return completeFullMotionCoach(options);

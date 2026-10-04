@@ -33,7 +33,7 @@ function retainedFinding(item) {
 
 function incompleteReview(coverage) {
   if (coverage?.complete !== true) return true;
-  if (coverage.strategy === 'visual-keyframes' && (!Number.isInteger(coverage.reviewedImageCount) || coverage.reviewedImageCount < 1
+  if (['visual-keyframes', 'guided-evidence'].includes(coverage.strategy) && (!Number.isInteger(coverage.reviewedImageCount) || coverage.reviewedImageCount < 1
       || finite(coverage.imageCount) && coverage.reviewedImageCount < coverage.imageCount)) return true;
   if (finite(coverage.frameCount) && finite(coverage.reviewedFrameCount) && coverage.reviewedFrameCount < coverage.frameCount) return true;
   return false;
@@ -48,12 +48,21 @@ function noObservations(quality) {
  * uncertain verdict, including when the model could not identify the action.
  * A visible concrete problem can still be reported from a partial review.
  */
-export function sanitizeMotionVerdict(value, {feedback = [], coverage, quality, action} = {}) {
+export function sanitizeMotionVerdict(value, {feedback = [], coverage, quality, action, selectionCheck} = {}) {
   const requested = value && typeof value === 'object' && !Array.isArray(value) && statuses.has(value.status) ? value.status : null;
   const findings = (Array.isArray(feedback) ? feedback : []).filter(retainedFinding);
   const improvements = findings.filter(item => item.status === 'improve' && cleanText(item.correction));
   const positives = findings.filter(item => item.status === 'good');
-  const identified = action?.status === 'identified' && !isUnknownMotionActionName(action.name) && (cleanText(action.name) || cleanText(action.exerciseId));
+  const selected = action?.status === 'selected' && action.source === 'user';
+  const selectionSupported = ['consistent', 'mismatch'].includes(selectionCheck?.status)
+    && cleanText(selectionCheck.evidence).replace(/\s/g, '').length >= 4
+    && Array.isArray(selectionCheck.evidenceTimes) && selectionCheck.evidenceTimes.some(timeIsValid);
+  if (selected && (!selectionSupported || selectionCheck.status !== 'consistent')) {
+    return {status: 'uncertain', summary: selectionSupported && selectionCheck.status === 'mismatch'
+      ? '视频与所选动作类型不一致，请核对动作选择后重新评价。'
+      : '目前还不能确认视频与所选动作一致，请核对动作类型或补充清晰视频。'};
+  }
+  const identified = (selected || action?.status === 'identified') && !isUnknownMotionActionName(action.name) && (cleanText(action.name) || cleanText(action.exerciseId));
   const identityChanged = quality?.reasons?.includes('TARGET_ID_CHANGED');
   const incomplete = incompleteReview(coverage);
   const visualEvidence = coverage?.strategy === 'visual-keyframes' && coverage.reviewedImageCount > 0
@@ -91,5 +100,5 @@ export function readMotionVerdict(report = {}) {
   if (report?.recognitionConflict === true) return {status: 'uncertain', summary: '动作类型还未确认，请补充能看清身体和器械的完整动作视频。'};
   const coach = report?.coach || (report?.mode && typeof report.mode === 'string' ? report : null);
   const feedback = Array.isArray(coach?.feedback) ? coach.feedback : legacyVisualFeedback(coach);
-  return sanitizeMotionVerdict(coach?.verdict, {feedback, coverage: coach?.coverage, quality: report?.quality, action: coach?.action});
+  return sanitizeMotionVerdict(coach?.verdict, {feedback, coverage: coach?.coverage, quality: report?.quality, action: coach?.action, selectionCheck: coach?.selectionCheck});
 }

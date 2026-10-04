@@ -26,6 +26,6 @@
     "qa:motion:rtmw": "node scripts/qa-motion-rtmw.mjs",
     "qa:motion:dataset": "node scripts/qa-motion-dataset.mjs",
     "check:motion:onnx": "node --check public/motion-rtmw.js && node --check scripts/setup-motion-onnx.mjs && node --check scripts/qa-motion-onnx.mjs && node --check scripts/qa-motion-rtmw.mjs",
-    "check:motion:assessment": "node --check server/motion-coach-context.mjs && node --check server/motion-coach-temporal.mjs && node --check server/motion-coach-visual.mjs && node --check scripts/motion-dataset-benchmark.mjs && node --check scripts/motion-dataset-provider.mjs && node --check scripts/motion-dataset-report.mjs && node --check scripts/qa-motion-dataset.mjs && node --check scripts/motion-dataset-reference.mjs"
+    "check:motion:assessment": "node --check server/motion-coach-context.mjs && node --check server/motion-coach-temporal.mjs && node --check server/motion-coach-visual.mjs && node --check server/motion-coach-guided.mjs && node --check scripts/motion-dataset-benchmark.mjs && node --check scripts/motion-dataset-provider.mjs && node --check scripts/motion-dataset-report.mjs && node --check scripts/qa-motion-dataset.mjs && node --check scripts/motion-dataset-reference.mjs && node --check scripts/motion-dataset-guided.mjs && node --check scripts/motion-dataset-guided-prepare.mjs && node --check scripts/motion-dataset-guided-report.mjs && node --check scripts/motion-dataset-guided-audit.mjs"
   }
 }

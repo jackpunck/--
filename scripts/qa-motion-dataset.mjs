@@ -16,11 +16,12 @@ import {buildMotionPoseData} from '../public/motion-pose-data.js';
 import {BENCHMARK_VERSION, datasetVideoPath, hashFile, inspectDataset, scoreMotionPrediction, selectDatasetItems, summarizeDatasetResults} from './motion-dataset-benchmark.mjs';
 import {redactMotionProviderPayload} from './motion-dataset-logging.mjs';
 import {forceMotionDatasetCpu} from './motion-dataset-instrumentation.mjs';
+import {guidedRequestFields,requireGuidedSelection} from './motion-dataset-guided.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const executeFile = promisify(execFile);
-const args = process.argv.slice(2), flags = new Set(['--help', '--verify-hashes', '--one-per-exercise', '--rebuild-images']);
-const names = new Set(['--mode', '--dataset', '--manifest', '--output', '--limit', '--seed', '--exercise', '--subject', '--id', '--minimum-accuracy', '--timeout-ms', '--delegate', '--review-mode', '--stored-provider', '--budget-cny', '--replay', '--reference-review', '--acceptance', '--sample-fps', '--visual-reference-pack']);
+const args = process.argv.slice(2), flags = new Set(['--help', '--verify-hashes', '--one-per-exercise', '--rebuild-images', '--short-first']);
+const names = new Set(['--mode', '--dataset', '--manifest', '--output', '--limit', '--seed', '--exercise', '--subject', '--id', '--minimum-accuracy', '--timeout-ms', '--delegate', '--review-mode', '--stored-provider', '--budget-cny', '--replay', '--reference-review', '--acceptance', '--sample-fps', '--visual-reference-pack', '--protocol']);
 const options = {};
 for (let i = 0; i < args.length; i++) {
   const key = args[i];
@@ -29,6 +30,7 @@ for (let i = 0; i < args.length; i++) {
   else throw new Error(`Unknown option or missing argument: ${key}`);
 }
 if (options['--help']) {
+  console.log('Guided evaluation: --review-mode guided requires each manifest item.selectedExerciseId. Optional --protocol JSON freezes actual system/model/config and code hashes. --short-first changes processing order only. User-selected actions never count as recognition accuracy.');
   console.log('Usage: node scripts/qa-motion-dataset.mjs --mode inventory|sparse|extract|coach [--dataset 测试集] [--manifest JSON] [--sample-fps 7.5|15] [--one-per-exercise] [--limit N] [--exercise ID,ID] [--subject ID,ID] [--id ID,ID] [--seed VALUE] [--verify-hashes] [--output PATH] [--minimum-accuracy 0.85] [--timeout-ms 900000] [--delegate CPU|GPU] [--review-mode efficient|full] [--stored-provider ID --budget-cny 50] [--replay EXTRACT_OUTPUT --rebuild-images] [--reference-review JSON] [--acceptance rate|each-exercise] [--visual-reference-pack JSON]\nSparse: 6 true frames per clip, shared RTMW model, no action/form claims. Extract/coach: complete production video pipeline. Coach: explicit QA_MOTION_BASE_URL, QA_MOTION_MODEL, QA_MOTION_API_KEY or --stored-provider for an authorized saved DeepSeek provider; no implicit configuration lookup. Visual references are an explicit QA-only experiment, recorded separately; targets must be disjoint from reference source videos. QA_PLAYWRIGHT, QA_BROWSER and QA_FFMPEG can override local runtimes.');
   process.exit(0);
 }
@@ -42,7 +44,8 @@ if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) throw new Error('Invalid ti
 const minimumAccuracy = Number(options['--minimum-accuracy'] || .85);
 if (!Number.isFinite(minimumAccuracy) || minimumAccuracy <= 0 || minimumAccuracy > 1) throw new Error('Invalid accuracy gate.');
 const reviewMode = options['--review-mode'] || 'efficient';
-if (!['efficient', 'full'].includes(reviewMode)) throw new Error('Invalid review mode.');
+if (!['efficient', 'full', 'guided'].includes(reviewMode)) throw new Error('Invalid review mode.');
+if(reviewMode==='guided'&&options['--visual-reference-pack'])throw new Error('Guided production evaluation does not accept the QA visual-reference protocol.');
 const acceptance = options['--acceptance'] || 'rate';
 if (!['rate', 'each-exercise'].includes(acceptance)) throw new Error('Invalid acceptance mode.');
 const sampleFps = Number(options['--sample-fps'] || 15);
@@ -64,9 +67,11 @@ else await run();
 async function run() {
   const split = name => (options[name] || '').split(',').filter(Boolean);
   let items = selectDatasetItems(inspected.manifest.items, {seed: options['--seed'], exercises: split('--exercise'), subjects: split('--subject'), ids: split('--id')});
+  if(options['--short-first'])items.sort((a,b)=>(a.duration||a.sourceDurationSeconds||5)-(b.duration||b.sourceDurationSeconds||5)||a.id.localeCompare(b.id));
   if (options['--one-per-exercise']) items = [...new Map(items.toReversed().map(item => [item.exercise, item])).values()].sort((a, b) => a.exercise.localeCompare(b.exercise));
   items = items.slice(0, limit);
   if (!items.length) throw new Error('No matching dataset items.');
+  if(reviewMode==='guided')items.forEach(requireGuidedSelection);
   let referenceMetadata = null;
   if (options['--reference-review']) {
     const reference = JSON.parse(await readFile(resolve(options['--reference-review']), 'utf8'));
@@ -79,14 +84,17 @@ async function run() {
     items = items.map(item => ({...item, ...(refs.has(item.id) ? {independentReview: refs.get(item.id)} : {})}));
     referenceMetadata = {path: resolve(options['--reference-review']), reviewType: reference.reviewType || 'explicit-independent-reference', professionalGroundTruth: reference.professionalGroundTruth === true, scope: reference.scope || 'Explicit independent visual reference'};
   }
-  const safeExpected = item => Object.fromEntries(['id', 'exercise', 'exerciseNameZh', 'qualityLabel', 'sourceLabel', 'sourceGroup', 'subject', 'view', 'specificFault', 'labelProvenance', 'relativePath', 'independentReview'].map(key => [key, item[key] ?? null]));
+  const safeExpected = item => Object.fromEntries(['id', 'exercise', 'selectedExerciseId', 'exerciseNameZh', 'qualityLabel', 'sourceLabel', 'sourceGroup', 'subject', 'view', 'specificFault', 'labelProvenance', 'relativePath', 'independentReview'].map(key => [key, item[key] ?? null]));
   const rows = items.map(item => ({id: item.id, expected: safeExpected(item), status: 'pending'}));
+  const frozenProtocol=options['--protocol']?JSON.parse(await readFile(resolve(options['--protocol']),'utf8')):null;
+  if(frozenProtocol&&frozenProtocol.reviewMode!==reviewMode)throw new Error('Frozen protocol review mode mismatch.');
   const codeFiles = ['public/motion-video.js', 'public/motion-worker.js', 'public/motion-rtmw.js', 'public/motion-tracking.js',
     'public/motion-software-decode.js', 'public/motion-source.js', 'public/motion-evidence.js', 'public/motion-analysis.js',
     'public/motion-pose-data.js', 'public/motion-catalog.js', 'public/motion-contract.js', 'public/motion-feedback.js', 'public/motion-verdict.js',
-    'server/motion-coach.mjs', 'server/motion-coach-full.mjs', 'server/motion-coach-temporal.mjs', 'server/motion-coach-visual.mjs', 'server/motion-coach-context.mjs',
-    'server/providers.mjs', 'scripts/motion-dataset-benchmark.mjs', 'scripts/motion-dataset-provider.mjs', 'scripts/motion-dataset-logging.mjs', 'scripts/motion-dataset-reference.mjs', 'scripts/motion-dataset-instrumentation.mjs', 'scripts/qa-motion-dataset.mjs'];
+    'server/motion-coach.mjs', 'server/motion-coach-full.mjs', 'server/motion-coach-temporal.mjs', 'server/motion-coach-visual.mjs', 'server/motion-coach-guided.mjs', 'server/motion-coach-context.mjs',
+    'server/providers.mjs', 'scripts/motion-dataset-benchmark.mjs', 'scripts/motion-dataset-guided.mjs', 'scripts/motion-dataset-provider.mjs', 'scripts/motion-dataset-logging.mjs', 'scripts/motion-dataset-reference.mjs', 'scripts/motion-dataset-instrumentation.mjs', 'scripts/qa-motion-dataset.mjs'];
   const codeHashes = Object.fromEntries(await Promise.all(codeFiles.map(async file => [file, await hashFile(join(root, file))])));
+  if(frozenProtocol?.codeHashes)for(const [file,hash]of Object.entries(frozenProtocol.codeHashes))if(codeHashes[file]!==hash)throw new Error(`Frozen protocol code changed: ${file}`);
   const replayRoot = options['--replay'] ? resolve(options['--replay']) : null;
   if (replayRoot === output) throw new Error('Replay source and output must be different directories.');
   if (replayRoot && !['extract', 'coach'].includes(mode)) throw new Error('--replay is only supported for extract or real coach mode.');
@@ -96,9 +104,11 @@ async function run() {
     inference: {metadataLabelsExcluded: true, embeddedVideoTextUnmodified: true, neutralFilename: true, mock: false, replay: replayRoot, requestedSampleFps: sampleFps, sampleStrategy: mode === 'sparse' ? 'Six independent frames at 10%, 26%, 42%, 58%, 74%, 90%; real RTMW, no production temporal tracking.' : 'Unmodified analyzeVideo + buildMotionEvidence pipeline at explicitly recorded sampleFps.'}, rows};
   const persist = async () => {
     report.inference.actualSampleRates = [...new Set(rows.map(row => row.pose?.sampleFps).filter(Number.isFinite))];
-    report.summary = summarizeDatasetResults(rows, {minimumAccuracy, mode, acceptance});
+    report.summary = summarizeDatasetResults(rows, {minimumAccuracy, mode, acceptance, reviewMode});
     await writeFile(join(output, 'results.json'), JSON.stringify(report, null, 2));
   };
+  if(frozenProtocol)report.inference.frozenProtocol={path:resolve(options['--protocol']),sha256:await hashFile(resolve(options['--protocol'])),...frozenProtocol};
+  report.inference.userSelectedAction=reviewMode==='guided';
   await persist();
   let provider, fetchImpl, visualPack, referenceFetchFactory;
   if (options['--visual-reference-pack']) {
@@ -210,7 +220,8 @@ async function run() {
               rebuiltQuality = rebuilt.quality;
               row.rebuiltEvidence = true;
             }
-            body = validateMotionCoachRequest({...cachedBody, reviewMode});
+            delete cachedBody.selectedExerciseId;
+            body = validateMotionCoachRequest({...cachedBody, reviewMode, ...(reviewMode==='guided'?guidedRequestFields(item):{})});
             row.duration = cached.duration;
             row.pose = {...cached.pose, sampleFps: realPipeline?.sampleFps || cached.pose?.sampleFps || cachedBody.poseData?.sampleFps, ...(rebuiltQuality ? {quality: rebuiltQuality} : {})};
             row.timing = {pose: cached.timing?.pose, evidence: Math.round(evidenceMs || 0)};
@@ -247,7 +258,7 @@ async function run() {
           row.pose = {frames: result.pipeline.frames.length, sampleFps: result.pipeline.sampleFps, quality: result.observations.quality, delegate: result.pipeline.delegate, decoder: result.pipeline.decoder, model: result.pipeline.modelVersion};
           await writeFile(join(output, `${artifactId}-frames.json`), JSON.stringify(result.pipeline));
           row.framesFile = `${artifactId}-frames.json`;
-          body = validateMotionCoachRequest({...result.body, reviewMode});
+          body = validateMotionCoachRequest({...result.body, reviewMode, ...(reviewMode==='guided'?guidedRequestFields(item):{})});
           row.requestFile = `${artifactId}-request.json`;
           await writeFile(join(output, row.requestFile), JSON.stringify(body));
           }
@@ -265,13 +276,24 @@ async function run() {
             // Never retain request headers, bearer credentials or private data.
             let responseIndex = 0;
             const observedFetch = async (...args) => {
-              if (report.partition === 'holdout' && responseIndex) {
+              if ((report.partition === 'holdout'||reviewMode==='guided') && responseIndex) {
                 row.automaticRetryBlocked = true;
                 throw new Error('Frozen holdout permits one provider attempt per video; automatic timeout retry was blocked.');
               }
               const callIndex = ++responseIndex;
               const requestFile = `${artifactId}-provider-request-${callIndex}.json`;
               const payload = JSON.parse(args[1].body);
+              if(frozenProtocol){
+                const {createHash}=await import('node:crypto');
+                const systemSha256=createHash('sha256').update(payload.messages[0].content).digest('hex');
+                if(systemSha256!==frozenProtocol.systemSha256||payload.model!==frozenProtocol.model||payload.thinking?.type!==frozenProtocol.thinking||payload.temperature!==frozenProtocol.temperature||payload.max_tokens!==frozenProtocol.maxTokens)throw new Error('Actual provider payload violates the frozen protocol.');
+              }
+              if(reviewMode==='guided'){
+                const serialized=JSON.stringify(payload),context=JSON.parse(payload.messages[1].content[0].text);
+                if(context.stage!=='guided-evidence'||context.selectedExercise?.id!==item.selectedExerciseId)throw new Error('Guided actual input lost the declared user selection.');
+                for(const value of [item.id,item.relativePath,'qualityLabel','sourceLabel','specificFault','labelProvenance'])if(value&&serialized.includes(value))throw new Error('Ground-truth metadata leaked into actual provider input.');
+                row.inputAudit={stage:context.stage,selectedExerciseId:context.selectedExercise.id,groundTruthFieldsAbsent:true,actualPoseFrames:context.evidence.frames.length,actualImages:payload.messages[1].content.filter(p=>p.type==='image_url').length};
+              }
               const safePayload = redactMotionProviderPayload(payload, provider.apiKey);
               await writeFile(join(output, requestFile), JSON.stringify({recordedAt: new Date().toISOString(), credentialsOmitted: true, imagesReplacedByHashes: true,
                 localInput: {duration: body.duration, sampleFps: body.poseData.sampleFps, frameCount: body.poseData.frameCount, poseSchemaVersion: body.poseData.schemaVersion, requestSha256: row.requestSha256}, body: safePayload}, null, 2));
@@ -306,7 +328,7 @@ async function run() {
       console.log(JSON.stringify({completed: `${index + 1}/${items.length}`, id: item.id, status: row.status, error: row.error, timing: row.timing, score: row.score, pose: row.pose}));
     }
     if (mode === 'sparse') await writeGallery(rows);
-    if (rows.some(row => row.status === 'error') || mode === 'coach' && !report.summary.gate.passed) process.exitCode = 1;
+    if (rows.some(row => row.status === 'error') || mode === 'coach' && report.summary.gate.passed === false) process.exitCode = 1;
   } finally {
     if (mode === 'sparse') await page?.evaluate(() => window.qaPose?.close()).catch(() => {});
     await browser?.close();

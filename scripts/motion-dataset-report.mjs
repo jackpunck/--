@@ -4,13 +4,22 @@
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, join, relative, resolve, sep} from 'node:path';
 import {datasetVideoPath, expectedVerdict, scoreMotionPrediction, summarizeDatasetResults} from './motion-dataset-benchmark.mjs';
+import {writeGuidedDatasetReport} from './motion-dataset-guided-report.mjs';
 
 const args = process.argv.slice(2);
 if (args[0] !== '--output' || !args[1] || args.length < 3) throw new Error('Usage: --output DIRECTORY coach-results.json [coach-results.json ...]');
 const output = resolve(args[1]), attempts = [];
 const partition = args[2] === '--partition' ? args[3] : 'development';
-if (!['development', 'calibration', 'holdout'].includes(partition)) throw new Error('Partition must be development, calibration or holdout.');
-for (const filename of args.slice(args[2] === '--partition' ? 4 : 2)) {
+let firstReportIndex=args[2]==='--partition'?4:2;
+let planManifest=null,reportContext={};
+while(args[firstReportIndex]?.startsWith('--')){
+  if(args[firstReportIndex]==='--plan-manifest')planManifest=resolve(args[firstReportIndex+1]);
+  else if(args[firstReportIndex]==='--report-context')reportContext=JSON.parse(await readFile(resolve(args[firstReportIndex+1]),'utf8'));
+  else throw new Error('Unknown report option: '+args[firstReportIndex]);
+  firstReportIndex+=2;
+}
+if (!['development', 'calibration', 'holdout', 'guided-development'].includes(partition)) throw new Error('Invalid report partition.');
+for (const filename of args.slice(firstReportIndex)) {
   const path = resolve(filename), report = JSON.parse(await readFile(path, 'utf8'));
   if (report.mode !== 'coach' || report.inference?.mock !== false) throw new Error('Only real coach benchmark reports can be combined.');
   if ((report.partition || 'development') !== partition) throw new Error(`Refusing to mix ${report.partition || 'development'} results into the ${partition} report.`);
@@ -18,11 +27,21 @@ for (const filename of args.slice(args[2] === '--partition' ? 4 : 2)) {
     if (row.status === 'pending') continue;
     const score = row.coach ? scoreMotionPrediction(row.expected, row.coach) : undefined;
     attempts.push({...row, score, runAt: report.generatedAt, reportFile: path, referenceReview: report.referenceReview,
-      protocol: {reviewMode: report.reviewMode, visualReferences: report.inference.visualReferences || null, actualSampleRates: report.inference.actualSampleRates, codeHashes: report.codeHashes}});
+      protocol: {reviewMode: report.reviewMode, visualReferences: report.inference.visualReferences || null, actualSampleRates: report.inference.actualSampleRates, codeHashes: report.codeHashes,
+        frozen:report.inference.frozenProtocol||null,provider:report.inference.provider||null}});
   }
 }
 attempts.sort((a, b) => a.runAt.localeCompare(b.runAt));
 const latest = [...new Map(attempts.map(row => [row.id, row])).values()];
+if(attempts.some(row=>row.protocol.reviewMode==='guided'||row.coach?.mode==='guided')){
+  if(attempts.some(row=>row.protocol.reviewMode!=='guided'))throw new Error('Do not mix user-selected evaluations with action recognition attempts.');
+  if(planManifest){const plan=JSON.parse(await readFile(planManifest,'utf8')),known=new Set(latest.map(row=>row.id));
+    for(const item of plan.items)if(!known.has(item.id))latest.push({id:item.id,status:'pending',expected:item,plannedOnly:true});
+    if(latest.some(row=>!plan.items.some(item=>item.id===row.id)))throw new Error('An attempted clip is absent from the frozen plan.');
+  }
+  console.log(JSON.stringify(await writeGuidedDatasetReport({output,partition,attempts,latest,reportContext}),null,2));
+  process.exit(0);
+}
 const requiredExercises = ['bodyweight-squat', 'pull-up', 'barbell-bench-press', 'barbell-deadlift', 'seated-cable-row'];
 const limitations = {
   holdout: 'Held-out videos: report separately from development and calibration attempts. No unseen seated-row sample exists. Latest attempts, failures, and abstentions all remain counted. Author good/bad labels do not independently verify a specific correction.',

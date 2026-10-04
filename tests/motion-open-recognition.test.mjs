@@ -7,7 +7,7 @@ const action = extra => ({exerciseId: null, name: '引体向上', family: 'verti
 const sanitize = (value, options = {}) => sanitizeMotionCoachResponse(value, {mode: 'visual', keyframes: frames, ...options});
 
 test('open action names keep their visual identity independently of the teaching catalogue', () => {
-  for (const name of ['引体向上', '负重引体向上', '弹力带面拉', '双杠臂屈伸']) {
+  for (const name of ['引体向上', '负重引体向上', '对握引体向上', '宽握反手引体向上']) {
     const coach = sanitize({action: action({name})});
     assert.equal(coach.action.status, 'identified');
     assert.equal(coach.action.exerciseId, name==='引体向上'?'bodyweight-pullup':null);
