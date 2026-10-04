@@ -1,3 +1,4 @@
+import {compute} from '../server/compute.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {addDays,weekDates,validateDate,validateCalendarTask,calendarTasks,trainingDayType,planCalendarTasks,recurringCalendarTasks,calendarResetChanges} from '../public/schedule.js';
@@ -100,7 +101,8 @@ test('recurring scheduling preserves overrides, extends distant weeks and stays 
   records.set('active-plan',{id:'active-plan',kind:'plan',data:template});
   records.set('meal',{id:'meal',kind:'meal',data:{date:'2026-12-31'}});
   let nextId=0;
-  const context={syncBeforeArchiving:async()=>{},loadCalendarHolidayData:async()=>{},state:{store,date:'2026-12-31'},plan:()=>template,today:()=> '2026-12-31',uid:()=>`cycle-${++nextId}`,structuredClone,weekDates,addDays,planCalendarTasks,recurringCalendarTasks,calendarResetChanges,closeModal:()=>{},renderTraining:()=>{},toast:()=>{}};
+  const context={calculate:async(operation,...args)=>compute({operation,args}),syncBeforeArchiving:async()=>{},loadCalendarHolidayData:async()=>{},state:{store,date:'2026-12-31'},plan:()=>template,today:()=> '2026-12-31',uid:()=>`cycle-${++nextId}`,structuredClone,weekDates,addDays,planCalendarTasks,recurringCalendarTasks,calendarResetChanges,closeModal:()=>{},renderTraining:()=>{},toast:()=>{}};
+  context.computeRecords=()=>[...records.values()];
   runInNewContext(source.slice(start,end),context);
   fail=true;await assert.rejects(context.addPlanToCalendar(template,'2026-12-31'),/disk unavailable/);
   assert.equal(records.size,2);fail=false;

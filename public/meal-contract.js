@@ -65,14 +65,17 @@ export function nutritionBalance(target, consumed) {
   }]));
 }
 
-export function mealAdviceTiming(date, meals, value = new Date()) {
-  const now = new Date(value);
+export function mealAdviceTiming(date, meals, value = new Date(), timezoneOffset) {
+  const instant=new Date(value);
+  const offset=timezoneOffset===undefined?instant.getTimezoneOffset():timezoneOffset;
+  if(!Number.isInteger(offset)||offset < -840||offset > 840)throw new Error('用户时区无效。');
+  const now = new Date(instant.getTime()-offset*60000);
   if(!Number.isFinite(now.getTime()))throw new Error('建议生成时间无效。');
-  const localDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  const hour=now.getHours();
+  const localDate=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
+  const hour=now.getUTCHours();
   const mainMealCount=meals.filter(meal=>(meal.items||[]).some(item=>foodCategory(item,meal.userPrompt??meal.notes)==='正餐')).length;
   const earliestMealIndex=date>localDate?0:date<localDate?3:hour<11?0:hour<16?1:hour<21?2:3;
-  const timing={localDate,localTime:`${String(hour).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,timezoneOffset:now.getTimezoneOffset(),recordedTimes:meals.map(meal=>meal.createdAt||null),recordCount:meals.length,mainMealCount,remainingMainMeals:Math.max(0,3-mainMealCount),earliestMealIndex};
+  const timing={localDate,localTime:`${String(hour).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`,timezoneOffset:offset,recordedTimes:meals.map(meal=>meal.createdAt||null),recordCount:meals.length,mainMealCount,remainingMainMeals:Math.max(0,3-mainMealCount),earliestMealIndex};
   if(date<localDate)return {...timing,scenario:'review',title:'这一天的饮食复盘',nextMeal:null,maxFoods:0,reason:'查看历史日期，只复盘当日搭配，不建议现在补吃历史差额。'};
   if(date>localDate)return {...timing,scenario:'plan',title:'这一天的饮食安排',nextMeal:null,maxFoods:5,reason:'查看未来日期，结合已有记录规划，不把未来记录当作今天已吃。'};
   return {...timing,scenario:'meal',title:'一日三餐建议',nextMeal:null,maxFoods:5,reason:'按已记录正餐调整剩余三餐，结合同日加餐、零食和近七天习惯分配营养；记录时刻不是实际进食时刻，不要求立即补吃。'};

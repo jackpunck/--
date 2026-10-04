@@ -12,7 +12,7 @@ test('pose resources use executable MIME and constrained worker/WASM policy; rep
  const server=await startServer({host:'127.0.0.1',port:0,dataDir});
  t.after(async()=>{await new Promise(r=>{server.close(r);server.closeAllConnections();});await rm(dataDir,{recursive:true,force:true});});
  const base=`http://127.0.0.1:${server.address().port}`;
- for(const [path,type]of [['/vendor/mediapipe/wasm/vision_wasm_internal.wasm','application/wasm'],['/vendor/mediapipe/pose_landmarker_full.task','application/octet-stream'],['/motion-worker.js','text/javascript; charset=utf-8'],['/motion-decode.js','text/javascript; charset=utf-8'],['/vendor/mp4box/mp4box.all.mjs','text/javascript; charset=utf-8']]){
+ for(const [path,type]of [['/vendor/rtmw/rtmw-l-384x288.onnx','application/octet-stream'],['/vendor/rtmw/yolox-tiny-humanart.onnx','application/octet-stream'],['/motion-models.js','text/javascript; charset=utf-8'],['/vendor/onnxruntime/ort-wasm-simd-threaded.wasm','application/wasm'],['/motion-rtmw.js','text/javascript; charset=utf-8'],['/motion-worker.js','text/javascript; charset=utf-8'],['/motion-decode.js','text/javascript; charset=utf-8'],['/vendor/mp4box/mp4box.all.mjs','text/javascript; charset=utf-8'],['/motion-media.js','text/javascript; charset=utf-8'],['/motion-source.js','text/javascript; charset=utf-8'],['/motion-source-worker.js','text/javascript; charset=utf-8'],['/motion-software-decode.js','text/javascript; charset=utf-8'],['/motion-frame-player.js','text/javascript; charset=utf-8'],['/vendor/ffmpeg/ffmpeg-core.js','text/javascript; charset=utf-8'],['/vendor/ffmpeg/ffmpeg-core.wasm','application/wasm']]){
   const response=await fetch(base+path,{method:'HEAD'});assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),type);
   const policy=response.headers.get('content-security-policy');assert(policy.includes("'wasm-unsafe-eval'"));assert(!policy.includes("'unsafe-eval'"));assert(policy.includes("worker-src 'self'"));assert(policy.includes("media-src 'self' blob:"));
  }
@@ -28,14 +28,13 @@ test('pose resources use executable MIME and constrained worker/WASM policy; rep
 });
 
 
-test('long engine and AI reports preserve all repetitions through frontend validation and HTTP sync',async t=>{
+test('AI-only reports save concise conclusions without local measurements or legacy rule results',async t=>{
  const {analysis,report}=longMotionReport();
- assert.equal(report.reps.length,74);assert.equal(report.attemptCount,analysis.attemptCount);
- assert.ok(Buffer.byteLength(JSON.stringify(report))>256*1024);assert.ok(Buffer.byteLength(JSON.stringify(report))<MAX_MOTION_ASSESSMENT_BYTES);
+ assert(analysis.measurements.length>1000);
+ for(const key of ['score','checks','reps','qualified','measurements','poseData'])assert.equal(Object.hasOwn(report,key),false);
+ assert(report.coach.verdict);assert(report.coach.feedback.length>0);
+ assert.ok(Buffer.byteLength(JSON.stringify(report))<32*1024);
  assert.doesNotThrow(()=>validateMotionAssessmentSize(report));
- assert.ok(analysis.reps.every(rep=>rep.metrics.components),'Building a stored report does not mutate the live analysis');
- assert.ok(report.reps.every(rep=>rep.metrics.components===undefined));
- assert.deepEqual(report.reps.map(rep=>[rep.start,rep.bottom,rep.end,rep.checks,rep.issues]),analysis.reps.map(rep=>[rep.start,rep.bottom,rep.end,rep.checks,rep.issues]));
  const dataDir=await mkdtemp(join(tmpdir(),'fitness-motion-long-')),server=await startServer({host:'127.0.0.1',port:0,dataDir});
  t.after(async()=>{await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});await rm(dataDir,{recursive:true,force:true});});
  const root=`http://127.0.0.1:${server.address().port}`;

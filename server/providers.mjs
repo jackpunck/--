@@ -205,7 +205,15 @@ async function requestJson(endpoint, { provider, address, fetchImpl, signal, bod
     });
   } catch (error) { throw connectionError(error); }
   if (!response.ok) {
-    await response.body?.cancel().catch(() => {});
+    // Classify bounded context errors without reflecting vendor text or keys.
+    let contextTooLong=false;
+    if([400,413,422].includes(response.status)&&response.body){
+      const reader=response.body.getReader();let errorText='';
+      try {const decoder=new TextDecoder();while(errorText.length<8192){const chunk=await reader.read();if(chunk.done)break;errorText+=decoder.decode(chunk.value,{stream:true}).slice(0,8192-errorText.length);}}
+      catch {} finally {await reader.cancel().catch(()=>{});reader.releaseLock();}
+      contextTooLong=/context[_ ]length[_ ]exceeded|maximum context|context window|too many tokens|input.{0,50}(too long|token limit)|token.{0,30}(limit|maximum|exceed)|上下文.{0,12}(超|长)/i.test(errorText);
+    } else await response.body?.cancel().catch(() => {});
+    if(contextTooLong)throw Object.assign(new HttpError(502,'AI 模型上下文长度不足，输入超过模型限制。'),{code:'AI_CONTEXT_TOO_LONG'});
     const message = response.status === 401 || response.status === 403 ? 'AI 服务拒绝认证，请检查密钥和模型权限。' : response.status === 429 ? 'AI 服务请求过于频繁或额度不足，请稍后再试。' : `AI 服务返回 HTTP ${response.status}，请检查模型和接口兼容性。`;
     throw new HttpError(502, message);
   }
@@ -313,6 +321,11 @@ export async function complete({ provider, messages, purpose, fetchImpl, timeout
   const baseUrl = apiBase(provider);
   let endpoint = `${baseUrl}/chat/completions`;
   let body = { model: provider.model, messages, stream: false };
+  // Complete motion observations need a short verdict, not an extended reasoning
+  // response. This option is specific to the official DeepSeek API and models.
+  if(purpose==='motion-coach'&&provider.protocol==='openai'&&new URL(provider.baseUrl).hostname==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(provider.model)){
+    body.thinking={type:'disabled'};body.response_format={type:'json_object'};body.max_tokens=2400;body.temperature=0;
+  }
   // Daily suggestions use already calculated nutrition and a bounded JSON response.
   // Only send this vendor option to the official models that support it.
   if (purpose === 'nutrition-advice' && provider.protocol === 'openai'

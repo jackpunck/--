@@ -11,7 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const qaRoot = join(root, '.qa');
 await mkdir(qaRoot, { recursive: true });
 const dataDir = await mkdtemp(join(qaRoot, 'providers-'));
-const { chromium } = await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT || join(root, '精细模型与动作开发/node_modules/playwright/index.mjs'))).href);
+const { chromium } = await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT || join(root, '.qa/browser-tools/node_modules/playwright/index.mjs'))).href);
 const keys = ['qa-secret-deepseek-never-return-98671', 'qa-secret-openai-never-return-29783'];
 const modelIds = ['qa-chat', 'qa-vision', 'qa-planner'];
 const modelCalls = [], completionCalls = [], errors = [], unexpectedFailures = [];
@@ -91,7 +91,7 @@ const noStoredKeys = async () => {
     const local = Object.fromEntries(Object.entries(localStorage));
     const session = Object.fromEntries(Object.entries(sessionStorage));
     const accounts = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('fitness-assistant-v1', 1);
+      const request = indexedDB.open('fitness-assistant-v1');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
@@ -135,6 +135,9 @@ try {
   await screenshot('desktop-provider-search-empty');
   await page.locator('#provider-model-search').fill('');
   for (const model of modelIds) assert.equal(await page.locator(`input[name="enabled-model"][value="${model}"]`).isChecked(), true);
+  await page.locator('[data-model-vision="qa-chat"]').selectOption('false');
+  await page.locator('[data-model-vision="qa-vision"]').selectOption('true');
+  await page.locator('[data-model-vision="qa-planner"]').selectOption('unknown');
   await submit('provider-form'); await page.locator('#provider-form').waitFor({ state: 'hidden' });
   let saved = await config();
   assert.equal(saved.providers.length, 1);
@@ -142,6 +145,9 @@ try {
   assert.equal(saved.providers[0].hasKey, true);
   assert.equal(saved.providers[0].model, 'qa-chat');
   assert.deepEqual(saved.providers[0].models.map(model => model.id).sort(), [...modelIds].sort());
+  assert.equal(saved.providers[0].models.find(model=>model.id==='qa-vision').vision,true);
+  assert.equal(saved.tasks.motion,firstId,'A known visual model initializes the motion task');
+  assert.equal(saved.taskModels.motion,'qa-vision','Text default model must not initialize motion');
 
   step = 'assign each task a different model from the same provider'; console.log(step);
   for (const [task, modelId] of Object.entries({ chat: 'qa-chat', meal: 'qa-vision', planning: 'qa-planner' })) {
@@ -164,6 +170,7 @@ try {
   step = 'edit discovers models using saved key without re-entry'; console.log(step);
   await editProvider(firstId);
   assert.equal(await page.locator('#provider-key').inputValue(), '');
+  assert.equal(await page.locator('[data-model-vision="qa-vision"]').inputValue(),'true','Manual image capability survives save and reopening');
   assert.equal((await discover()).status, 200);
   assert.equal(modelCalls.at(-1).authorization, `Bearer ${keys[0]}`);
   await noStoredKeys();
@@ -179,8 +186,9 @@ try {
   discoveryMode = 'success'; assert.equal((await discover()).status, 200);
   await submit('provider-form'); await page.locator('#provider-form').waitFor({ state: 'hidden' });
   saved = await config();
-  assert.deepEqual(saved.tasks, { chat: firstId, meal: firstId, planning: firstId });
-  assert.deepEqual(saved.taskModels, { chat: 'qa-chat', meal: 'qa-vision', planning: 'qa-planner' });
+  assert.deepEqual(saved.tasks, { chat: firstId, meal: firstId, planning: firstId, motion:firstId });
+  assert.deepEqual(saved.taskModels, { chat: 'qa-chat', meal: 'qa-vision', planning: 'qa-planner', motion:'qa-vision' });
+  assert.equal(saved.providers[0].models.find(model=>model.id==='qa-vision').vision,true,'Discovery preserves manually confirmed image support');
 
   step = 'second preset makes both providers available to task model selection'; console.log(step);
   await addProvider('openai', keys[1]);
@@ -205,12 +213,13 @@ try {
   await screenshot('desktop-provider-settings');
 
   step = 'reload retains configuration and mobile at 390 pixels stays within viewport'; console.log(step);
-  await page.reload(); await page.locator('#chat-input').waitFor(); await settings();
+  await page.reload(); await page.locator('.nav [data-page="settings"]').waitFor(); await settings();
   assert.equal(await page.locator('#task-chat').inputValue(), JSON.stringify({ providerId: secondId, modelId: 'qa-vision' }));
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'AI settings overflow at 390px');
   await screenshot('mobile-provider-settings');
   await editProvider(firstId);
+  assert.equal(await page.locator('[data-model-vision="qa-vision"]').inputValue(),'true');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Provider editor overflows at 390px');
   assert.equal(await page.locator('#provider-form').evaluate(form => form.scrollWidth <= form.clientWidth), true, 'Provider form has horizontal overflow');
   await assertSaveButtonVisible();

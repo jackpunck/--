@@ -1,3 +1,4 @@
+import {compute} from '../server/compute.mjs';
 import {validTrainingCompletion} from '../public/achievements.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,9 +9,11 @@ import {exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERC
 const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const content=source.slice(source.indexOf('function trainingExerciseSummary('),source.indexOf('function exerciseLine('));
 const conflictCheck=source.slice(source.indexOf('function assertTaskCurrent('),source.indexOf('function renderCalendarCard('));
-const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('function renderTraining('));
+const cardRenderer=source.slice(source.indexOf('function renderCalendarCard('),source.indexOf('async function renderTraining('));
 function setup(extra={}) {
   const context={button:()=>'',validTrainingCompletion,beijingDate:()=>'2026-09-30',weekDates:()=>['2026-09-28','2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-03','2026-10-04'],allCalendarTasks:()=>[],today:()=>'2026-09-30',structuredClone,exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES,...extra};
+  context.calculate=async(operation,...args)=>compute({operation,args});
+  context.computed={get completed(){const values=context.allCalendarTasks();return values.filter(validTrainingCompletion).map(r=>r.id);}};
   runInNewContext(conflictCheck+content,context);
   return context;
 }
@@ -121,7 +124,7 @@ test('editing an exercise clears its checkoff while unchanged and removed rows k
 
 test('calendar card follows all exercise checkoffs and reverts when one is unchecked',async()=>{
   const record=task();
-  const context=setup({state:{calendarDetail:structuredClone(record),store:{put:async(kind,id,data)=>{record.data=data;}}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot,esc:String,icon:()=>'',button:(text,action)=>`<button data-action="${action}">${text}</button>`});
+  const context=setup({allCalendarTasks:()=>[record],state:{calendarDetail:structuredClone(record),store:{put:async(kind,id,data)=>{record.data=data;}}},calendarTask:()=>record,taskDay:r=>r.data.daySnapshot,esc:String,icon:()=>'',button:(text,action)=>`<button data-action="${action}">${text}</button>`});
   runInNewContext(cardRenderer,context);
   for(let index=0;index<2;index++){
     context.state.calendarDetail=structuredClone(record);await context.toggleTrainingExercise(record.id,index);
@@ -136,9 +139,9 @@ test('calendar card follows all exercise checkoffs and reverts when one is unche
 });
 
 test('completion summary keeps saved training complete and does not complete empty sessions',()=>{
-  const context=setup({taskDay:r=>r.data.daySnapshot});
+  const record=task(),context=setup({allCalendarTasks:()=>[record],taskDay:r=>r.data.daySnapshot});
   assert.equal(typeof context.trainingTaskCompleted,'function');
-  const record=task();record.data.daySnapshot.exercises=[];
+  record.data.daySnapshot.exercises=[];
   assert.equal(context.trainingTaskCompleted(record),false);
   record.data.completed=true;assert.equal(context.trainingTaskCompleted(record),false);
   record.data.daySnapshot=task().data.daySnapshot;record.data.actual=structuredClone(record.data.daySnapshot.exercises);assert.equal(context.trainingTaskCompleted(record),true);

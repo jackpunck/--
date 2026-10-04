@@ -1,26 +1,25 @@
 import {landingMarkup, mountLanding} from './landing.js?v=13';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {getDailyQuote} from './daily-quotes.js?v=1';
-import {normalizeBusySettings,defaultWeekdays,setDefaultWeekdays,busyPredicate,isBusyDate,busyDatesInRange} from './busy-rules.js';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
-import {createLibraryTemplate, libraryMigration, libraryPlan} from './plan-library.js?v=2';
-import {beijingDate,validTrainingCompletion,achievementWall} from './achievements.js?v=5';
-import {renderAchievementWall,renderAchievementDetails} from './achievement-view.js?v=4';
-import {api, streamChat, RecordStore, setApiUser, createId} from './store.js?v=10';
+import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=25';
+import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} from './store.js?v=11';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
-import {calendarTasks, validateCalendarTask, trainingDayType, addDays, weekDates, planCalendarTasks, recurringCalendarTasks, calendarResetChanges, rescheduleBusyTasks} from './schedule.js?v=12';
-import {remainingMealSuggestions, foodCategory, mealWeekContext, mealCategoryInstruction, adjustMealNutrient, mealDishInstruction, parseMealEstimate, nutritionBalance, parseNutritionAdvice, formatMealNotes, mealAdviceTiming} from './meal-contract.js?v=9';
+import {addDays, weekDates} from './schedule.js?v=12';
+import {formatMealNotes} from './meal-display.js';
+import {calculate,createComputedState} from './compute.js';
+import {exercises,foods,trainingParts,MAX_TRAINING_EXERCISES,defaultExercises,formulaCards,foodPortions,rmPresets,rmConversionReference,mealCategoryInstruction,mealDishInstruction} from './compute-catalog.js';
+const exerciseUsesSeconds = id => id === 'plank';
+const defaultTrainingExercise = id => structuredClone(defaultExercises[id]);
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
-import {formulaCards, foodPortions, rmPresets, rmConversionReference, calculateMetabolism, calculateMacroEnergy, calculateFoodPortion, calculateRMConversion} from './knowledge-tools.js?v=11';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
-import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=6';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=10';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {createProviderSettings} from './provider-settings.js?v=1';
-import {exercises, foods, calculateNutrition, generateGroupedPlan, trainingParts, MAX_TRAINING_EXERCISES, defaultTrainingExercise, exerciseUsesSeconds, estimate1RM, sumFoods, suggestRecipe, substituteFood, convertFoodWeight, validateProfile} from './domain.js?v=12';
 import {coverUrl} from './exercise-covers.js?v=9';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -45,6 +44,7 @@ const paths = {
  food:'M6 3v6a3 3 0 0 0 6 0V3M9 3v18M19 3v18M19 3c-4 4-4 9 0 9',
  dumbbell:'m6 5 13 13M3 8l5-5M2 5l3-3M16 21l5-5M19 22l3-3M5 10l5-5M14 19l5-5',
  grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+ community:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
  settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',
  plus:'M12 5v14M5 12h14', arrow:'M7 17 17 7M7 7h10v10', send:'M12 19V5M5 12l7-7 7 7',
  clip:'m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5',
@@ -59,7 +59,7 @@ const paths = {
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.spark}"/></svg>`;
 const button = (text,action,extra='',type='') => `<button type="button" class="button ${type}" data-action="${action}" ${extra}>${text}</button>`;
 const empty = (text,name='leaf') => `<div class="empty">${icon(name)}${text}</div>`;
-const state = {page:'chat',setting:'profile',date:today(),conversation:null,user:null,store:null,providers:[],tasks:{},taskModels:{},providerDraft:null,files:[],busy:false,filter:'',muscle:'',equipment:'',knowledgeTab:'nutrition',mealDraft:null,authMode:'register'};
+const state = {page:'chat',setting:'home',date:today(),conversation:null,user:null,store:null,providers:[],tasks:{},taskModels:{},providerDraft:null,files:[],busy:false,filter:'',muscle:'',equipment:'',knowledgeTab:'nutrition',mealDraft:null,authMode:'register'};
 try { state.sidebarCollapsed = localStorage.getItem('fitness:sidebar-collapsed') === 'true'; } catch { state.sidebarCollapsed = false; }
 const knowledgeDrafts = {};
 const modelViewer = new ModelViewer();
@@ -67,6 +67,26 @@ let motionView = null;
 let motionContainer = null;
 function closeMotionView() { motionView?.destroy(); motionView=null; motionContainer=null; }
 let landingCleanup = null;
+let communityController = null;
+let navigationVersion = 0;
+let providerSettings = null;
+state.providersVersion = null;
+state.providersConflict = false;
+const personalSections = [['home','我的主页'],['profile','健康档案'],['achievements','成就墙'],['ai','AI 服务'],['review','阶段复盘'],['data','数据与同步']];
+function personalRoute(hash=location.hash) {
+  const [path,query='']=String(hash).split('?'),params=new URLSearchParams(query);
+  return {active:path==='#settings',section:personalSections.some(([id])=>id===params.get('section'))?params.get('section'):'home',tab:['collections','drafts'].includes(params.get('tab'))?params.get('tab'):'published'};
+}
+const personalHash = section => section==='home'?'#settings':'#settings?section='+encodeURIComponent(section);
+const communityOnlyPage = () => state.page==='community'||state.page==='settings'&&state.setting==='home';
+function canonicalProfileHash(hash) {
+  const [path,query='']=String(hash).split('?'),params=new URLSearchParams(query),parts=path.split('/');
+  if(path==='#community/mine'||parts[0]==='#community'&&parts[1]==='user'&&String(parts[2])===String(state.user?.id)&&params.get('preview')!=='public'){
+    const tab=['collections','drafts'].includes(params.get('tab'))?params.get('tab'):'published';
+    return tab==='published'?'#settings':'#settings?tab='+tab;
+  }
+  return hash;
+}
 const chatDrafts = new Map();
 const chatScroll = new Map();
 let chatRun = null;
@@ -90,17 +110,26 @@ const chatUploads = new AttachmentManager({
 const profile = () => state.store?.get('profile');
 const records = kind => state.store?.list(kind) || [];
 const plan = () => state.store?.get('active-plan');
-const allCalendarTasks = () => calendarTasks(records('calendar-task'),records('schedule'),plan());
+const emptyTotals = {kcal:0,protein:0,carbs:0,fat:0};
+let computed = {tasks:[],nutrition:{},totals:{},mealTotals:{},dayTypes:{},advice:{},busyDates:[],completed:[],achievements:{}};
+const computeRecords = () => [...(state.store?.records.values()||[])].filter(r=>['profile','phase','meal','nutrition-advice','plan','draft','calendar-task','schedule','training-cycle','calendar-settings','achievement','achievement-summary','training-template','library-settings','preferences'].includes(r.kind));
+const computedState = createComputedState(()=>({records:computeRecords(),dates:[state.date],today:today(),now:new Date().toISOString().slice(0,16)+':00.000Z',timezoneOffset:new Date().getTimezoneOffset(),userId:state.user?.id}));
+async function refreshComputed() {if(!state.user)return;computed=await computedState.refresh();}
+async function readyComputed() {const store=state.store,page=state.page,setting=state.setting;try{await refreshComputed();return state.store===store&&state.page===page&&state.setting===setting;}catch(error){if(state.store===store)toast(error.message,true);return false;}}
+const allCalendarTasks = () => computed.tasks;
 const scheduledRecord = date => allCalendarTasks().find(r=>r.data.date===date&&r.data.taskType==='training');
 const scheduled = date => scheduledRecord(date)?.data;
-const dayType = date => trainingDayType(date,allCalendarTasks());
-const totals = date => records('meal').filter(r => r.data.date === date && r.data.confirmed).reduce((sum,r) => { const t = mealTotals(r.data.items); for (const k of Object.keys(sum)) sum[k] += t[k] || 0; return sum; },{kcal:0,protein:0,carbs:0,fat:0});
-const mealTotals = items => sumFoods(items || []);
-function nutrition(date = state.date) { try { return calculateNutrition(profile(),dayType(date)); } catch(error) { return {kcal:0,protein:0,carbs:0,fat:0,bmr:0,tdee:0,error:error.message}; } }
+const dayType = date => computed.dayTypes[date] || 'rest';
+const totals = date => computed.totals[date] || emptyTotals;
+const mealTotals = items => computed.mealTotals[JSON.stringify(items||[])] || emptyTotals;
+function nutrition(date=state.date) {return computed.nutrition[dayType(date)]||{...emptyTotals,bmr:0,tdee:0,error:'等待服务器计算营养目标。'};}
+const isBusyDate = date => computed.busyDates.includes(date);
+const beijingDate = () => computed.beijingDate;
+const foodCategory = (item,description='') => item.category||computed.mealCategories?.[JSON.stringify([item,description])]||'正餐';
 function toast(message,error=false) { const el=document.createElement('div'); el.className='toast'+(error?' error':''); el.textContent=message; $('#toasts').append(el); while($('#toasts').children.length>2)$('#toasts').firstElementChild.remove();setTimeout(()=>el.remove(),5000); }
 function modal(title,html,wide=false,required=false) { const el=$('#modal'); el.className=wide?'modal-wide':''; el.innerHTML=`<div class="modal-head"><h2>${title}</h2>${required?'':`<button class="icon-button" aria-label="关闭" data-action="close-modal">${icon('close')}</button>`}</div><div class="modal-content">${html}</div>`; el.oncancel=required?e=>e.preventDefault():null; if(!el.open)el.showModal(); }
 function clearProviderDraft() {if(state.providerDraft)state.providerDraft.apiKey='';state.providerDraft=null;const key=$('#provider-key');if(key)key.value='';}
-function closeModal() {clearProviderDraft();$('#modal').close(); }
+function closeModal() {clearProviderDraft();state.busyEditor=null;$('#modal').close(); }
 function formData(form) { return Object.fromEntries(new FormData(form)); }
 function options(list,selected) { return list.map(([value,label])=>`<option value="${esc(value)}" ${String(value)===String(selected)?'selected':''}>${esc(label)}</option>`).join(''); }
 
@@ -114,20 +143,79 @@ async function boot() {
   }
 }
 async function enter(user,offline=false) {
-  if(state.user?.id!==user.id){modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.celebratedWeeks=new Set();state.achievementPage=0;state.achievementCategory='all';state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
+  if(state.user?.id!==user.id){closeMotionView();await communityController?.destroy();communityController=null;modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.celebratedWeeks=new Set();state.achievementPage=0;state.achievementCategory='all';state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
+  state.providersVersion=null;state.providersConflict=false;
   setApiUser(user.id);
   state.user=user; state.store=await new RecordStore(user).open(); localStorage.setItem('fitness:last-user',JSON.stringify(user));
+  providerSettings=createSessionProviderSettings(user,state.store);
   let derivedPending=false;for(const [id,change] of state.store.pending){if(['achievement','achievement-summary'].includes(change.kind)){state.store.pending.delete(id);state.store.records.delete(id);state.store.conflicts=state.store.conflicts.filter(item=>item.id!==id);derivedPending=true;}}
   if(derivedPending){state.store.cursor=null;await state.store.persist();}
-  if(offline)state.store.status='offline';
+  const communityReturn=readCommunityReturn();
+  if(communityReturn)history.replaceState(null,'',communityReturn);
+  const initialHash=canonicalProfileHash(location.hash);
+  if(initialHash!==location.hash)history.replaceState(null,'',initialHash);
+  const personal=personalRoute(initialHash);
+  if(personal.active){state.page='settings';state.setting=personal.section;}
+  else state.page=initialHash.startsWith('#community')?'community':(['chat','nutrition','training','library','motion'].includes(initialHash.slice(1))?initialHash.slice(1):state.page);
+  let computeReady=false;
+  if(offline){state.store.status='offline';if(!communityOnlyPage()){showComputeUnavailable();return;}}
+  else try{await refreshComputed();computeReady=true;}catch(error){if(!communityOnlyPage()){showComputeUnavailable(error.message);return;}}
   const store=state.store;state.scheduleFingerprint=scheduleFingerprint();state.scheduleRefreshPending=false;
-  store.addEventListener('change',()=>{if(state.store!==store)return;updateSync();renderSidebarHistory();refreshScheduleViews();});
+  store.addEventListener('change',()=>{if(state.store!==store)return;updateSync();renderSidebarHistory();void refreshComputed().then(()=>{if(state.store===store)refreshScheduleViews();}).catch(error=>{if(state.store===store)toast(error.message,true);});});
   if(!offline) { await state.store.sync().catch(e=>toast(e.message,true)); await loadProviders(); }
-  await ensurePlanLibrary();
+  if(computeReady)await ensurePlanLibrary();
   render(); if(!profile()) showProfile(true);
 }
-const providerSettings=createProviderSettings({request:api,getUserId:()=>state.user?.id,onUpdate:result=>{state.providers=result.providers;state.tasks=result.tasks;state.taskModels=result.taskModels||{};}});
-async function loadProviders() { try { await providerSettings.load(); } catch {} }
+function applyProviders(result) {
+  if(state.providersVersion!==null&&result.version<state.providersVersion)return;
+  state.providers=result.providers;state.tasks=result.tasks;state.taskModels=result.taskModels||{};
+  state.providersVersion=result.version;state.providersConflict=false;
+}
+function createSessionProviderSettings(user,store) {
+  return createProviderSettings({
+    getUserId:()=>state.user?.id,
+    request:(path,options={})=>{
+      if(state.user!==user||state.store!==store)throw new Error('账号已切换，请重新保存模型配置。');
+      return api(path,{...options,headers:{...options.headers,'X-Fitness-User':user.id}});
+    },
+    onUpdate:result=>{if(state.user===user&&state.store===store)applyProviders(result);},
+  });
+}
+async function loadProviders() {
+  const user=state.user,store=state.store,settings=providerSettings;if(!user||!settings)return false;
+  try {
+    await settings.load();
+    return state.user===user&&state.store===store&&providerSettings===settings;
+  } catch {return false;}
+}
+function providerConflictMarkup() {
+  return `<div class="error-box"><p>AI 服务配置已更新，当前修改尚未保存。加载最新配置后，请重新修改。</p>${button('加载最新配置','reload-providers')}<small style="display:block;margin-top:8px">加载后会清除当前未保存的配置修改。</small></div>`;
+}
+async function saveProviderConfiguration(payload,version,form) {
+  const user=state.user,store=state.store,settings=providerSettings;if(!user||!settings)return false;
+  try {
+    if(!Number.isSafeInteger(version)||version<0)throw Object.assign(new Error('AI 服务配置尚未加载，请加载最新配置后再保存。'),{status:409});
+    await settings.save({...payload,version});
+    if(state.user!==user||state.store!==store)return false;
+    return true;
+  } catch(error) {
+    if(state.user!==user||state.store!==store)return false;
+    if(error.status===409&&error.message.includes('AI 服务配置')) {
+      state.providersConflict=true;
+      const feedback=form?.isConnected&&form.id==='provider-form'?$('#provider-feedback'):$('#provider-settings-feedback');
+      if(feedback)feedback.innerHTML=providerConflictMarkup();
+      if(form?.isConnected&&form.id!=='provider-form'&&form.closest('#modal')) {
+        let notice=form.querySelector('[data-provider-conflict]');
+        if(!notice){notice=document.createElement('div');notice.dataset.providerConflict='';form.prepend(notice);}notice.innerHTML=providerConflictMarkup();
+      }
+    }
+    throw error;
+  }
+}
+function showComputeUnavailable(message='无法连接计算服务器。请恢复网络后重试。') {
+  $('#app').innerHTML=`<main class="content"><section class="card"><h1>等待计算服务器</h1><p>${esc(message)}</p><p>浏览器中的已保存记录仍保留，恢复连接后可以继续使用。</p><button type="button" class="button primary" id="retry-local-service">重新连接</button></section></main>`;
+  $('#retry-local-service').addEventListener('click',()=>location.reload());
+}
 // Decorative movement rings use CSS only, with reduced-motion support.
 function energyVisual() {
  return `<div class="energy-visual" aria-hidden="true"><div class="energy-orbit orbit-one"></div><div class="energy-orbit orbit-two"></div><div class="energy-orbit orbit-three"></div><div class="energy-core">${icon('spark')}</div><span class="energy-satellite satellite-lime">${icon('dumbbell')}</span><span class="energy-satellite satellite-coral">${icon('food')}</span><span class="energy-satellite satellite-white">${icon('body')}</span><span class="energy-caption">FIND YOUR FLOW</span></div>`;
@@ -141,6 +229,8 @@ function setWorkspaceTheme(active) {
   document.querySelector('meta[name="theme-color"]').content=active?'#e4e6fa':'#263dff';
 }
 function renderAuth() {
+  closeMotionView();
+  rememberCommunityReturn();
   setWorkspaceTheme(false);
   const panel=$('[data-auth-panel]');
   if(panel){
@@ -156,13 +246,14 @@ function renderAuth() {
   landingCleanup=mountLanding($('.landing'),{onAuthRoute:mode=>{state.authMode=mode;renderAuth();}});
 }
 
-function render() {
+async function render() {
+ if(!communityOnlyPage()&&!await readyComputed())return;
   closeMotionView();
   setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
-  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',settings:'个人中心'};
-  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
+  const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',community:'社区',settings:'个人中心'};
+  $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}${state.page==='community'?' community-active':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['community','community','社区'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
   updateSidebarQuote(); renderSidebarHistory(); updateSync(); renderPage();
 }
 function updateSidebarQuote() {
@@ -183,9 +274,16 @@ function renderSidebarHistory() {
   const html=state.store.conversationHeaders().slice(0,30).map(r=>`<div class="history-item ${r.id===state.conversation?'current':''}"><button data-action="open-chat" data-id="${esc(r.id)}">${esc(r.data.title)}</button><button class="delete" aria-label="删除对话 ${esc(r.data.title)}" data-action="delete-chat" data-id="${esc(r.id)}">×</button></div>`).join('') || '<div style="padding:5px 12px"><small>新的对话，从这里开始</small></div>';
   if(el._renderedMarkup!==html){el.innerHTML=html;el._renderedMarkup=html;}
 }
-function renderPage() {
+async function renderPage() {
+ if(!communityOnlyPage()&&!await readyComputed())return;
  if(state.page!=='motion')closeMotionView();
- ensureRecurringSchedule().catch(error=>toast(error.message,true));
+  if(state.page==='community'){
+    if(!profile()){$('#page').innerHTML='<div class="empty" role="status">完成基本资料后，即可进入循序社区。</div>';return;}
+    communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
+    communityController.mount($('#page')).catch(error=>toast(error.message,true));
+    return;
+  }
+ if(!communityOnlyPage())ensureRecurringSchedule().catch(error=>toast(error.message,true));
   ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,motion:renderMotion,settings:renderSettings}[state.page])();
 }
 function renderMotion() {
@@ -207,9 +305,9 @@ function renderMotion() {
      const model=provider&&enabledModels(provider).find(item=>item.id===currentModel('motion'));
      return {configured:!!model,vision:model?.vision===true,model:model?.name||model?.id||'',provider:provider?.name||''};
    },
-   reviewAssessment:async(payload,{signal}={})=>{
+   reviewAssessment:async(payload,{signal,onProgress}={})=>{
      if(state.store!==store)throw new Error('账号已切换，请重新分析视频。');
-     return api('/motion/coach',{method:'POST',body:payload,signal});
+     return streamMotionCoach(payload,{signal,onProgress});
    },
    openCoachSettings:()=>{state.setting='ai';void navigate('settings');},
    notify:toast,
@@ -390,6 +488,7 @@ function mealChatInstruction(intent) {
  return `【餐食记录场景】用户通过“记录餐食”入口提交下方文字或照片，意图是分析本次实际吃下的食物并保存饮食记录。不划分早餐、午餐、晚餐或加餐，只保存记录时间。先读取 get_today_meals，识别食物、份量与营养后调用 create_meal 保存；若是在补充或更正同一餐，使用 update_meal 避免重复入账。数量或食物身份不清时先追问。仅在工具成功后说明已记录，并展示热量和营养估算；如果用户是在咨询、表示尚未吃或取消记录，则按其明确意思回答，不入账。\n用户描述：\n`;
 }
 async function sendChat(text,retryId=null) {
+ if(!await readyComputed())return;
  if(chatRun)return;
  const store=state.store,user=state.user;
  const owner=attachmentOwner(),attachments=retryId?[]:chatUploads.ready(owner);
@@ -467,16 +566,13 @@ function adviceMealFingerprint(date,store=state.store) {
 }
 function adviceSnapshot() {
  const n=nutrition(),date=state.date;
- const meals=records('meal').filter(r=>r.data.date===date&&r.data.confirmed).map(r=>({id:r.id,items:r.data.items.map(item=>({...item,category:foodCategory(item,r.data.userPrompt??r.data.notes)})),notes:r.data.userPrompt??r.data.notes,createdAt:r.data.createdAt||null}));
- const week=mealWeekContext(records('meal').map(record=>record.data),date);
- const recentWeek={...week,meals:week.meals.map(meal=>({date:meal.date,description:meal.description.slice(0,300),items:meal.items.map(({name,grams,category})=>({name,grams,category}))}))};
- const context={purpose:'nutrition-advice',date,dayType:dayType(date),profile:profile(),preferences:state.store.get('preferences')||{},meals,recentWeek,balance:nutritionBalance(n,totals(date)),mealTiming:mealAdviceTiming(date,meals)};
+ const context=computed.advice[date];
  const fingerprint=adviceMealFingerprint(date);
  return {context,fingerprint,recordId:'nutrition-advice:'+date,key:JSON.stringify({user:state.user.id,date}),error:n.error};
 }
 function savedNutritionAdvice(snapshot) {
  const cached=adviceCache.get(snapshot.key);if(cached)return cached;
- const saved=state.store.get(snapshot.recordId);
+ const saved=computed.savedAdvice?.[snapshot.recordId];
  if(saved&&['ready','error'].includes(saved.status))return saved;
  return null;
 }
@@ -485,10 +581,12 @@ function nutritionAdvice(n) {
  const configured=!!state.tasks.planning;
  return `<div class="card-head"><div><span class="eyebrow">DAILY BALANCE</span><h3>这一天的营养建议</h3></div>${icon('leaf')}</div><div class="nutrition-panel-scroll" tabindex="0" role="region" aria-label="营养建议，可上下滚动"><div class="advice-tabs" role="group" aria-label="营养建议分类">${[['brief','用餐建议'],['detailed','饮食分析']].map(([mode,label])=>`<button type="button" data-action="advice-mode" data-mode="${mode}" aria-pressed="${adviceMode===mode}" class="${adviceMode===mode?'active':''}">${label}</button>`).join('')}</div>${n.error?'':adviceBalanceCards(snapshot.context.balance)}<div class="advice-result" aria-live="polite">${n.error?`<div class="error-box">${esc(n.error)}</div>`:!configured?`<p class="muted">连接规划建议模型后，即可生成营养建议。</p>${button('配置 AI 模型','advice-settings','','small')}`:entry?.data?`${adviceContentCards(entry.data[adviceMode],adviceMode,entry.timing)}<small class="advice-estimate-label">根据上次生成时的饮食记录估算</small>`:entry?.status==='error'?`<div class="error-box">${esc(entry.error)}</div>`:`<p class="muted" role="status">${entry?.status==='loading'?'正在结合这一天的饮食生成建议…':'点击“更新建议”生成用餐建议。'}</p>`}</div>${entry?.data&&entry.status==='error'?`<p class="error-box">${esc(entry.error)}<br>\u5df2\u4fdd\u7559\u4e0a\u6b21\u5efa\u8bae\u3002</p>`:''}${configured&&!n.error?`<div class="form-footer">${button(entry?.status==='loading'?'更新中…':'更新建议','advice-refresh',entry?.status==='loading'?'disabled':'','small subtle')}</div>`:''}<details class="advice-basis"><summary>查看营养目标依据</summary><p>基础代谢 ${numeric(n.bmr)} kcal · 预计每日总消耗 ${numeric(n.tdee)} kcal</p><small>${esc(n.explanation||'结合个人资料与当天训练估算。')}</small></details></div>`;
 }
-function paintNutritionAdvice() {
+async function paintNutritionAdvice() {
+ if(!await readyComputed())return;
  const el=$('#nutrition-advice');if(el&&state.page==='nutrition')patchHTML(el,nutritionAdvice(nutrition()));
 }
 async function loadNutritionAdvice() {
+ if(!await readyComputed())return;
  if(state.page!=='nutrition'||!state.tasks.planning)return;
  const snapshot=adviceSnapshot(),{key,context,error,fingerprint,recordId}=snapshot;if(error)return;
  const existing=savedNutritionAdvice(snapshot);if(existing?.status==='loading')return;
@@ -503,7 +601,7 @@ async function loadNutritionAdvice() {
    const prompt=dailyMealAdvicePrompt;
    const response=await api('/ai',{method:'POST',body:{task:'planning',messages:[{role:'user',content:prompt}],context}});
    if(state.store!==store)return;
-   const entry={status:'ready',data:parseNutritionAdvice(response.content,context.mealTiming),fingerprint,balance:context.balance,timing:context.mealTiming,generatedAt:new Date().toISOString(),generationMs:Math.round(performance.now()-startedAt),providerTiming:response.timing};
+   const entry={status:'ready',data:await calculate('parseNutritionAdvice',response.content,context.mealTiming),fingerprint,balance:context.balance,timing:context.mealTiming,generatedAt:new Date().toISOString(),generationMs:Math.round(performance.now()-startedAt),providerTiming:response.timing};
    await store.put('nutrition-advice',recordId,entry);
    adviceCache.set(key,entry);
  }catch(error){
@@ -522,7 +620,8 @@ async function loadNutritionAdvice() {
  }
 }
 
-function refreshNutritionSummary() {
+async function refreshNutritionSummary() {
+ if(!await readyComputed())return;
  const badge=$('#day-type');if(!badge)return;
  const type=dayType(state.date),n=nutrition(),t=totals(state.date);
  badge.dataset.type=type;badge.classList.toggle('neutral',type==='rest');badge.textContent=type==='training'?'训练日':'休息日';
@@ -596,7 +695,8 @@ function nutritionDateStrip() {
    return `<button type="button" class="nutrition-day distance-${Math.abs(offset)} ${offset===0?'is-selected':''}" data-action="nutrition-day" data-date="${date}" aria-label="${dateLabel(date)}${date===today()?'，今天':''}" aria-pressed="${offset===0}"><small>${day.getMonth()+1}月</small><strong>${day.getDate()}</strong><span>${date===today()?'今天':['周日','周一','周二','周三','周四','周五','周六'][day.getDay()]}</span></button>`;
  }).join('')}</nav>`;
 }
-function renderNutrition() {
+async function renderNutrition() {
+ if(!await readyComputed())return;
  const n=nutrition(),t=totals(state.date),meals=records('meal').filter(r=>r.data.date===state.date&&r.data.confirmed);
  $('#page').innerHTML=title('吃得明白，练得有底气。','认真吃好每一餐，比追求完美更重要。',button(icon('plus')+' 记录餐食','new-meal','','primary'))+`<div class="nutrition-date-toolbar"><div class="nutrition-date-meta"><input aria-label="饮食日期" id="nutrition-date" type="date" value="${state.date}"><div class="nutrition-day-type"><output id="day-type" class="badge ${dayType(state.date)==='rest'?'neutral':''}" data-type="${dayType(state.date)}" aria-label="日类型" aria-live="polite">${dayType(state.date)==='training'?'训练日':'休息日'}</output></div></div>${nutritionDateStrip()}</div><div class="stats">${nutritionStats(n,t)}</div><div class="grid-2 nutrition-layout"><section class="card nutrition-scroll-card"><div class="card-head"><div><span class="eyebrow">FOOD DIARY</span><h2>这一天的每一餐</h2></div><span class="badge neutral">${meals.length} 餐已记录</span></div><div class="meal-list nutrition-panel-scroll" tabindex="0" role="region" aria-label="饮食记录，可上下滚动">${meals.length?renderMealGroups(meals):empty('还没有记录餐食<br>拍张照，或用文字描述今天的第一餐。','food')}</div></section><div class="card nutrition-scroll-card" id="nutrition-advice">${nutritionAdvice(n)}</div></div>`;
  bindNutritionDateSwipe();
@@ -643,7 +743,7 @@ function adviceBalanceCards(balance) {
  return `<div class="advice-balance">${[['kcal','热量','kcal'],['protein','蛋白质','g'],['carbs','碳水','g'],['fat','脂肪','g']].map(([key,label,unit])=>{const value=balance[key];return `<div class="balance-tile ${key} ${value.excess?'is-excess':''}"><span>${label}</span><strong>${value.excess||value.remaining}<small>${unit}</small></strong><em>${value.excess?'已超出目标':value.remaining?'还可摄入':'已达目标'}</em></div>`;}).join('')}</div>`;
 }
 function renderRemainingMealAdvice(content,timing) {
- const meals=remainingMealSuggestions(content.meals,timing);
+ const meals=content.displayMeals||[];
  if(!meals.length)return `<p class="muted">${timing?.scenario==='review'?'历史饮食的分析可在“饮食分析”中查看。':'今天暂无待安排的正餐，无需为补齐数值额外进食。'}</p>`;
  return `<div class="advice-brief-view markdown-body"><div class="advice-daily-meals">${meals.map(meal=>`<section class="advice-meal-plan planned"><div class="advice-meal-heading"><h4>${icon({'早餐':'sunrise','午餐':'sun','晚餐':'moon'}[meal.name])}${esc(meal.name)}</h4></div>${meal.foods.length?`<div class="advice-food-grid">${meal.foods.map(food=>`<article class="advice-food-card"><span class="food-symbol">${foodSymbol(food.name)}</span><div><strong>${esc(food.name)}</strong><p class="advice-portion">${esc(food.portion)}</p></div></article>`).join('')}</div>`:'<p>按饥饿感和实际摄入按需安排，无需刻意补足差额。</p>'}</section>`).join('')}</div></div>`;
 }
@@ -693,10 +793,10 @@ function updateMealNutrient(id,key,value) {
  const store=state.store;
  const write=(mealNutrientWrites.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{
    const meal=store.get(id);if(!meal)throw new Error('这条饮食记录已不存在。');
-   const items=adjustMealNutrient(meal.items,key,value);
+   const items=await calculate('adjustMealNutrient',meal.items,key,value);
    await store.put('meal',id,{...meal,items,updatedAt:new Date().toISOString()});
    if(state.store!==store)return;
-   const values=mealTotals(items);
+   const values=await calculate('sumFoods',items);
    document.querySelectorAll('[data-meal-nutrient]').forEach(input=>{
      if(input.dataset.id===id&&input!==document.activeElement)input.value=values[input.dataset.mealNutrient];
    });
@@ -747,20 +847,15 @@ function readMealForm() {
 async function saveMeal() {
  readMealForm();const m=state.mealDraft;
  if(!m.items.length)throw new Error('未识别到食物，请补充照片或说明后重试。');
- mealTotals(m.items);
+ await calculate('sumFoods',m.items);
  const {_id,_editing,_busy,_revision,_originalAttachmentCount,...data}=m;delete data.type;data.confirmed=true;data.updatedAt=new Date().toISOString();
  await state.store.put('meal',_editing?_id:'meal:'+_id,data);
  closeModal();state.date=m.date;state.page='nutrition';render();toast(_editing?'这一餐已更新':'这一餐已计入饮食记录');
 }
 
-function mealConfirmationPortion(item) {
- const portion={...item};
- for(const key of ['protein','carbs','fat','kcal'])portion[key]=Number((item[key]*item.grams/100).toFixed(2));
- return portion;
-}
-function renderMealConfirmation() {
- const m=state.mealDraft;
- modal('确认餐食',`<form id="meal-confirm-form"><p class="description">核对后再计入饮食。可直接修改，最终以你的输入为准。</p><div class="form-grid"><div><label for="confirm-meal-date">日期</label><input id="confirm-meal-date" type="date" required value="${esc(m.date)}"></div><div><label>记录时间</label><input readonly value="${esc(mealRecordTime(m))}"></div></div><div class="meal-confirm-items">${m.items.map((stored,index)=>{const item=mealConfirmationPortion(stored);return `<section class="meal-confirm-item" data-index="${index}" data-grams="${item.grams}"><label>食物名称<input data-field="name" required maxlength="100" value="${esc(item.name)}"></label><label class="meal-confirm-category">食物标签<select data-field="category">${options(['正餐','加餐','零食'].map(category=>[category,category]),foodCategory(item,m.userPrompt??m.notes))}</select></label><div class="meal-confirm-fields">${[['grams','实际份量（g）',10000],['protein','蛋白质（g）',10000],['carbs','碳水（g）',10000],['fat','脂肪（g）',10000],['kcal','热量（kcal）',100000]].map(([key,label,max])=>`<label>${label}<input type="number" data-field="${key}" min="${key==='grams'?'0.01':'0'}" max="${max}" step="any" required value="${item[key]}"></label>`).join('')}</div></section>`;}).join('')}</div><p class="description">修改蛋白质、碳水或脂肪后，热量按 4 × 蛋白质 + 4 × 碳水 + 9 × 脂肪重新计算；也可直接填写包装标注的热量。以上均为这份食物的实际摄入，下方直接合计。修改份量时营养数值按比例调整。</p><div id="meal-confirm-totals" class="meal-totals" aria-live="polite"></div><details class="meal-confirm-analysis"><summary>查看 AI 估算说明</summary>${renderMealNotes(m.estimateNote)}</details><div id="meal-confirm-error" role="alert"></div><div class="form-footer">${button('返回修改描述','meal-review-back')}<button type="submit" class="button primary">${m._editing?'确认更新':'确认计入饮食'}</button></div></form>`,true);
+async function renderMealConfirmation() {
+ const m=state.mealDraft;let portions;try{portions=await calculate('mealPortions',m.items,m.userPrompt??m.notes);}catch(error){toast(error.message,true);return;}if(state.mealDraft!==m)return;
+ modal('确认餐食',`<form id="meal-confirm-form"><p class="description">核对后再计入饮食。可直接修改，最终以你的输入为准。</p><div class="form-grid"><div><label for="confirm-meal-date">日期</label><input id="confirm-meal-date" type="date" required value="${esc(m.date)}"></div><div><label>记录时间</label><input readonly value="${esc(mealRecordTime(m))}"></div></div><div class="meal-confirm-items">${portions.map((item,index)=>{return `<section class="meal-confirm-item" data-index="${index}" data-grams="${item.grams}"><label>食物名称<input data-field="name" required maxlength="100" value="${esc(item.name)}"></label><label class="meal-confirm-category">食物标签<select data-field="category">${options(['正餐','加餐','零食'].map(category=>[category,category]),foodCategory(item,m.userPrompt??m.notes))}</select></label><div class="meal-confirm-fields">${[['grams','实际份量（g）',10000],['protein','蛋白质（g）',10000],['carbs','碳水（g）',10000],['fat','脂肪（g）',10000],['kcal','热量（kcal）',100000]].map(([key,label,max])=>`<label>${label}<input type="number" data-field="${key}" min="${key==='grams'?'0.01':'0'}" max="${max}" step="any" required value="${item[key]}"></label>`).join('')}</div></section>`;}).join('')}</div><p class="description">修改蛋白质、碳水或脂肪后，热量按 4 × 蛋白质 + 4 × 碳水 + 9 × 脂肪重新计算；也可直接填写包装标注的热量。以上均为这份食物的实际摄入，下方直接合计。修改份量时营养数值按比例调整。</p><div id="meal-confirm-totals" class="meal-totals" aria-live="polite"></div><details class="meal-confirm-analysis"><summary>查看 AI 估算说明</summary>${renderMealNotes(m.estimateNote)}</details><div id="meal-confirm-error" role="alert"></div><div class="form-footer">${button('返回修改描述','meal-review-back')}<button type="submit" class="button primary">${m._editing?'确认更新':'确认计入饮食'}</button></div></form>`,true);
  const form=$('#meal-confirm-form');
  form.querySelectorAll('[data-field="kcal"]').forEach((input,index)=>{
    const hint=document.createElement('small');
@@ -771,48 +866,45 @@ function renderMealConfirmation() {
    input.after(hint);
  });
  form.addEventListener('input',event=>{
-   const row=event.target.closest('.meal-confirm-item');
-   if(row&&event.target.dataset.field==='grams'&&event.target.value!==''&&event.target.validity.valid){
-     const grams=Number(event.target.value),previous=Number(row.dataset.grams);
-     for(const key of ['protein','carbs','fat','kcal']){
-       const input=row.querySelector(`[data-field="${key}"]`);
-       if(input.value!==''&&input.validity.valid)input.value=Number((Number(input.value)*grams/previous).toFixed(2));
-     }
-     row.dataset.grams=grams;
-   }
-   if(row&&['protein','carbs','fat'].includes(event.target.dataset.field)){
-     const values=['protein','carbs','fat'].map(key=>row.querySelector(`[data-field="${key}"]`));
-     if(values.every(input=>input.value!==''&&input.validity.valid)){
-       const calorie=row.querySelector('[data-field="kcal"]');
-       calorie.value=Number((Number(values[0].value)*4+Number(values[1].value)*4+Number(values[2].value)*9).toFixed(2));
-     }
-   }
-   updateMealConfirmationTotals();
+   const row=event.target.closest('.meal-confirm-item'),field=event.target.dataset.field;
+   if(!row||!['grams','protein','carbs','fat','kcal'].includes(field)){void updateMealConfirmationTotals();return;}
+   const revision=(row._revision||0)+1;row._revision=revision;
+   const edited=event.target.value===''?null:Number(event.target.value);
+   row._calculated??=structuredClone(portions[Number(row.dataset.index)]);
+   row._pending=(row._pending||Promise.resolve()).then(async()=>{
+     const previous=row._calculated, value=await calculate('updateMealPortion',{...previous,[field]:edited},field,previous.grams);
+     row._calculated=value;
+     if(row._revision!==revision||!row.isConnected)return;
+     row._computeError=null;$('#meal-confirm-error').textContent='';
+     for(const key of ['protein','carbs','fat','kcal'])if(key!==field)row.querySelector(`[data-field="${key}"]`).value=value[key];
+     row.dataset.grams=value.grams;
+     return updateMealConfirmationTotals();
+   }).catch(error=>{row._computeError=error;if(row._revision===revision&&row.isConnected)$('#meal-confirm-error').textContent=error.message;});
  });
  updateMealConfirmationTotals();
 }
-function readMealConfirmationItems() {
- return [...document.querySelectorAll('.meal-confirm-item')].map(row=>{
-   const item=Object.fromEntries([...row.querySelectorAll('[data-field]')].map(input=>[input.dataset.field,['name','category'].includes(input.dataset.field)?input.value:input.value===''?null:Number(input.value)]));
-   for(const key of ['protein','carbs','fat','kcal'])if(item[key]!==null&&item.grams>0)item[key]=item[key]*100/item.grams;
-   return item;
- });
+function readMealPortionRow(row) {return Object.fromEntries([...row.querySelectorAll('[data-field]')].map(input=>[input.dataset.field,['name','category'].includes(input.dataset.field)?input.value:input.value===''?null:Number(input.value)]));}
+async function readMealConfirmationItems() {
+ return calculate('mealItems',[...document.querySelectorAll('.meal-confirm-item')].map(readMealPortionRow));
 }
-function updateMealConfirmationTotals() {
- const output=$('#meal-confirm-totals');
+async function updateMealConfirmationTotals() {
+ const output=$('#meal-confirm-totals');if(!output)return;const revision=(output._revision||0)+1;output._revision=revision;
  try{
-   const items=parseMealEstimate(JSON.stringify({items:readMealConfirmationItems()})).items,t=mealTotals(items);
-   output.textContent=`本餐合计：${t.kcal} kcal · 蛋白质 ${t.protein} g · 碳水 ${t.carbs} g · 脂肪 ${t.fat} g`;
- }catch{output.textContent='请填写有效的份量和营养数值。';}
+   const items=await readMealConfirmationItems(),t=await calculate('sumFoods',items);
+   if(output._revision!==revision||!output.isConnected)return;output.textContent=`本餐合计：${t.kcal} kcal · 蛋白质 ${t.protein} g · 碳水 ${t.carbs} g · 脂肪 ${t.fat} g`;
+ }catch{if(output._revision===revision&&output.isConnected)output.textContent='请填写有效的份量和营养数值。';}
 }
 async function confirmMeal() {
  const m=state.mealDraft;
  if(!m||m._busy)return;
  const form=$('#meal-confirm-form');if(!form?.reportValidity())return;
+ m._busy=true;lockMealEditor(true);
  try{
-   const items=parseMealEstimate(JSON.stringify({items:readMealConfirmationItems()})).items;
+   const rows=[...form.querySelectorAll('.meal-confirm-item')];await Promise.all(rows.map(row=>row._pending));
+   if(!form.isConnected||state.mealDraft!==m)return;
+   const failed=rows.find(row=>row._computeError);if(failed)throw failed._computeError;
+   const items=await readMealConfirmationItems();
    m.items=items;m.date=$('#confirm-meal-date').value;
-   m._busy=true;lockMealEditor(true);
    await saveMeal();
  }catch(error){if($('#meal-confirm-error'))$('#meal-confirm-error').textContent=error.message;}
  finally{m._busy=false;if($('#meal-confirm-form'))lockMealEditor(false);}
@@ -835,7 +927,7 @@ async function estimateMeal() {
  const instruction=mealDishInstruction+'\n'+mealCategoryInstruction+'\n'+'请估算这同一餐实际吃下的食物；区分餐前餐后及营养标签，结合原估算修订。只返回 JSON {"items":[{"name":"食物名称（注明生熟）","grams":实际克数,"kcal":每100克热量,"protein":每100克蛋白质,"carbs":每100克碳水,"fat":每100克脂肪}],"note":"依据和不确定性"}。不划分餐次，记录时间由应用保存。所有数值非负。份量不明确时按常见份量估算并说明假设，无法识别食物时返回空 items。不要执行账户写入，由应用在校验成功后保存。';
  const response=await api('/ai',{method:'POST',body:{task:'meal',messages:[{role:'user',content:instruction+(m._editing?'':'\n这是新餐食记录，下面的用户修改是本餐描述，所有附件均属于本餐。')+'\n原餐食说明：'+m.notes+'\n本次用户修改（以本次为准）：'+m._revision+'\n附件顺序：前'+m._originalAttachmentCount+'张是原照片，其余为本次补充照片，用于修订同一餐，不要重复累加。'+'\n已有估算：'+JSON.stringify(m.items)+'\n之前修订：'+JSON.stringify(m.history||[]),attachments:m.attachments}],context:aiContext()}});
  if(state.user?.id!==userId||state.mealDraft!==m)return;
- const parsed=parseMealEstimate(response.content);
+ const parsed=await calculate('parseMealEstimate',response.content);
  m.items=parsed.items.map(item=>({...item,category:foodCategory(item,m._revision),kcal:Number((item.protein*4+item.carbs*4+item.fat*9).toFixed(2))}));m.estimateNote=parsed.note;
 
  m.originalPrompt ??= m._editing?(m.notes||m._revision):m._revision;
@@ -855,7 +947,7 @@ function assertTaskCurrent(snapshot) {
  return current;
 }
 function trainingTaskCompleted(record) {
- return record.data.date<=beijingDate()&&validTrainingCompletion({...record,data:{...record.data,daySnapshot:taskDay(record)}});
+ return computed.completed.includes(record.id);
 }
 
 function renderCalendarCard(record) {
@@ -867,7 +959,8 @@ function renderCalendarCard(record) {
   <div class="task-card-bottom"><span class="task-state ${completed?'is-completed':''}"><span class="task-state-mark" aria-hidden="true">${completed?icon('check'):''}</span>${completed?'已完成':'待完成'}</span></div>
  </article>`;
 }
-function renderTraining() {
+async function renderTraining() {
+ if(!await readyComputed())return;
  ensureRecurringSchedule().catch(error=>toast(error.message,true));
  const busy=new Set(getBusyDates()),days=weekDates(state.date),weekTasks=allCalendarTasks().filter(r=>days.includes(r.data.date));
  const completed=weekTasks.filter(trainingTaskCompleted).length,monthLabel=`${state.date.slice(0,4)}年${Number(state.date.slice(5,7))}月`;
@@ -916,23 +1009,27 @@ async function loadCalendarHolidayData(from,to) {
 }
 async function openBusyDays() {
  await ensureRecurringSchedule();await ensureHolidayData(Number(state.date.slice(0,4)));
- const settings=normalizeBusySettings(getBusySettings());
- state.busyEditor={month:state.date.slice(0,7),settings,weekdays:defaultWeekdays(settings,today()),expanded:false,fingerprint:scheduleFingerprint()};
+ const settings=await calculate('normalizeBusySettings',getBusySettings());
+ state.busyEditor={month:state.date.slice(0,7),settings,weekdays:await calculate('defaultWeekdays',settings,today()),expanded:false,fingerprint:scheduleFingerprint()};
  renderBusyDays();
 }
-function busyEditorSettings() {
+async function busyEditorSettings() {
  const editor=state.busyEditor;
- return JSON.stringify(defaultWeekdays(editor.settings,today()))===JSON.stringify(editor.weekdays)?normalizeBusySettings(editor.settings):setDefaultWeekdays(editor.settings,editor.weekdays,today());
+ return JSON.stringify(await calculate('defaultWeekdays',editor.settings,today()))===JSON.stringify(editor.weekdays)?await calculate('normalizeBusySettings',editor.settings):await calculate('setDefaultWeekdays',editor.settings,editor.weekdays,today());
 }
-function renderBusyDays(focusDate) {
- const editor=state.busyEditor,first=editor.month+'-01',year=Number(first.slice(0,4)),month=Number(first.slice(5,7));
+async function renderBusyDays(focusDate) {
+ const editor=state.busyEditor;if(!editor)return;const revision=(editor.renderRevision||0)+1;editor.renderRevision=revision;
+ try {
+ const first=editor.month+'-01',year=Number(first.slice(0,4)),month=Number(first.slice(5,7));
  const count=new Date(year,month,0).getDate(),leading=(new Date(first+'T12:00:00').getDay()+6)%7;
  const slots=Array.from({length:Math.ceil((leading+count)/7)*7},(_,index)=>{const n=index-leading+1;return n<1||n>count?null:`${editor.month}-${String(n).padStart(2,'0')}`;});
- const planned=new Set(allCalendarTasks().map(record=>record.data.date)),now=today(),busy=busyPredicate(busyEditorSettings()),labels=['周一','周二','周三','周四','周五','周六','周日'];
+ const planned=new Set(allCalendarTasks().map(record=>record.data.date)),now=today(),busyDates=await calculate('busyDatesInRange',await busyEditorSettings(),first,`${editor.month}-${String(count).padStart(2,'0')}`),busy=date=>busyDates.includes(date),labels=['周一','周二','周三','周四','周五','周六','周日'];
+ if(state.busyEditor!==editor||editor.renderRevision!==revision)return;
  modal('繁忙日设置',`<details class="busy-defaults" id="busy-defaults" ${editor.expanded?'open':''}><summary>${icon('calendar')}<strong>默认繁忙日</strong><span class="busy-defaults-summary">${editor.weekdays.length===7?'每天':editor.weekdays.map(day=>labels[day-1]).join(' · ')||'未设置'}</span><span class="busy-defaults-chevron" aria-hidden="true">⌄</span></summary><div class="busy-defaults-content"><div class="busy-default-weekdays" role="group" aria-label="每周默认繁忙日">${labels.map((label,index)=>`<button type="button" data-action="busy-weekday" data-weekday="${index+1}" aria-pressed="${editor.weekdays.includes(index+1)}">${label}</button>`).join('')}</div><p>${icon('leaf')} 节假日自动空闲，手动设置优先</p></div></details><div class="busy-month-toolbar"><strong>${year}年${month}月</strong><div class="row">${button('‹','busy-month',`data-offset="-1" aria-label="上个月" ${editor.month==='1900-01'?'disabled':''}`,'small')}${button('本月','busy-current','','small')}${button('›','busy-month',`data-offset="1" aria-label="下个月" ${editor.month==='2199-12'?'disabled':''}`,'small')}</div></div>${!holidayYear(year)?'<p class="busy-holiday-unavailable">该年节假日数据暂不可用，按每周设置安排。</p>':''}<div class="busy-weekdays" aria-hidden="true">${['一','二','三','四','五','六','日'].map(day=>`<span>${day}</span>`).join('')}</div><div class="busy-date-grid" role="group" aria-label="${year}年${month}月繁忙日期">${slots.map(date=>{if(!date)return '<span aria-hidden="true"></span>';const selected=busy(date),holiday=holidayInfo(date);return `<button type="button" class="busy-date ${selected?'is-busy':''} ${date===now?'is-today':''}" data-action="busy-toggle" data-date="${date}" aria-pressed="${selected}" aria-label="${dateLabel(date)}，${selected?'繁忙':planned.has(date)?'有训练':'空闲'}${holiday?'，'+esc(holiday.isOffDay?holiday.name+'放假':'调休上班'):''}" ${date<now?'disabled':''} ${date===now?'aria-current="date"':''}><strong>${Number(date.slice(-2))}</strong><span>${selected?'繁忙':holiday?.isOffDay?esc(holiday.name):planned.has(date)?'训练':''}</span>${holiday?`<i class="busy-holiday-badge ${holiday.isOffDay?'is-off':'is-work'}" aria-hidden="true">${holiday.isOffDay?'休':'班'}</i>`:''}</button>`;}).join('')}</div><div class="busy-days-footer"><div class="row">${button('取消','close-modal')}${button('保存设置','busy-save','','primary')}</div></div><div id="busy-days-error" role="alert"></div>`);
  $('#modal').classList.add('busy-days-modal');
  const disclosure=$('#busy-defaults');disclosure.addEventListener('toggle',()=>{if(disclosure.isConnected)editor.expanded=disclosure.open;});
  if(focusDate)$(`.busy-date[data-date="${focusDate}"]`)?.focus({preventScroll:true});
+ }catch(error){if(state.busyEditor===editor&&editor.renderRevision===revision)toast(error.message,true);}
 }
 async function changeBusyMonth(offset,current=false) {
  const editor=state.busyEditor,d=new Date(editor.month+'-01T12:00:00');d.setMonth(d.getMonth()+offset);
@@ -942,10 +1039,10 @@ async function changeBusyMonth(offset,current=false) {
 async function saveBusyDays() {
  const editor=state.busyEditor,store=state.store;
  if(editor.fingerprint!==scheduleFingerprint())throw new Error('日程已更新，请重新打开繁忙日设置。');
- const previous=normalizeBusySettings(getBusySettings()),settings=busyEditorSettings();
+ const previous=await calculate('normalizeBusySettings',getBusySettings()),settings=await busyEditorSettings();
  if(JSON.stringify(previous)===JSON.stringify(settings)){closeModal();return;}
  const cycle=store.get('calendar-cycle');
- const changes=rescheduleBusyTasks(allCalendarTasks(),cycle,previous,settings,today());
+ const changes=await calculate('rescheduleBusyTasks',allCalendarTasks(),cycle,previous,settings,today());
  await store.putMany([{id:'calendar-busy-days',kind:'calendar-settings',data:settings},...changes]);
  closeModal();state.busyEditor=null;renderTraining();
 }
@@ -955,7 +1052,7 @@ function cycleWindow(date) {
  return {from,to:addDays(from,Math.min(83,remaining))};
 }
 function getBusySettings() {return state.store?.get('calendar-busy-days')||{dates:[]};}
-function getBusyDates(from=weekDates(state.date)[0],to=addDays(from,6)) {return busyDatesInRange(getBusySettings(),from,to);}
+function getBusyDates(from=weekDates(state.date)[0],to=addDays(from,6)) {return computed.busyDates.filter(date=>date>=from&&date<=to);}
 async function ensureRecurringSchedule(date=state.date) {
  const store=state.store,cycle=store?.get('calendar-cycle');
  if(!cycle||cycle.plan.planVersion!==plan()?.planVersion)return;
@@ -964,7 +1061,7 @@ async function ensureRecurringSchedule(date=state.date) {
  const missing=new Map();
  for(const anchor of new Set([date,today()])) {
    const {from,to}=cycleWindow(anchor);
-   for(const task of recurringCalendarTasks(cycle,from,to,getBusySettings()))if(!store.records.has(task.id))missing.set(task.id,task);
+   for(const task of await calculate('recurringCalendarTasks',cycle,from,to,getBusySettings()))if(!store.records.has(task.id))missing.set(task.id,task);
  }
  // Tombstones count as existing records: deleted occurrences must stay deleted.
  if(missing.size)await store.putMany([...missing.values()]);
@@ -972,7 +1069,7 @@ async function ensureRecurringSchedule(date=state.date) {
 async function addPlanToCalendar(trainingPlan,date,{activate=false}={}) {
  const store=state.store,previous=store.get('calendar-cycle');
  if(previous?.plan.planVersion===trainingPlan?.planVersion&&previous.startDate===date){if(activate&&store.get('active-plan')?.planVersion!==trainingPlan.planVersion)await store.putMany([{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]);await ensureRecurringSchedule(date);return;}
- planCalendarTasks(trainingPlan,date);
+ await calculate('planCalendarTasks',trainingPlan,date);
  await loadCalendarHolidayData(date,cycleWindow(date).to);
  if(state.store!==store||JSON.stringify(store.get('calendar-cycle'))!==JSON.stringify(previous))throw new Error('日程已更新，请重新导入方案。');
  const cycle={id:uid(),startDate:date,plan:structuredClone(trainingPlan)},changes=activate?[{id:'active-plan',kind:'plan',data:structuredClone(trainingPlan)}]:[];
@@ -981,13 +1078,13 @@ async function addPlanToCalendar(trainingPlan,date,{activate=false}={}) {
    if(record.data.cycleId===previous.id&&!finished&&record.data.date>=date&&record.data.date>=today())changes.push({id:record.id,kind:record.kind,deleted:true});
  }
  const {to}=cycleWindow(date);
- changes.push({id:'calendar-cycle',kind:'training-cycle',data:cycle},...recurringCalendarTasks(cycle,date,to,getBusySettings()));
+ changes.push({id:'calendar-cycle',kind:'training-cycle',data:cycle},...(await calculate('recurringCalendarTasks',cycle,date,to,getBusySettings())));
  await store.putMany(changes);
 }
 async function resetTrainingCalendar() {
  const store=state.store;
  await syncBeforeArchiving();
- await store.putMany(calendarResetChanges([...store.records.values()]));
+ await store.putMany(await calculate('calendarResetChanges',computeRecords()));
  state.date=today();state.calendarDelete=null;state.calendarDetail=null;state.trainingContentEditor=null;
  closeModal();renderTraining();toast('日历已重置');
 }
@@ -1001,7 +1098,7 @@ async function saveCalendarTask(values) {
  const original=state.calendarEditor?.record,record=original?assertTaskCurrent(original):null;
  if(record?.data.completed)throw new Error('已完成的训练不能修改日期或内容。');
  if(isBusyDate(values.date,getBusySettings()))throw new Error('这一天已设为繁忙，请选择其他日期。');
- const data={...(record?.data||{}),...validateCalendarTask({...values,taskType:'training',completed:false}),completed:false};
+ const data={...(record?.data||{}),...await calculate('validateCalendarTask',{...values,taskType:'training',completed:false}),completed:false};
  if(data.date!==record?.data.date)delete data.busyBaseDate;
  const selected=plan()?.days.find(day=>day.id===values.dayId&&!day.rest),preserved=record?.data.dayId===values.dayId&&record.data.daySnapshot;
  if(!selected&&!preserved)throw new Error('请先选择有效的训练内容。');
@@ -1031,10 +1128,7 @@ function showCalendarTask(id) {
 }
 async function saveTrainingProgress(record,data) {
  const updated={id:record.id,kind:record.kind,data};
- if(data.date>beijingDate()&&validTrainingCompletion(updated))throw new Error('未来日期的训练不能提前记录完成。');
- if((data.completed||data.daySnapshot?.exercises?.length&&data.daySnapshot.exercises.every(exercise=>exercise.completed))&&!validTrainingCompletion(updated))throw new Error('请为每个动作填写有效的完成组数和次数。');
- const store=state.store,days=weekDates(beijingDate()),tasks=allCalendarTasks().filter(task=>days.includes(task.data.date));
- const finished=validTrainingCompletion(updated)&&tasks.length&&tasks.every(task=>task.id===record.id?true:validTrainingCompletion(task));
+ const store=state.store,{finished,days}=await calculate('trainingProgress',updated,allCalendarTasks());
  await store.put(record.kind,record.id,data);
  state.celebratedWeeks??=new Set();
  if(finished&&days.includes(data.date)&&!state.celebratedWeeks.has(days[0])){state.celebratedWeeks.add(days[0]);state.weekCelebration={userId:state.user?.id,weekStart:days[0],expiresAt:Date.now()+120000};}
@@ -1104,7 +1198,7 @@ async function saveTrainingContent() {
 function exerciseLine(e,i) {const x=exercises.find(x=>x.id===e.exerciseId);return `<div class="exercise-line"><span class="number">${String(i+1).padStart(2,'0')}</span><div class="grow"><button class="link-button" style="padding:0;text-align:left" data-action="exercise" data-id="${esc(e.exerciseId)}"><strong>${esc(x?.name||e.exerciseId)}</strong></button><small>${esc(x?.muscle||'')} · 休息 ${e.restSeconds}s</small></div><span class="rep">${e.sets} × ${esc(e.reps)}</span></div>`;}
 async function ensurePlanLibrary() {
  const store=state.store;if(!store)return;
- const changes=libraryMigration([...store.records.values()],new Date().toISOString());
+ const changes=await calculate('libraryMigration',computeRecords(),new Date().toISOString());
  if(changes.length)await store.putMany(changes);
 }
 function libraryTemplates() {
@@ -1152,7 +1246,7 @@ async function saveLibraryDraft(draft) {
 async function importLibraryTemplate(values) {
  const record=assertLibraryCurrent(state.librarySnapshots.get(values['library-template'])),date=values.startDate;
  if(date<today())throw new Error('请选择今天或之后的开始日期。');
- const trainingPlan=libraryPlan(record);trainingPlan.confirmedAt=new Date().toISOString();
+ const trainingPlan=await calculate('libraryPlan',record);trainingPlan.confirmedAt=new Date().toISOString();
  await addPlanToCalendar(trainingPlan,date,{activate:true});
  state.date=date;state.libraryDate=date;closeModal();renderTraining();toast('方案已循环安排到日历');
 }
@@ -1286,8 +1380,9 @@ function chooseRMPreset(reps,side) {
  $(`#weight-${side}-reps`).value=count;
  updateKnowledgeTool($('#weight-conversion-form'));
 }
-function updateKnowledgeTool(form) {
+async function updateKnowledgeTool(form) {
  if(!form)return;
+ const revision=(form._computeRevision||0)+1;form._computeRevision=revision;form.dataset.computing='true';
  const values=formData(form),id=form.id,kind=id==='metabolism-form'?'metabolism':id==='macro-energy-form'?'macro':id==='weight-conversion-form'?'weights':'portion',prefix=kind==='macro'?'macro-energy':kind;
  knowledgeDrafts[kind]=values;
  if(kind==='weights')form.querySelectorAll('[data-action="rm-preset"]').forEach(button=>button.setAttribute('aria-pressed',String(Number(values[button.dataset.side+'Reps'])===Number(button.dataset.reps))));
@@ -1295,21 +1390,21 @@ function updateKnowledgeTool(form) {
  try {
    let html='';
    if(kind==='weights'){
-     const result=calculateRMConversion(values),method=result.method==='epley'?'Epley':'Brzycki';
+     const result=await calculate('calculateRMConversion',values);if(form._computeRevision!==revision||!form.isConnected)return;const method=result.method==='epley'?'Epley':'Brzycki';
      html=renderWeightResult(result);
      patchHTML(targetOutput,`<div class="row spread wrap"><div class="tool-total"><small>目标 ${result.target.label} · 估算重量</small><strong data-rm-target>${result.target.weight}<em> kg</em></strong></div><span class="badge neutral">${method}</span></div>`);targetOutput.hidden=false;
    }else if(kind==='metabolism'){
-     const result=calculateMetabolism(values);
+     const result=await calculate('calculateMetabolism',values);if(form._computeRevision!==revision||!form.isConnected)return;
      html=`<div class="tool-numbers"><div><small>静息能量消耗</small><strong>${numeric(result.ree)}<em> kcal / 天</em></strong></div><div><small>全天总消耗估算</small><strong>${numeric(result.tdee)}<em> kcal / 天</em></strong></div></div><p>${esc(result.note)}</p>`;
    }else if(kind==='macro'){
-     const result=calculateMacroEnergy(values);
+     const result=await calculate('calculateMacroEnergy',values);if(form._computeRevision!==revision||!form.isConnected)return;
      html=`<div class="tool-total"><small>热量合计</small><strong>${numeric(result.kcal)}<em> kcal</em></strong></div><div class="macro-energy-breakdown">${[['protein','蛋白质'],['carbs','碳水'],['fat','脂肪']].map(([key,label])=>`<div><span>${label}</span><strong>${numeric(result[key+'Kcal'])} kcal</strong><small>${Math.round(result[key+'Share']*10)/10}% 能量占比</small></div>`).join('')}</div>`;
    }else{
-     const result=calculateFoodPortion(values.foodId,{count:values.count,grams:values.grams});
+     const result=await calculate('calculateFoodPortion',values.foodId,{count:values.count,grams:values.grams});if(form._computeRevision!==revision||!form.isConnected)return;
      html=`<div class="row spread wrap"><strong>${esc(result.label)}</strong><span class="badge">共 ${result.grams} g</span></div><div class="portion-totals">${[['kcal','热量','kcal'],['protein','蛋白质','g'],['carbs','碳水','g'],['fat','脂肪','g']].map(([key,label,unit])=>`<div><small>${label}</small><strong>${Math.round(result[key]*10)/10}<em> ${unit}</em></strong></div>`).join('')}</div><p>${esc(result.note)}</p>${sourceLink(result.source)}`;
    }
-   errorBox.innerHTML='';patchHTML(output,html);output.hidden=false;
- }catch(error){output.hidden=true;if(targetOutput)targetOutput.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
+   form.dataset.computing='false';errorBox.innerHTML='';patchHTML(output,html);output.hidden=false;
+ }catch(error){if(form._computeRevision!==revision||!form.isConnected)return;form.dataset.computing='false';output.hidden=true;if(targetOutput)targetOutput.hidden=true;errorBox.innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}
 }
 function choosePortion(id) {
  const item=foodPortions.find(item=>item.id===id);if(!item)return;
@@ -1334,27 +1429,38 @@ function showExercise(id) {
 }
 
 function renderSettings() {
- $('#page').innerHTML=title('你的身体，你的节奏。','记录进步，管理资料与偏好。')+`<nav class="settings-nav" aria-label="个人中心栏目">${[['profile','个人资料'],['achievements','成就墙'],['ai','AI 服务'],['review','阶段复盘'],['data','数据与同步']].map(([id,label])=>`<button data-action="settings-tab" data-tab="${id}" class="${state.setting===id?'active':''}">${label}</button>`).join('')}</nav><div id="settings-content"></div>`;
- ({profile:renderProfile,achievements:renderAchievements,ai:renderAISettings,review:renderReview,data:renderData}[state.setting])();
+ if(!personalSections.some(([id])=>id===state.setting))state.setting='home';
+ $('#page').classList.add('personal-center-content');
+ $('.layout').classList.add('personal-center-active');
+ const actions=state.setting==='home'?`<div class="personal-head-actions"><a class="button personal-preview" href="#community/user/${encodeURIComponent(state.user.id)}?preview=public">他人视角 ${icon('arrow')}</a><a class="button primary" href="#community/publish">${icon('plus')} 发布笔记</a></div>`:'';
+ $('#page').innerHTML=title('个人中心','管理你的主页、健康档案与偏好。',actions)+`<nav class="settings-nav" aria-label="个人中心栏目">${personalSections.map(([id,label])=>`<button data-action="settings-tab" data-tab="${id}" class="${state.setting===id?'active':''}" ${state.setting===id?'aria-current="page"':''}>${label}</button>`).join('')}</nav><div id="settings-content"></div>`;
+ if(state.setting==='home'){
+   $('#settings-content').innerHTML='<div id="personal-community"></div>';
+   communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
+   communityController.mountPersonal($('#personal-community'),personalRoute().active?location.hash:'#settings').catch(error=>toast(error.message,true));
+ }else ({profile:renderProfile,achievements:renderAchievements,ai:renderAISettings,review:renderReview,data:renderData}[state.setting])();
 }
-function renderAchievements() {
- const all=[...state.store.records.values()],pageSize=matchMedia('(max-width:700px)').matches?2:4;
- const model=achievementWall(all,state.achievementCategory||'all');
+async function renderAchievements() {
+ if(!await readyComputed())return;
+ const all=computeRecords(),pageSize=matchMedia('(max-width:700px)').matches?2:4;
+ const model=computed.achievements[state.achievementCategory||'all'];
  state.achievementPage=Math.max(0,Math.min(state.achievementPage||0,Math.ceil(model.cards.length/pageSize)-1));
- $('#settings-content').innerHTML=renderAchievementWall(all,{category:state.achievementCategory||'all',page:state.achievementPage,pageSize});
+ $('#settings-content').innerHTML=await calculate('renderAchievementWall',all,{category:state.achievementCategory||'all',page:state.achievementPage,pageSize});
  const carousel=$('.achievement-carousel');if(!carousel)return;
  let touch=null;
  carousel.addEventListener('touchstart',event=>{const p=event.touches[0];touch={x:p.clientX,y:p.clientY};},{passive:true});
  carousel.addEventListener('touchend',event=>{const p=event.changedTouches[0];if(touch&&Math.abs(p.clientX-touch.x)>60&&Math.abs(p.clientY-touch.y)<45){state.achievementPage+=p.clientX<touch.x?1:-1;renderAchievements();}touch=null;},{passive:true});
 }
-function showAchievement(id) {
- const all=[...state.store.records.values()];
- const card=achievementWall(all).cards.find(item=>item.id===id)||achievementWall(all,'milestone').cards.find(item=>item.id===id);if(!card)return;
- modal(card.name,renderAchievementDetails([...state.store.records.values()],id));
+async function showAchievement(id) {
+ if(!await readyComputed())return;
+ const all=computeRecords();
+ const card=computed.achievements.all.cards.find(item=>item.id===id)||computed.achievements.milestone.cards.find(item=>item.id===id);if(!card)return;
+ modal(card.name,await calculate('renderAchievementDetails',computeRecords(),id));
  $('#modal').classList.add('achievement-detail-modal');
 }
 
-function renderProfile() {
+async function renderProfile() {
+ if(!await readyComputed())return;
  const p=profile(),history=records('phase');
  $('#settings-content').innerHTML=`<div class="grid-2"><div class="card"><div class="profile-head"><span class="avatar">${esc(state.user.name?.slice(0,1))}</span><div><h2>${esc(state.user.name)}</h2><small>${esc(state.user.email)}</small></div></div><div class="stats" style="grid-template-columns:1fr 1fr;margin-bottom:20px"><div class="stat"><small>当前体重</small><strong>${p?.weight||'—'}<em>kg</em></strong></div><div class="stat"><small>当前目标</small><strong style="font-size:23px">${goalLabel(p?.goal)||'待设置'}</strong></div></div><div class="row spread"><small>年龄 / 性别</small><span>${p?.age||'—'} 岁 · ${p?.sex==='female'?'女':'男'}</span></div><div class="divider"></div><div class="row spread"><small>身高</small><span>${p?.height||'—'} cm</span></div><div class="divider"></div>${button('更新阶段资料','profile','','primary')}<p class="description" style="font-size:11px;margin:18px 0 0">每次更新会保留带日期的历史，并重新估算营养建议。</p></div><div class="card"><div class="card-head"><h2>阶段记录</h2><span class="badge neutral">${history.length} 条</span></div>${history.length?`<table class="history-table"><thead><tr><th>日期</th><th>体重</th><th>目标</th><th></th></tr></thead><tbody>${history.map(r=>`<tr><td>${esc(r.data.date)}</td><td>${r.data.weight} kg</td><td>${goalLabel(r.data.goal)}</td><td><button class="link-button" data-action="delete-phase" data-id="${r.id}">删除</button></td></tr>`).join('')}</tbody></table>`:empty('更新资料后，会在这里留下一条记录。')}</div></div>`;
 }
@@ -1364,14 +1470,13 @@ function showProfile(first=false) {
 }
 function presetFor(id) { return providerPresets.find(p=>p.id===id)||providerPresets.find(p=>p.id==='custom'); }
 function providerLogo(preset) { return `<span class="provider-logo" style="--provider-color:${esc(preset.color||'#527b68')}">${esc(preset.logo||preset.name.slice(0,1))}</span>`; }
-function modelCapability(model) { return model.vision===true?'<span class="badge">支持图片</span>':model.vision===false?'<span class="badge neutral">文本</span>':'<span class="badge neutral">图片能力待确认</span>'; }
 function renderAISettings() {
  const taskOptions=task=>'<option value="">选择供应商与模型</option>'+state.providers.filter(p=>enabledModels(p).length).map(p=>`<optgroup label="${esc(p.name)}">${options(enabledModels(p).map(m=>[JSON.stringify({providerId:p.id,modelId:m.id}),`${p.name} · ${m.name||m.id}${m.vision===true?' · 支持图片':''}`]),taskSelection(task,state.providers,state.tasks,state.taskModels))}</optgroup>`).join('');
- $('#settings-content').innerHTML=`<div class="provider-intro"><div><div class="eyebrow">CONNECT YOUR AI</div><h2>选择服务，填入密钥，就可以开始。</h2><p>地址已为你准备好。获取模型后，勾选常用模型，再分配给不同任务。</p></div><span class="badge">${providerPresets.filter(p=>p.id!=='custom').length} 种供应商预设</span></div><div class="provider-settings-grid"><section class="card"><div class="card-head"><h2>我的供应商</h2>${button('+ 添加供应商','provider','','small')}</div>${state.providers.length?state.providers.map(p=>{const preset=presetFor(p.presetId);return `<article class="provider-card"><div class="row">${providerLogo(preset)}<div class="grow"><strong>${esc(p.name)}</strong><small>${enabledModels(p).length} 个已启用模型</small></div><span class="badge ${p.hasKey?'':'neutral'}">${p.hasKey?'已配置':'无密钥'}</span></div><div class="provider-model-tags">${enabledModels(p).slice(0,4).map(m=>`<span title="${esc(m.id)}">${esc(m.name||m.id)}</span>`).join('')}${enabledModels(p).length>4?`<small>+${enabledModels(p).length-4}</small>`:''}</div><div class="row wrap">${button('管理模型','provider',`data-id="${esc(p.id)}"`,'small')}${button('测试连接','test-provider',`data-id="${esc(p.id)}" ${p.model?'':'disabled'}`,'small')}${button('删除','delete-provider',`data-id="${esc(p.id)}"`,'small')}</div></article>`;}).join(''):empty('还没有连接 AI 服务<br>从下面选择你使用的供应商。','spark')}<div class="divider"></div><div class="card-head"><h3>添加常用服务</h3><small>自动填写接口地址</small></div><div class="provider-presets">${providerPresets.map(p=>`<button class="preset-tile" data-action="provider-preset" data-preset="${p.id}">${providerLogo(p)}<span>${esc(p.name)}</span></button>`).join('')}</div><p class="provider-footnote">密钥在服务端加密保存，个人导出与浏览器缓存不包含密钥。</p></section><section class="card task-card"><div class="card-head"><h2>任务使用的模型</h2>${icon('settings')}</div><p class="description">同一份密钥下的多个模型，可以分别承担不同任务。</p><form id="tasks-form">${[['chat','日常对话','连续追问、知识问答与阶段分析','chat'],['meal','餐食识别','请选择支持图片输入的模型','image'],['planning','规划建议','训练安排、食谱与阶段规划','leaf'],['motion','动作点评','视觉模型可识别器械与动作细节；文本模型解释检测证据','body']].map(([id,label,desc,i])=>`<div class="task-model-field"><label for="task-${id}">${icon(i)} ${label}</label><select id="task-${id}" name="${id}">${taskOptions(id)}</select><small>${desc}</small></div>`).join('')}<div id="tasks-error" role="alert"></div><div class="form-footer"><button type="submit" class="button primary">保存任务模型</button></div></form><div class="notice" style="margin-top:24px">有些服务的模型列表不提供图片能力信息；这类模型会标注“待确认”，可结合供应商说明选择。</div></section></div>`;
+ $('#settings-content').innerHTML=`<div id="provider-settings-feedback" role="status" aria-live="polite">${state.providersConflict?providerConflictMarkup():''}</div><div class="provider-intro"><div><div class="eyebrow">CONNECT YOUR AI</div><h2>选择服务，填入密钥，就可以开始。</h2><p>地址已为你准备好。获取模型后，勾选常用模型，再分配给不同任务。</p></div><span class="badge">${providerPresets.filter(p=>p.id!=='custom').length} 种供应商预设</span></div><div class="provider-settings-grid"><section class="card"><div class="card-head"><h2>我的供应商</h2>${button('+ 添加供应商','provider','','small')}</div>${state.providers.length?state.providers.map(p=>{const preset=presetFor(p.presetId);return `<article class="provider-card"><div class="row">${providerLogo(preset)}<div class="grow"><strong>${esc(p.name)}</strong><small>${enabledModels(p).length} 个已启用模型</small></div><span class="badge ${p.hasKey?'':'neutral'}">${p.hasKey?'已配置':'无密钥'}</span></div><div class="provider-model-tags">${enabledModels(p).slice(0,4).map(m=>`<span title="${esc(m.id)}">${esc(m.name||m.id)}</span>`).join('')}${enabledModels(p).length>4?`<small>+${enabledModels(p).length-4}</small>`:''}</div><div class="row wrap">${button('管理模型','provider',`data-id="${esc(p.id)}"`,'small')}${button('测试连接','test-provider',`data-id="${esc(p.id)}" ${p.model?'':'disabled'}`,'small')}${button('删除','delete-provider',`data-id="${esc(p.id)}"`,'small')}</div></article>`;}).join(''):empty('还没有连接 AI 服务<br>从下面选择你使用的供应商。','spark')}<div class="divider"></div><div class="card-head"><h3>添加常用服务</h3><small>自动填写接口地址</small></div><div class="provider-presets">${providerPresets.map(p=>`<button class="preset-tile" data-action="provider-preset" data-preset="${p.id}">${providerLogo(p)}<span>${esc(p.name)}</span></button>`).join('')}</div><p class="provider-footnote">密钥在服务端加密保存，个人导出与浏览器缓存不包含密钥。</p></section><section class="card task-card"><div class="card-head"><h2>任务使用的模型</h2>${icon('settings')}</div><p class="description">同一份密钥下的多个模型，可以分别承担不同任务。</p><form id="tasks-form" data-version="${state.providersVersion??''}">${[['chat','日常对话','连续追问、知识问答与阶段分析','chat'],['meal','餐食识别','请选择支持图片输入的模型','image'],['planning','规划建议','训练安排、食谱与阶段规划','leaf'],['motion','动作点评','请选择支持图片的模型，结合骨架与关键截图评价动作','body']].map(([id,label,desc,i])=>`<div class="task-model-field"><label for="task-${id}">${icon(i)} ${label}</label><select id="task-${id}" name="${id}">${taskOptions(id)}</select><small>${desc}</small></div>`).join('')}<div id="tasks-error" role="alert"></div><div class="form-footer"><button type="submit" class="button primary">保存任务模型</button></div></form><div class="notice" style="margin-top:24px">图片能力“待确认”的模型，可在“管理模型”中根据供应商说明设置为“支持图片”，再用于动作点评。</div></section></div>`;
 }
 function providerEditor(id,presetId='deepseek') {
  const existing=state.providers.find(x=>x.id===id),preset=presetFor(existing?.presetId||presetId);
- state.providerDraft={id:existing?.id||uid(),presetId:preset.id,protocol:existing?.protocol||preset.protocol,name:existing?.name||preset.name,baseUrl:existing?.baseUrl||preset.baseUrl,apiKey:'',hasKey:existing?.hasKey||false,models:structuredClone(existing?enabledModels(existing):[]),model:existing?.model||'',availableModels:structuredClone(existing?enabledModels(existing):[]),search:'',fetched:false,fetching:false,existing:!!existing};
+ state.providerDraft={version:state.providersVersion,id:existing?.id||uid(),presetId:preset.id,protocol:existing?.protocol||preset.protocol,name:existing?.name||preset.name,baseUrl:existing?.baseUrl||preset.baseUrl,apiKey:'',hasKey:existing?.hasKey||false,models:structuredClone(existing?enabledModels(existing):[]),model:existing?.model||'',availableModels:structuredClone(existing?enabledModels(existing):[]),search:'',fetched:false,fetching:false,existing:!!existing};
  renderProviderEditor();
 }
 function renderProviderEditor() {
@@ -1382,7 +1487,7 @@ function renderProviderEditor() {
 function renderProviderModels() {
  const d=state.providerDraft,el=$('#provider-model-list');if(!d||!el)return;
  const query=d.search.trim().toLocaleLowerCase(),visible=d.availableModels.filter(m=>(m.id+' '+m.name).toLocaleLowerCase().includes(query));
- el.innerHTML=visible.length?visible.map(m=>`<label class="model-option"><input type="checkbox" name="enabled-model" value="${esc(m.id)}" ${d.models.some(x=>x.id===m.id)?'checked':''}><span class="grow"><strong>${esc(m.name||m.id)}</strong>${m.name&&m.name!==m.id?`<small>${esc(m.id)}</small>`:''}</span>${modelCapability(m)}</label>`).join(''):empty(d.availableModels.length?'没有找到匹配模型，试试其他关键词。':d.fetched?'此服务没有返回可用模型，可查看账户权限或手动添加。':'填入 API Key 后，点击“获取模型”。','grid');
+ el.innerHTML=visible.length?visible.map(m=>`<div class="model-option"><label class="model-enable"><input type="checkbox" name="enabled-model" value="${esc(m.id)}" ${d.models.some(x=>x.id===m.id)?'checked':''}><span class="grow"><strong>${esc(m.name||m.id)}</strong>${m.name&&m.name!==m.id?`<small>${esc(m.id)}</small>`:''}</span></label><select class="model-vision" data-model-vision="${esc(m.id)}" aria-label="${esc(m.name||m.id)} 的图片输入能力">${options([['unknown','图片能力待确认'],['true','支持图片'],['false','仅文本']],typeof m.vision==='boolean'?String(m.vision):'unknown')}</select></div>`).join(''):empty(d.availableModels.length?'没有找到匹配模型，试试其他关键词。':d.fetched?'此服务没有返回可用模型，可查看账户权限或手动添加。':'填入 API Key 后，点击“获取模型”。','grid');
 }
 function updateProviderSelection() {
  const d=state.providerDraft;if(!d||!$('#provider-model'))return;
@@ -1406,7 +1511,8 @@ async function fetchProviderModels() {
   const response=await api('/providers/models',{method:'POST',body:{provider:providerPayload(d)}});
   if(state.providerDraft!==d||d.requestId!==requestId||!$('#provider-form'))return;
   if(!Array.isArray(response.models))throw new Error('服务没有返回有效的模型列表。');
-  const available=new Map(response.models.map(m=>[m.id,{id:m.id,name:m.name||m.id,vision:m.vision??null}]));
+  const configured=new Map(d.models.map(m=>[m.id,m]));
+  const available=new Map(response.models.map(m=>[m.id,{id:m.id,name:m.name||m.id,vision:m.vision??configured.get(m.id)?.vision??null}]));
   for(const model of d.models)if(!available.has(model.id))available.set(model.id,model);
   d.availableModels=[...available.values()];d.models=d.models.map(m=>available.get(m.id));d.fetched=true;
   renderProviderModels();updateProviderSelection();
@@ -1421,13 +1527,15 @@ async function saveProvider() {
  if(!d.apiKey&&(!d.hasKey||d.clearKey)&&presetFor(d.presetId).requiresKey)throw new Error('请填写此供应商的 API Key。');
  const providers=state.providers.filter(p=>p.id!==d.id).map(p=>({...p}));providers.push(providerPayload(d));
  const selection=reconcileTasks(providers,state.tasks,state.taskModels,d.id,{defaultTasks:state.providers.some(p=>enabledModels(p).length)?['motion']:undefined});
- await providerSettings.save({providers,...selection});
- $('#provider-form')?.reset();d.apiKey='';state.providerDraft=null;closeModal();renderAISettings();toast('供应商与模型已保存');
+ const saved=await saveProviderConfiguration({providers,...selection},d.version,$('#provider-form'));
+ if(!saved||state.providerDraft!==d||!$('#provider-form'))return;
+ $('#provider-form').reset();d.apiKey='';state.providerDraft=null;closeModal();renderAISettings();toast('供应商与模型已保存');
 }
-function renderReview() {
- const phases=records('phase').map(r=>r.data).sort((a,b)=>a.date.localeCompare(b.date));const first=phases[0],last=phases.at(-1),delta=first&&last?Number((last.weight-first.weight).toFixed(1)):0;
+async function renderReview() {
+ if(!await readyComputed())return;
+ const phases=records('phase').map(r=>r.data).sort((a,b)=>a.date.localeCompare(b.date));const first=phases[0],last=phases.at(-1),delta=first&&last?Number(computed.phaseWeightChange.toFixed(1)):0;
  const done=allCalendarTasks().filter(r=>r.data.taskType==='training'&&r.data.completed),meals=records('meal').filter(r=>r.data.confirmed),dates=new Set(meals.map(r=>r.data.date));
- const mean=dates.size?[...dates].reduce((sum,date)=>sum+totals(date).kcal,0)/dates.size:0;
+ const mean=computed.meanKcal;
  $('#settings-content').innerHTML=`<div class="stats"><div class="stat"><small>已记录体重变化</small><strong>${delta>0?'+':''}${delta}<em>kg</em></strong><p>${first?`${first.date} 至 ${last.date}`:'等待至少两次体重记录'}</p></div><div class="stat"><small>完成训练</small><strong>${done.length}<em>次</em></strong><p>实际完成记录</p></div><div class="stat"><small>饮食记录天数</small><strong>${dates.size}<em>天</em></strong><p>${meals.length} 餐已确认</p></div><div class="stat"><small>有记录日平均摄入</small><strong>${numeric(mean)}<em>kcal</em></strong><p>缺少餐次会低估全天摄入</p></div></div><div class="grid-2"><section class="card"><h2>体重趋势</h2>${phases.length>1?`<div class="trend" role="img" aria-label="体重历史：${esc(phases.map(p=>p.date+' '+p.weight+'kg').join('，'))}">${phases.slice(-12).map(p=>`<div class="trend-column"><span>${p.weight}</span><i style="height:${Math.max(15,(p.weight-Math.min(...phases.map(x=>x.weight))+1)/(Math.max(...phases.map(x=>x.weight))-Math.min(...phases.map(x=>x.weight))+2)*75)}px"></i><span>${p.date.slice(5)}</span></div>`).join('')}</div>`:empty('连续记录几次体重，就能看到趋势。')}<p class="review-summary">${phases.length>1?`这段记录中，体重${delta>0?'上升':delta<0?'下降':'保持'} ${Math.abs(delta)} kg。`:'目前的体重记录还不足以判断趋势。'}体重会受饮水、食物和测量时间影响，建议在相近条件下观察多次记录。</p>${button('更新阶段参数','profile','','small')}</section><section class="card"><h2>把记录放在一起看</h2><p class="review-summary">你已记录 ${done.length} 次训练和 ${meals.length} 餐饮食。${dates.size<7?'继续积累完整记录，有助于判断计划是否适合当前生活节奏。':'复盘时可以结合体重变化、训练表现与饥饿感调整阶段目标。'}</p>${button(icon('spark')+' 请 AI 结合记录复盘','ai-review','','primary')}<p class="description" style="font-size:11px;margin-top:17px">更新阶段参数后会重新计算营养建议；训练计划须主动修改并再次确认。</p></section></div>`;
 }
 function renderData() {
@@ -1482,7 +1590,72 @@ async function exportData() {
  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`循序健身-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);toast(data.offline?'已导出本机记录；图片需联网完整导出':'个人数据已导出');
 }
 function confirmDialog(title,message,action,id='') {modal(title,`<p class="description">${esc(message)}</p><div class="form-footer">${button('取消','close-modal')}${button('确认删除',action,`data-id="${esc(id)}"`,'danger')}</div>`);}
-async function navigate(page) {state.page=page;if(page==='settings'&&state.setting==='ai')await loadProviders();render();window.scrollTo(0,0);}
+function rememberCommunityReturn() {
+  if(!location.hash.startsWith('#community')&&!personalRoute().active)return;
+  try{sessionStorage.setItem('fitness:community-return',location.hash);}catch{}
+}
+function readCommunityReturn() {
+  try{
+    const value=sessionStorage.getItem('fitness:community-return');
+    sessionStorage.removeItem('fitness:community-return');
+    return value?.startsWith('#community')||personalRoute(value).active?value:null;
+  }catch{return null;}
+}
+async function communityNavigate(hash) {
+  if(hash==='#auth-entry'){
+    rememberCommunityReturn();
+    await logout();
+    location.hash='#auth-entry';
+    return;
+  }
+  hash=canonicalProfileHash(hash);
+  if(!String(hash).startsWith('#community')&&!personalRoute(hash).active)return;
+  if(location.hash===hash){
+    if(personalRoute(hash).active)await navigate('settings',{fromHash:true});
+    else if(state.page==='community'&&communityController?.isMounted($('#page')))await communityController.handleRoute(hash);
+    else await navigate('community',{fromHash:true});
+  }else location.hash=hash;
+}
+async function navigate(page,{fromHash=false}={}) {
+  if(!['chat','nutrition','training','library','motion','community','settings'].includes(page))return;
+  const version=++navigationVersion;
+  if(page==='community'&&!fromHash&&!location.hash.startsWith('#community'))history.pushState(null,'','#community');
+  if(page==='community'){
+    const canonical=canonicalProfileHash(location.hash);
+    if(canonical!==location.hash){history.replaceState(null,'',canonical);page='settings';fromHash=true;}
+  }
+  if(page==='settings'&&fromHash)state.setting=personalRoute().section;
+  if(page!=='community'&&!fromHash){const hash=page==='settings'?personalHash(state.setting):'#'+page;if(location.hash!==hash)history.pushState(null,'',hash);}
+  if(page==='community'&&state.page==='community'&&communityController?.isMounted($('#page'))){
+    $('#sidebar')?.classList.remove('open');
+    await communityController.handleRoute(location.hash);
+    return;
+  }
+  if(page==='settings'&&state.page==='settings'&&state.setting==='home'&&communityController?.isMounted($('#personal-community'))){
+    $('#sidebar')?.classList.remove('open');
+    await communityController.handlePersonalRoute(location.hash);
+    return;
+  }
+  if(communityController?.isMounted())await communityController.unmount();
+  if(version!==navigationVersion)return;
+  state.page=page;
+  if(page==='settings'&&state.setting==='ai')await loadProviders();
+  if(version!==navigationVersion)return;
+  render();window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',()=>{
+  if(!state.user){rememberCommunityReturn();return;}
+  const hash=location.hash;
+  if(hash.startsWith('#community')){
+    navigate('community',{fromHash:true}).catch(error=>toast(error.message,true));
+  }else if(personalRoute(hash).active){
+    navigate('settings',{fromHash:true}).catch(error=>toast(error.message,true));
+  }else{
+    const page=hash.slice(1);
+    if(['chat','nutrition','training','library','motion'].includes(page)&&page!==state.page)
+      navigate(page,{fromHash:true}).catch(error=>toast(error.message,true));
+  }
+});
 
 // 真人封面加载失败（文件缺失、离线、清单过期）时移除图片并撤掉遮罩，露出底下的矢量图示。
 // closest 必须在 remove 之前取：图片一旦脱离文档，closest 只会返回 null。
@@ -1505,7 +1678,7 @@ document.addEventListener('click',async event=>{
    else {$('#auth-entry').scrollIntoView({behavior:'instant'});$('#landing-auth-heading').focus({preventScroll:true});}
    break;
  }
- case 'nav':await navigate(target.dataset.page);break;
+ case 'nav':if(target.dataset.page==='settings')state.setting='home';await navigate(target.dataset.page);break;
  case 'motion-open':modelViewer.close();closeModal();await navigate('motion');break;
  case 'toggle-sidebar': {
    state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -1547,7 +1720,7 @@ document.addEventListener('click',async event=>{
  case 'meal-ai':await estimateMeal();break;
  case 'meal-estimate':{const meal=state.store.get(id);if(meal)modal('详细说明',renderMealNotes(meal.estimateNote||meal.notes||'暂无估算说明'),true);break;}
  case 'meal-nutrient-step':{const input=document.getElementById(`meal-${id}-${target.dataset.key}`);const value=Math.max(0,Number(input.value)+Number(target.dataset.step));input.value=Number(value.toFixed(2));await updateMealNutrient(id,target.dataset.key,value);break;}
- case 'meal-review-back':{const m=state.mealDraft;if(m._busy)break;if(!$('#meal-confirm-form').reportValidity())break;m.items=parseMealEstimate(JSON.stringify({items:readMealConfirmationItems()})).items;m.date=$('#confirm-meal-date').value;renderMealEditor();break;}
+ case 'meal-review-back':{const m=state.mealDraft;if(m._busy)break;if(!$('#meal-confirm-form').reportValidity())break;m.items=await readMealConfirmationItems();m.date=$('#confirm-meal-date').value;renderMealEditor();break;}
  case 'delete-meal':confirmDialog('删除这餐记录','删除后将从当天摄入总量中扣除。','confirm-delete-meal',id);break;
  case 'confirm-delete-meal':await state.store.remove(id);closeModal();renderNutrition();toast('已删除餐食记录');break;
  case 'plan-builder':planBuilder();break;
@@ -1571,7 +1744,7 @@ document.addEventListener('click',async event=>{
  case 'busy-month':await changeBusyMonth(Number(target.dataset.offset));break;
  case 'busy-current':await changeBusyMonth(0,true);break;
  case 'busy-weekday':{const editor=state.busyEditor,day=Number(target.dataset.weekday);editor.expanded=true;editor.weekdays=editor.weekdays.includes(day)?editor.weekdays.filter(item=>item!==day):[...editor.weekdays,day].sort((a,b)=>a-b);renderBusyDays();$(`[data-action="busy-weekday"][data-weekday="${day}"]`).focus({preventScroll:true});break;}
- case 'busy-toggle':{const date=target.dataset.date;if(date<today())break;state.busyEditor.settings.overrides[date]=!isBusyDate(date,busyEditorSettings());renderBusyDays(date);break;}
+ case 'busy-toggle':{const date=target.dataset.date;if(date<today())break;state.busyEditor.settings.overrides[date]=!await calculate('isBusyDate',date,await busyEditorSettings());renderBusyDays(date);break;}
  case 'busy-save':{const controls=[...$('#modal').querySelectorAll('button')].map(node=>({node,disabled:node.disabled}));controls.forEach(({node})=>node.disabled=true);try{await saveBusyDays();}catch(error){$('#busy-days-error').innerHTML=`<div class="error-box">${esc(error.message)}</div>`;}finally{controls.forEach(({node,disabled})=>node.disabled=disabled);}break;}
  case 'calendar-week':state.date=addDays(state.date,Number(target.dataset.offset));renderTraining();break;
  case 'calendar-today':state.date=today();renderTraining();break;
@@ -1614,15 +1787,26 @@ document.addEventListener('click',async event=>{
  case 'achievement-filter':state.achievementCategory=target.dataset.category;state.achievementPage=0;renderAchievements();break;
  case 'achievement-page':state.achievementPage=Number(target.dataset.page);renderAchievements();break;
  case 'achievement-detail':showAchievement(id);break;
- case 'settings-tab':state.setting=target.dataset.tab;if(state.setting==='ai')await loadProviders();renderSettings();break;
+ case 'settings-tab':if(personalSections.some(([section])=>section===target.dataset.tab)){state.setting=target.dataset.tab;await navigate('settings');}break;
  case 'provider':providerEditor(id);break;
  case 'provider-preset':providerEditor(null,target.dataset.preset);break;
  case 'fetch-models':await fetchProviderModels();break;
+ case 'reload-providers':{
+   const user=state.user,store=state.store;target.disabled=true;
+   try {
+     const loaded=await loadProviders();if(state.user!==user||state.store!==store||!target.isConnected)break;
+     if(!loaded)throw new Error('暂时无法加载最新配置，请稍后重试。');
+     if(target.closest('#modal'))closeModal();
+     if($('#settings-content')&&state.setting==='ai')renderAISettings();
+     toast('已加载最新配置，请重新修改后保存');
+   } finally {target.disabled=false;}
+   break;
+ }
  case 'select-visible-models':{const d=state.providerDraft,q=d.search.trim().toLowerCase();const selected=new Map(d.models.map(m=>[m.id,m]));for(const m of d.availableModels)if((m.id+' '+m.name).toLowerCase().includes(q))selected.set(m.id,m);d.models=[...selected.values()];renderProviderModels();updateProviderSelection();break;}
  case 'manual-model':{const d=state.providerDraft,value=$('#provider-manual-model').value.trim();if(!value)throw new Error('请填写模型 ID。');if(!d.availableModels.some(m=>m.id===value))d.availableModels.push({id:value,name:value,vision:null});if(!d.models.some(m=>m.id===value))d.models.push(d.availableModels.find(m=>m.id===value));d.search='';$('#provider-model-search').value='';$('#provider-manual-model').value='';renderProviderModels();updateProviderSelection();break;}
  case 'test-provider':target.disabled=true;try{const r=await api('/providers/test',{method:'POST',body:{id}});toast(r.message||'连接成功');}finally{target.disabled=false;}break;
- case 'delete-provider':confirmDialog('删除 AI 服务','使用此服务的任务将需要重新选择模型。','confirm-delete-provider',id);break;
- case 'confirm-delete-provider':{const providers=state.providers.filter(p=>p.id!==id);const selection=reconcileTasks(providers,state.tasks,state.taskModels);await providerSettings.save({providers,...selection});closeModal();renderAISettings();break;}
+ case 'delete-provider':state.providerDeleteVersion=state.providersVersion;confirmDialog('删除 AI 服务','使用此服务的任务将需要重新选择模型。','confirm-delete-provider',id);break;
+ case 'confirm-delete-provider':{const providers=state.providers.filter(p=>p.id!==id);const selection=reconcileTasks(providers,state.tasks,state.taskModels),scope=$('#modal .modal-content');const saved=await saveProviderConfiguration({providers,...selection},state.providerDeleteVersion,scope);if(saved&&target.isConnected){closeModal();if($('#settings-content')&&state.setting==='ai')renderAISettings();}break;}
  case 'ai-review':state.conversation=null;closeModal();await navigate('chat');await sendChat('请结合我的阶段体重、饮食和实际训练记录复盘。指出记录不足和趋势的不确定性，并建议下一阶段可调整的参数。不要改写我的固定训练计划。');break;
  case 'recipe':recipeTool();break;
  case 'recipe-ai':{if(!state.recipe)return;target.disabled=true;try{const response=await api('/ai',{method:'POST',body:{task:'planning',messages:[{role:'user',content:'请结合我的训练时间、偏好与忌口，对以下食谱草案给出可操作的调整说明和单餐替换，避免忽略任何饮食限制。不要自动记账。'+JSON.stringify({recipe:state.recipe,preferences:state.store.get('preferences')})}],context:aiContext()}});$('#recipe-result').insertAdjacentHTML('beforeend',`<div class="notice" style="margin-top:18px;white-space:pre-wrap">${esc(response.content)}</div>`);}finally{target.disabled=false;}break;}
@@ -1646,25 +1830,25 @@ document.addEventListener('submit',async event=>{
  try {
  switch(form.id){
  case 'auth-form':{const {user}=await api('/auth/'+state.authMode,{method:'POST',body:values});await enter(user);break;}
- case 'profile-form':{const p=validateProfile({...profile(),...values,activity:values.activity?Number(values.activity):profile()?.activity||1.375});calculateNutrition(p);const date=values.date||today();delete p.date;await state.store.put('profile','profile',p);await state.store.put('phase',uid(),{...p,date});closeModal();render();toast('阶段资料已保存，营养建议已更新');break;}
+ case 'profile-form':{const p=await calculate('validateProfile',{...profile(),...values,activity:values.activity?Number(values.activity):profile()?.activity||1.375});await calculate('calculateNutrition',p);const date=values.date||today();delete p.date;await state.store.put('profile','profile',p);await state.store.put('phase',uid(),{...p,date});closeModal();render();toast('阶段资料已保存，营养建议已更新');break;}
  case 'chat-form':if(values.message.length>16000)throw new Error('单条消息请控制在 16000 字以内。');if(values.message.trim()||chatUploads.list(attachmentOwner()).length)await sendChat(values.message.trim());break;
  case 'meal-form':await estimateMeal();break;
  case 'meal-confirm-form':await confirmMeal();break;
  case 'metabolism-form':case 'macro-energy-form':case 'portion-form':case 'weight-conversion-form':updateKnowledgeTool(form);break;
- case 'plan-form':{await ensurePlanLibrary();const draft=generateGroupedPlan({split:state.planSplit,groups:state.planGroups.slice(0,state.planSplit),variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(createLibraryTemplate([...state.store.records.values()],draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;state.librarySelected=id;state.libraryEditing=structuredClone(state.store.records.get(id));viewDraft();break;}
- case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();libraryPlan({id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
+ case 'plan-form':{await ensurePlanLibrary();const draft=await calculate('generateGroupedPlan',{split:state.planSplit,groups:state.planGroups.slice(0,state.planSplit),variant:values.variant},profile()),id='template:'+uid();if(state.planStartDate)draft.scheduleDate=state.planStartDate;await state.store.putMany(await calculate('createLibraryTemplate',computeRecords(),draft,id,new Date().toISOString()));state.libraryDate=state.planStartDate<today()?today():state.planStartDate;state.librarySelected=id;state.libraryEditing=structuredClone(state.store.records.get(id));viewDraft();break;}
+ case 'draft-form':{const draft=readDraftForm();draft.name=draft.name.trim();await calculate('libraryPlan',{id:state.libraryEditing.id,kind:'training-template',data:draft});await saveLibraryDraft(draft);await openPlanLibrary(state.libraryEditing.id,true);break;}
  case 'plan-library-form':await importLibraryTemplate(values);break;
  case 'library-rename-form':{const record=assertLibraryCurrent(state.libraryRenaming),name=values.name.trim();if(!name||name.length>80)throw new Error('方案名称需为 1–80 个字。');await state.store.put(record.kind,record.id,{...record.data,name,libraryRevision:uid()});await openPlanLibrary(record.id,true);break;}
  case 'calendar-task-form':await saveCalendarTask(values);break;
  case 'training-content-form':await saveTrainingContent();break;
  case 'training-log':{const record=assertTaskCurrent(state.trainingLog),s=record.data,day=taskDay(record);await saveTrainingProgress(record,{...s,daySnapshot:structuredClone(day),completed:true,notes:values.notes,actual:day.exercises.map((e,i)=>({exerciseId:e.exerciseId,sets:Number(values['sets-'+i]),reps:values['reps-'+i],weight:Number(values['weight-'+i])})),completedAt:s.completedAt||new Date().toISOString()});renderTraining();showCalendarTask(record.id);toast('训练已记录');break;}
- case 'strength-form':{const r=estimate1RM(Number(values.weight),Number(values.reps));$('#strength-result').innerHTML=`<div class="divider"></div><div class="grid-2"><div class="stat"><small>Epley 参考</small><strong>${r.epley}<em>kg</em></strong></div><div class="stat"><small>Brzycki 参考</small><strong>${r.brzycki}<em>kg</em></strong></div></div><p class="description" style="margin-top:18px">${esc(r.note)}</p>`;break;}
+ case 'strength-form':{const r=await calculate('estimate1RM',Number(values.weight),Number(values.reps));$('#strength-result').innerHTML=`<div class="divider"></div><div class="grid-2"><div class="stat"><small>Epley 参考</small><strong>${r.epley}<em>kg</em></strong></div><div class="stat"><small>Brzycki 参考</small><strong>${r.brzycki}<em>kg</em></strong></div></div><p class="description" style="margin-top:18px">${esc(r.note)}</p>`;break;}
  case 'provider-form':await saveProvider();break;
- case 'tasks-form':{const tasks={},taskModels={};for(const task of ['chat','meal','planning','motion']){const selected=values[task]?JSON.parse(values[task]):{};tasks[task]=selected.providerId||'';taskModels[task]=selected.modelId||'';}await providerSettings.save({providers:state.providers,tasks,taskModels});toast('任务模型已保存');break;}
- case 'recipe-form':{const pref={preferences:values.preferences,restrictions:values.restrictions,trainingTime:values.trainingTime};const result=suggestRecipe({...values,days:Number(values.days),profile:profile()});await state.store.put('preferences','preferences',pref);state.recipe=result;$('#recipe-result').innerHTML=recipeResult(result);break;}
- case 'food-swap-form':{const r=substituteFood(values.from,Number(values.grams),values.to,values.basis),from=foods.find(f=>f.id===values.from),to=foods.find(f=>f.id===values.to);$('#swap-result').innerHTML=`<div class="divider"></div><h3>${esc(from.name)} ${values.grams}g → ${esc(to.name)} ${r.grams}g</h3><table class="history-table"><thead><tr><th>营养</th><th>替换前</th><th>替换后</th><th>变化</th></tr></thead><tbody>${[['kcal','能量 kcal'],['protein','蛋白质 g'],['carbs','碳水 g'],['fat','脂肪 g']].map(([k,n])=>`<tr><td>${n}</td><td>${r.before[k]}</td><td>${r.after[k]}</td><td>${r.delta[k]>0?'+':''}${r.delta[k]}</td></tr>`).join('')}</tbody></table><p class="description">${esc(r.note)}</p><small>${esc(from.source)}<br>${esc(to.source)}</small>`;break;}
- case 'cooked-form':{const r=convertFoodWeight(Number(values.grams),Number(values.raw),Number(values.cooked));$('#cooked-result').innerHTML=`<div class="notice">对应熟重约 <strong>${r.grams} g</strong><br>${esc(r.note)}</div>`;break;}
- case 'delete-account-form':await stopChat();await api('/account',{method:'DELETE',body:{password:values.password}});modelViewer.destroy();await chatUploads.clearAll();await state.store.clear();await state.store.close?.();localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;chatDrafts.clear();chatScroll.clear();closeModal();renderAuth();toast('账号与个人数据已删除');break;
+ case 'tasks-form':{const tasks={},taskModels={};for(const task of ['chat','meal','planning','motion']){const selected=values[task]?JSON.parse(values[task]):{};tasks[task]=selected.providerId||'';taskModels[task]=selected.modelId||'';}const version=form.dataset.version===''?null:Number(form.dataset.version);const saved=await saveProviderConfiguration({providers:state.providers,tasks,taskModels},version,form);if(saved&&form.isConnected){form.dataset.version=String(state.providersVersion);toast('任务模型已保存');}break;}
+ case 'recipe-form':{const pref={preferences:values.preferences,restrictions:values.restrictions,trainingTime:values.trainingTime};const result=await calculate('suggestRecipe',{...values,days:Number(values.days),profile:profile()});await state.store.put('preferences','preferences',pref);state.recipe=result;$('#recipe-result').innerHTML=recipeResult(result);break;}
+ case 'food-swap-form':{const r=await calculate('substituteFood',values.from,Number(values.grams),values.to,values.basis),from=foods.find(f=>f.id===values.from),to=foods.find(f=>f.id===values.to);$('#swap-result').innerHTML=`<div class="divider"></div><h3>${esc(from.name)} ${values.grams}g → ${esc(to.name)} ${r.grams}g</h3><table class="history-table"><thead><tr><th>营养</th><th>替换前</th><th>替换后</th><th>变化</th></tr></thead><tbody>${[['kcal','能量 kcal'],['protein','蛋白质 g'],['carbs','碳水 g'],['fat','脂肪 g']].map(([k,n])=>`<tr><td>${n}</td><td>${r.before[k]}</td><td>${r.after[k]}</td><td>${r.delta[k]>0?'+':''}${r.delta[k]}</td></tr>`).join('')}</tbody></table><p class="description">${esc(r.note)}</p><small>${esc(from.source)}<br>${esc(to.source)}</small>`;break;}
+ case 'cooked-form':{const r=await calculate('convertFoodWeight',Number(values.grams),Number(values.raw),Number(values.cooked));$('#cooked-result').innerHTML=`<div class="notice">对应熟重约 <strong>${r.grams} g</strong><br>${esc(r.note)}</div>`;break;}
+ case 'delete-account-form':await deleteAccount(values.password);break;
  }
  }catch(error){const errorBox=form.id==='auth-form'?$('#auth-error'):form.id==='profile-form'?$('#profile-error'):form.id==='tasks-form'?$('#tasks-error'):form.id==='calendar-task-form'?$('#calendar-task-error'):form.id==='training-content-form'?$('#training-content-error'):form.id==='plan-library-form'?$('#plan-library-error'):null;if(errorBox)errorBox.innerHTML=`<div class="error-box" style="margin:12px 0">${esc(error.message)}</div>`;else toast(error.message,true);}
  finally {if(submit)submit.disabled=false;if(form.id==='chat-form')updateChatControls();}
@@ -1702,6 +1886,7 @@ document.addEventListener('change',async event=>{
  if(target.name==='library-template'){const scroll=$('.plan-library-list').scrollTop;state.librarySelected=target.value;renderPlanLibrary();$('.plan-library-list').scrollTop=scroll;$('input[name="library-template"]:checked').focus({preventScroll:true});return;}
  if(target.id==='library-start-date'){state.libraryDate=target.value;return;}
  if(target.name==='enabled-model'&&state.providerDraft){const d=state.providerDraft;if(target.checked){const m=d.availableModels.find(m=>m.id===target.value);if(m&&!d.models.some(x=>x.id===m.id))d.models.push(m);}else d.models=d.models.filter(m=>m.id!==target.value);updateProviderSelection();return;}
+ if(target.matches('[data-model-vision]')&&state.providerDraft){const d=state.providerDraft,id=target.dataset.modelVision,vision=target.value==='true'?true:target.value==='false'?false:null;for(const model of [...d.availableModels,...d.models])if(model.id===id)model.vision=vision;return;}
  try {
  switch(target.id){
  case 'provider-preset':{const d=state.providerDraft,preset=presetFor(target.value);Object.assign(d,{presetId:preset.id,name:preset.name,protocol:preset.protocol,baseUrl:preset.baseUrl,apiKey:'',hasKey:false,models:[],availableModels:[],model:'',search:'',fetched:false,fetching:false,requestId:uid()});renderProviderEditor();break;}
@@ -1737,12 +1922,40 @@ document.addEventListener('input',event=>{
  if(event.target.id==='provider-model-search'&&state.providerDraft){state.providerDraft.search=event.target.value;renderProviderModels();}
  if(event.target.id==='exercise-search'){const start=event.target.selectionStart;state.filter=event.target.value;renderLibrary();$('#exercise-search').focus();$('#exercise-search').setSelectionRange(start,start);}
 });
+async function deleteAccount(password) {
+  const user=state.user,store=state.store,community=communityController;if(!user||!store)return;
+  const current=()=>state.user===user&&state.store===store;
+  await stopChat();if(!current())return;
+  try {await api('/account',{method:'DELETE',headers:{'X-Fitness-User':user.id},body:{password}});}
+  catch(error){if(!current())return;throw error;}
+  if(current())closeMotionView();
+  // Cleanup always belongs to the account that sent DELETE, including after logout.
+  if(community){await community.clearAccountData();await community.destroy();if(communityController===community)communityController=null;}
+  else await clearCommunityDrafts(user.id);
+  clearCommunityLocalData(user.id);
+  await Promise.all([...chatUploads.owners.keys()].filter(owner=>owner.startsWith(user.id+':')).map(owner=>chatUploads.clear(owner)));
+  const deletedStore=store.closed?await new RecordStore(user).open():store;
+  try {await deletedStore.clear();}finally {await deletedStore.close();}
+  // A newer login can occur during any of the cleanup awaits above.
+  if(!current())return;
+  modelViewer.destroy();localStorage.removeItem('fitness:last-user');setApiUser(null);
+  state.user=null;state.store=null;state.providers=[];state.providersVersion=null;state.providersConflict=false;providerSettings=null;
+  state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';
+  chatDrafts.clear();chatScroll.clear();closeModal();renderAuth();toast('账号、个人记录与社区数据已删除');
+}
 async function logout() {
- closeMotionView();
- modelViewer.destroy();
- await chatUploads.clearAll({removeUploaded:true});await stopChat();
- if(state.store?.status!=='expired')try{await api('/auth/logout',{method:'POST',body:{}});}catch(error){if(![401,409].includes(error.status)){if(state.page==='motion')renderMotion();throw error;}}
- await state.store?.close?.();localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';chatDrafts.clear();chatScroll.clear();renderAuth();
+  const user=state.user,store=state.store,community=communityController;if(!user)return;
+  const current=()=>state.user===user&&state.store===store;
+  closeMotionView();
+  rememberCommunityReturn();
+  await community?.destroy();if(communityController===community)communityController=null;
+  if(!current())return;
+  modelViewer.destroy();
+  await chatUploads.clearAll({removeUploaded:true});if(!current())return;
+  await stopChat();if(!current())return;
+  if(store?.status!=='expired')try{await api('/auth/logout',{method:'POST',headers:{'X-Fitness-User':user.id},body:{}});}catch(error){if(!current())return;if(![401,409].includes(error.status)){if(state.page==='motion')renderMotion();throw error;}}
+  await store?.close?.();if(!current())return;
+  localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.providersVersion=null;state.providersConflict=false;providerSettings=null;state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';chatDrafts.clear();chatScroll.clear();renderAuth();
 }
 $('#modal').addEventListener('cancel',()=>{if($('#provider-form'))clearProviderDraft();});
 window.addEventListener('online',()=>state.store?.sync().then(()=>{toast('已恢复网络，记录已同步');}).catch(e=>toast(e.message,true)));

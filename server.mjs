@@ -1,7 +1,9 @@
 import {reconcileAchievements} from './server/achievements.mjs';
+import {compute} from './server/compute.mjs';
 import {beijingDate,validTrainingCompletion} from './public/achievements.js';
 import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
+import { loadEnvFile } from 'node:process';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { resolve, dirname, join, extname, relative, isAbsolute } from 'node:path';
@@ -18,6 +20,9 @@ import { completeNutritionAdvice } from './server/nutrition-advice.mjs';
 import { contextSections, readChatContext } from './server/chat-context.mjs';
 import { addDays } from './public/schedule.js';
 import {prepareChatHistory,historyTools} from './server/chat-history.mjs';
+import { createCommunity } from './server/community.mjs';
+import { communityTransaction } from './server/community-storage.mjs';
+import { createCommunityMedia } from './server/community-media.mjs';
 import {completeMotionCoach, validateMotionCoachRequest, MOTION_COACH_REQUEST_BYTES} from './server/motion-coach.mjs';
 
 const scrypt = promisify(scryptCallback);
@@ -26,7 +31,7 @@ const DAY = 86400000;
 const MAX_FILE = 8 * 1024 * 1024;
 const ID = /^[\w:-]{1,100}$/;
 const FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
-const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.task': 'application/octet-stream' };
+const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream' };
 const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'demo.offline.js', 'atlas.worker.js', 'assets/anatomy-data.bin', 'model-loader.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
 
 async function passwordHash(password) {
@@ -120,11 +125,20 @@ export function createServer(options = {}) {
     modelDir = join(root, '精细模型与动作开发'),
     fetchImpl,
     aiTimeoutMs = 60000,
+    motionAiTimeoutMs = options.aiTimeoutMs ?? 180000,
     allowPrivateProviders = process.env.ALLOW_PRIVATE_AI !== 'false',
     secureCookie = process.env.COOKIE_SECURE === 'true',
   } = options;
   const store = openStore(resolve(dataDir));
   const { db } = store;
+  const communityMedia = createCommunityMedia({ db, dataDir: resolve(dataDir) });
+  const community = createCommunity({ db, media: communityMedia, readBody, send,
+    moderatorIds: options.communityModeratorIds ?? (process.env.COMMUNITY_MODERATOR_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean),
+    moderatorEmails: options.communityModeratorEmails ?? (process.env.COMMUNITY_MODERATOR_EMAILS ?? '').split(',').map(value => value.trim()).filter(Boolean) });
+  const cleanupCommunityMedia = () => communityMedia.cleanupExpired().catch(error => console.error('[community] Media cleanup failed:', error.code ?? error.name));
+  const communityCleanupTimer = setInterval(cleanupCommunityMedia, 60 * 60 * 1000);
+  communityCleanupTimer.unref();
+  void cleanupCommunityMedia();
   const loadHolidayYear=createHolidayService(resolve(dataDir),{fetcher:options.holidayFetchImpl});
   const attempts = new Map();
   const activeAi = new Map();
@@ -237,6 +251,11 @@ export function createServer(options = {}) {
         const user = requireUser(req);
         if (pathname === '/api/auth/me' && method === 'GET') { send(res, 200, { user: publicUser(user) }); return; }
         checkExpectedUser(req, user);
+        if (await community.handle(req, res, user, pathname)) return;
+        if(pathname==='/api/compute'&&method==='POST') {
+          const body=await readBody(req,8*1024*1024);
+          send(res,200,{result:compute(body)});return;
+        }
         if (pathname === '/api/holidays' && method === 'GET') { const year=Number(new URL(req.url,'http://localhost').searchParams.get('year')); if(!Number.isInteger(year)||year<1900||year>2199)throw new HttpError(400,'节假日年份无效。');send(res,200,await loadHolidayYear(year));return; }
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');
@@ -284,29 +303,34 @@ export function createServer(options = {}) {
         if (pathname === '/api/providers' && method === 'PUT') {
           const body = await readBody(req);
           if (!Array.isArray(body.providers) || body.providers.length > 20 || (body.tasks !== undefined && (!body.tasks || typeof body.tasks !== 'object' || Array.isArray(body.tasks))) || (body.taskModels !== undefined && (!body.taskModels || typeof body.taskModels !== 'object' || Array.isArray(body.taskModels)))) throw new HttpError(400, '请提供供应商列表和有效的任务模型设置。');
-          const previous = getProviders(db, user.id);
-          const providers = body.providers.map(value => resolveProvider(user.id, value));
-          if (new Set(providers.map(item => item.id)).size !== providers.length) throw new HttpError(400, '供应商 ID 不能重复。');
-          const tasks = {}, taskModels = {};
-          for (const task of ['chat', 'meal', 'planning', ...(Object.hasOwn(body.tasks || {}, 'motion') || Object.hasOwn(body.taskModels || {}, 'motion') || Object.hasOwn(previous.tasks, 'motion') ? ['motion'] : [])]) {
-            const id = body.tasks?.[task] ?? (providers.some(item => item.id === previous.tasks[task]) ? previous.tasks[task] : '');
-            if (typeof id !== 'string' || id && !providers.some(item => item.id === id)) throw new HttpError(400, '任务选择了不存在的供应商。');
-            tasks[task] = id;
-            const provider = providers.find(item => item.id === id);
-            const oldModel = previous.tasks[task] === id ? previous.taskModels[task] : '';
-            const legacyUpdate = body.taskModels === undefined && body.providers.some(item => item.id === id && item.model !== undefined && item.models === undefined);
-            const model = body.taskModels?.[task] ?? (legacyUpdate ? provider?.model ?? '' : provider?.models.some(item => item.id === oldModel) ? oldModel : provider?.model ?? '');
-            if (typeof model !== 'string' || model && !provider?.models.some(item => item.id === model)) throw new HttpError(400, '任务模型必须属于所选供应商已启用的模型。');
-            taskModels[task] = id ? model : '';
-          }
+          if (body.version !== undefined && (!Number.isSafeInteger(body.version) || body.version < 0)) throw new HttpError(400, 'AI 服务配置版本无效，请重新加载配置。');
+          let settings;
           db.exec('BEGIN IMMEDIATE');
           try {
+            const previous = getProviders(db, user.id);
+            const alreadyConfigured = db.prepare('SELECT 1 FROM preferences WHERE user_id = ?').get(user.id) || previous.providers.length;
+            if (body.version === undefined ? alreadyConfigured : body.version !== previous.version) throw new HttpError(409, 'AI 服务配置已更新，请重新加载配置后再保存。');
+            const providers = body.providers.map(value => resolveProvider(user.id, value));
+            if (new Set(providers.map(item => item.id)).size !== providers.length) throw new HttpError(400, '供应商 ID 不能重复。');
+            const tasks = {}, taskModels = {};
+            for (const task of ['chat', 'meal', 'planning', ...(Object.hasOwn(body.tasks || {}, 'motion') || Object.hasOwn(body.taskModels || {}, 'motion') || Object.hasOwn(previous.tasks, 'motion') ? ['motion'] : [])]) {
+              const id = body.tasks?.[task] ?? (providers.some(item => item.id === previous.tasks[task]) ? previous.tasks[task] : '');
+              if (typeof id !== 'string' || id && !providers.some(item => item.id === id)) throw new HttpError(400, '任务选择了不存在的供应商。');
+              tasks[task] = id;
+              const provider = providers.find(item => item.id === id);
+              const oldModel = previous.tasks[task] === id ? previous.taskModels[task] : '';
+              const legacyUpdate = body.taskModels === undefined && body.providers.some(item => item.id === id && item.model !== undefined && item.models === undefined);
+              const model = body.taskModels?.[task] ?? (legacyUpdate ? provider?.model ?? '' : provider?.models.some(item => item.id === oldModel) ? oldModel : provider?.model ?? '');
+              if (typeof model !== 'string' || model && !provider?.models.some(item => item.id === model)) throw new HttpError(400, '任务模型必须属于所选供应商已启用的模型。');
+              taskModels[task] = id ? model : '';
+            }
             db.prepare('DELETE FROM providers WHERE user_id = ?').run(user.id);
             for (const provider of providers) db.prepare('INSERT INTO providers(user_id,id,name,base_url,model,api_key,preset_id,protocol,models) VALUES(?,?,?,?,?,?,?,?,?)').run(user.id, provider.id, provider.name, provider.baseUrl, provider.model, provider.encryptedKey, provider.presetId, provider.protocol, JSON.stringify(provider.models));
-            db.prepare('INSERT INTO preferences(user_id,tasks,task_models) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET tasks=excluded.tasks,task_models=excluded.task_models').run(user.id, JSON.stringify(tasks), JSON.stringify(taskModels));
+            db.prepare('INSERT INTO preferences(user_id,tasks,task_models,version) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET tasks=excluded.tasks,task_models=excluded.task_models,version=excluded.version').run(user.id, JSON.stringify(tasks), JSON.stringify(taskModels), previous.version + 1);
+            settings = getProviders(db, user.id);
             db.exec('COMMIT');
           } catch (error) { db.exec('ROLLBACK'); throw error; }
-          send(res, 200, getProviders(db, user.id)); return;
+          send(res, 200, settings); return;
         }
         if (['/api/providers/test', '/api/providers/models'].includes(pathname) && method === 'POST') {
           const body = await readBody(req);
@@ -329,15 +353,31 @@ export function createServer(options = {}) {
           const id = settings.tasks.motion, model = settings.taskModels.motion;
           if (!id || !model) throw new HttpError(400, '尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
           const provider = selectProviderModel(providerWithKey(user.id, id), model);
+          if (provider.models?.find(item => item.id === provider.model)?.vision !== true) throw new HttpError(400, '动作评估需要支持图片的 AI 模型，请在 AI 服务设置中更换动作点评模型。');
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
           res.once('close', disconnect);
+          const started=Date.now();let heartbeat,lastProgress={stage:'preparing',completed:0,total:0,message:'正在准备 AI 动作评价…'};
+          const event=async(name,data)=>{
+            if(controller.signal.aborted||res.destroyed||res.writableEnded)return;
+            if(!res.headersSent){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();}
+            if(!res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`))await new Promise(resolve=>{
+              const done=()=>{res.off('drain',done);res.off('close',done);resolve();};res.once('drain',done);res.once('close',done);
+            });
+          };
+          const progress=async data=>{lastProgress={...data,elapsedMs:Date.now()-started};if(body.stream)await event('progress',lastProgress);};
           try {
             if (req.aborted || res.destroyed) return;
-            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal}));
-            if (!controller.signal.aborted && !res.destroyed) send(res, 200, result);
-          } catch (error) { if (!controller.signal.aborted && !res.destroyed) throw error; }
-          finally { res.off('close', disconnect); }
+            if(body.stream){await progress(lastProgress);heartbeat=setInterval(()=>{void event('progress',{...lastProgress,elapsedMs:Date.now()-started});},15000);heartbeat.unref?.();}
+            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: motionAiTimeoutMs, allowPrivateProviders, signal: controller.signal,onProgress:progress}));
+            if (!controller.signal.aborted && !res.destroyed){if(body.stream)await event('done',result);else send(res,200,result);}
+          } catch (error) {
+            if (!controller.signal.aborted && !res.destroyed){
+              if(body.stream)await event('error',{error:error instanceof HttpError?error.message:'AI 动作评价失败，请重试。'});
+              else throw error;
+            }
+          }
+          finally {clearInterval(heartbeat);res.off('close',disconnect);if(body.stream&&!res.destroyed&&!res.writableEnded)res.end();}
           return;
         }
         if (pathname === '/api/ai' && method === 'POST') {
@@ -431,13 +471,18 @@ export function createServer(options = {}) {
           reconcileAchievements(db,user.id,currentTime());
           const attachments = db.prepare('SELECT * FROM attachments WHERE user_id = ? ORDER BY created_at').all(user.id).map(item => ({ id: item.id, name: item.name, type: item.type, size: item.size, createdAt: item.created_at, data: Buffer.from(item.data).toString('base64') }));
           res.setHeader('Content-Disposition', 'attachment; filename="fitness-data.json"');
-          send(res, 200, { schemaVersion: 1, exportedAt: currentTime(), user: publicUser(user), records: getRecords(db, user.id), ...getProviders(db, user.id), attachments }); return;
+          send(res, 200, { schemaVersion: 2, exportedAt: currentTime(), user: publicUser(user), records: getRecords(db, user.id), ...getProviders(db, user.id), attachments, community: community.exportUser(user.id) }); return;
         }
         if (pathname === '/api/account' && method === 'DELETE') {
           rateLimit(req);
           const body = await readBody(req, 10000);
           if (!await verifyPassword(body.password, user.password)) throw new HttpError(401, '密码不正确，未删除账号。');
-          db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+          const cleanupCommunityFiles = communityMedia.prepareUserCleanup(user.id);
+          communityTransaction(db, () => {
+            community.deleteUserData(user.id);
+            db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+          });
+          await cleanupCommunityFiles();
           db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
           res.setHeader('Set-Cookie', sessionCookie(req, '', 0, secureCookie));
           send(res, 200, { ok: true }); return;
@@ -447,6 +492,7 @@ export function createServer(options = {}) {
       if (!['GET', 'HEAD'].includes(method)) throw new HttpError(405, '不支持此请求方法。');
       await serveStatic(req, res, pathname, publicDir, modelDir);
     } catch (error) {
+      if (!res.headersSent && error instanceof HttpError && error.retryAfter) res.setHeader('Retry-After', error.retryAfter);
       if (!res.headersSent) send(res, error instanceof HttpError ? error.status : 500, { error: error instanceof HttpError ? error.message : '服务器处理失败，请稍后重试。' });
       else res.destroy();
       if (!(error instanceof HttpError)) console.error('[server] Request failed:', error.code ?? error.name);
@@ -455,7 +501,7 @@ export function createServer(options = {}) {
   server.requestTimeout = 90000;
   server.headersTimeout = 15000;
   server.keepAliveTimeout = 5000;
-  server.once('close', () => db.close());
+  server.once('close', () => { clearInterval(communityCleanupTimer); db.close(); });
   return server;
 }
 
@@ -468,6 +514,8 @@ export async function startServer(options = {}) {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  try { loadEnvFile(join(root, '.env')); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
   const server = await startServer();
   console.log(`AI 健身助手已启动：http://localhost:${server.address().port}`);
   const shutdown = () => { server.close(); server.closeIdleConnections(); };
