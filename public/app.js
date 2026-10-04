@@ -2,7 +2,7 @@ import {landingMarkup, mountLanding} from './landing.js?v=12';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {getDailyQuote} from './daily-quotes.js?v=1';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
-import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=25';
+import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=26';
 import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} from './store.js?v=11';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';

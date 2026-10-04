@@ -88,6 +88,44 @@
 @container community (max-width:520px){.cm-profile-page .cm-author-heading{grid-template-columns:72px minmax(0,1fr);column-gap:14px;row-gap:14px;padding:27px 0 26px;margin:0}.cm-profile-page .cm-profile-avatar{grid-column:1;grid-row:1/span 2;align-self:center}.cm-profile-page .cm-profile-avatar>.cm-avatar{width:72px;height:72px;font-size:28px}.cm-profile-page .cm-profile-copy{display:contents}.cm-profile-page .cm-profile-copy h1{grid-column:2;grid-row:1;align-self:end;font-size:24px;line-height:1.4;margin:0;letter-spacing:0}.cm-profile-page .cm-profile-copy .cm-account-number{grid-column:2;grid-row:2;align-self:start;font-size:11px;line-height:1.7;margin:0}.cm-profile-page .cm-profile-copy p{grid-column:1/-1;grid-row:3;font-size:13px;line-height:1.85;margin-top:4px}.cm-profile-page .cm-profile-stats{grid-column:1/-1;grid-row:4;gap:18px;row-gap:8px;font-size:12px;line-height:1.6;margin-top:3px}.cm-profile-page .cm-profile-stats b{font-size:16px}.cm-profile-page .cm-profile-actions{grid-column:1/-1;grid-row:5;justify-content:flex-end;gap:9px;margin:2px 0 0;width:100%;max-width:none}.cm-profile-page .cm-profile-actions .cm-button{min-width:105px;min-height:44px;font-size:14px;padding:9px 18px}.cm-profile-page .cm-profile-actions .cm-icon-button{width:44px;height:44px;min-width:44px;min-height:44px}.cm-profile-page .cm-profile-tabs{gap:6px;margin-bottom:19px;padding:0;min-height:48px}.cm-profile-page .cm-profile-tabs a{min-width:72px;min-height:44px;padding:8px 14px;font-size:15px}.cm-profile-page .cm-profile-tabs .cm-icon{width:15px;height:15px}.cm-profile-page .cm-skeleton-profile{width:100%;min-height:280px;margin:20px 0 27px;border-radius:17px}.cm-profile-private{min-height:290px;padding:30px 10px}.cm-profile-private h2{font-size:16px}.cm-profile-private p{font-size:12px}}
 @container community (max-width:360px){.cm-profile-page .cm-profile-copy h1{font-size:22px}.cm-profile-page .cm-profile-stats{gap:14px;font-size:11px}.cm-profile-page .cm-profile-stats b{font-size:15px}.cm-profile-page .cm-profile-tabs a{min-width:70px;font-size:14px;padding:8px 12px}}
 .cm-personal-embedded{min-width:0;background:#fff}
+/* Auto margins center fitting categories and collapse when they need to scroll. */
+.cm-channels a{flex:none}
+.cm-channels a:first-child{margin-left:auto}
+.cm-channels a:last-child{margin-right:auto}
+.cm-profile-page .cm-profile-stats>.cm-profile-stat-button{display:inline-flex;align-items:baseline;gap:5px;min-width:44px;min-height:44px;margin:-8px 0;padding:8px 0;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+.cm-profile-stat-button:hover b,.cm-profile-stat-button:hover>span{color:#347da6}
+.cm-profile-stat-button:focus-visible{outline:2px solid #347da6;outline-offset:4px}
+.cm-follow-dialog{width:min(560px,calc(100vw - 28px));max-height:calc(100dvh - 40px);background:#fff;color:#40424d}
+.cm-follow-dialog>header{padding:16px 20px 12px;border-bottom-color:#f0f0f3}
+.cm-follow-dialog>header h2{color:#343641}
+.cm-follow-dialog .cm-aux-content{padding:0 20px 16px;max-height:calc(100dvh - 115px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#e4e6eb transparent}
+.cm-follow-tabs{display:flex;justify-content:center;gap:12px;padding:12px 0 10px}
+.cm-follow-tabs button{min-width:94px;min-height:44px;padding:9px 18px;border:0;border-radius:999px;background:transparent;color:#9396a1;font:inherit;font-size:15px;cursor:pointer}
+.cm-follow-tabs button[aria-selected=true]{background:#edf5fb;color:#347da6;font-weight:650}
+.cm-follow-tabs button:hover{background:#f3f6f9}
+.cm-follow-dialog .cm-follow-search{display:flex;flex-direction:row;align-items:center;gap:9px;margin:0 0 8px;padding:0 8px 0 13px;border:1px solid #e9ebef;border-radius:12px;background:#fafbfc}
+.cm-follow-search>.cm-icon{flex:none;width:19px;height:19px;color:#a4adba}
+.cm-follow-dialog .cm-follow-search input{flex:1;min-width:0;width:100%;margin:0;padding:10px 0;border:0;background:transparent;color:#4b5260;font-size:13px;box-shadow:none}
+.cm-follow-search input::placeholder{color:#a9adb5}
+.cm-follow-search .cm-text-button{flex:none;padding:8px 5px;font-size:12px;color:#347da6}
+.cm-follow-panel{min-height:180px}
+.cm-follow-row{display:flex;align-items:center;gap:13px;min-width:0;min-height:98px;padding:15px 0;border-bottom:1px solid #f0f1f4}
+.cm-follow-user{display:flex;align-items:center;gap:13px;flex:1;min-width:0;min-height:58px;border-radius:8px;color:inherit;text-decoration:none}
+.cm-follow-user>.cm-avatar{flex:none;width:48px;height:48px;font-size:21px;background:#e4f0f9}
+.cm-follow-copy{flex:1;min-width:0}
+.cm-follow-copy h3{margin:0;color:#41444e;font-size:15px;font-weight:650;line-height:1.5;overflow-wrap:anywhere}
+.cm-follow-copy .cm-account-number{display:block;margin:3px 0;font-size:10px;color:#a0a4af;line-height:1.6;letter-spacing:0;overflow-wrap:anywhere}
+.cm-follow-copy p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:3px 0 0;color:#9298a4;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+.cm-follow-user:hover h3{color:#347da6}
+.cm-follow-row>.cm-button{flex:none;min-width:84px;padding:9px 12px;border-radius:10px;border-color:#e5e9ef;background:#f7f8fa;color:#77818f;font-size:12px}
+.cm-follow-row>.cm-button.cm-primary{border-color:#c6dfef;background:#edf6fc;color:#347da6}
+.cm-follow-row>.cm-button:disabled{opacity:.65;cursor:wait}
+.cm-follow-self{flex:none;min-width:84px;text-align:center;color:#a7abb4;font-size:12px}
+.cm-follow-status{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;min-height:70px;padding:16px 0 6px;color:#a0a5b0;font-size:12px;text-align:center}
+.cm-follow-status p{flex-basis:100%;margin:0;line-height:1.8;overflow-wrap:anywhere}
+.cm-follow-status .cm-button{font-size:12px}
+.cm-follow-dialog button:focus-visible,.cm-follow-user:focus-visible{outline:2px solid #347da6;outline-offset:3px}
+@media(max-width:390px){.cm-follow-dialog{width:calc(100vw - 24px);max-height:calc(100dvh - 28px);border-radius:17px}.cm-follow-dialog>header{padding:12px 12px 8px}.cm-follow-dialog .cm-aux-content{padding:0 12px 12px;max-height:calc(100dvh - 95px)}.cm-follow-row{gap:9px;padding:13px 0}.cm-follow-user{gap:9px}.cm-follow-user>.cm-avatar{width:40px;height:40px;font-size:18px}.cm-follow-copy h3{font-size:13px}.cm-follow-row>.cm-button{min-width:76px;padding:9px 8px;font-size:11px}.cm-follow-self{min-width:76px}.cm-follow-search>.cm-icon{display:none}.cm-follow-dialog .cm-follow-search{gap:5px;padding-left:10px}.cm-follow-dialog .cm-follow-search input{font-size:12px}}
 .cm-personal-shell .cm-author-heading{padding-top:34px}
 .cm-profile-preview-banner{display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:1120px;margin:20px auto 0;padding:8px 17px;border-radius:13px;background:#f0f6fb;color:#7192aa;font-size:12px;line-height:1.6}
 .cm-profile-preview-banner .cm-text-button{flex-shrink:0;font-size:12px;min-height:44px}
