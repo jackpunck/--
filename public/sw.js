@@ -1,6 +1,7 @@
-const CACHE = 'fitness-shell-v77';
+const CACHE = 'fitness-shell-v78';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
 SHELL.push('/meal-display.js','/compute.js','/compute-catalog.js');
+SHELL.push('/community.css', '/community.js', '/community-api.js', '/community-drafts.js', '/community-report-reasons.js', '/community-groups.js', '/community-groups.css', '/community-images.js');
 SHELL.push('/motion-models.js', '/motion-rtmw.js', '/motion-overlay.js', '/motion-smoothing.js');
 SHELL.push('/motion.css', '/motion-view.js', '/motion-video.js', '/motion-worker.js', '/motion-analysis.js', '/motion-decode.js', '/motion-catalog.js', '/motion-contract.js', '/motion-evidence.js', '/motion-tracking.js');
 SHELL.push('/achievement-view.js', ...['first','week','sprout','rhythm','tree','mountain','footprints','steps','summit','cycle','sunrise','seasons'].flatMap(name=>[`/assets/achievements/${name}.svg`,`/assets/achievements/${name}-pending.svg`]));

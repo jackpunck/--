@@ -80,25 +80,37 @@ try{
    assert.equal(registration.status(),201);const {user}=await registration.json();
    assert.equal((await context.request.post(origin+'/api/sync',{data:{userId:user.id,changes:[{id:'profile',kind:'profile',baseVersion:0,data:{age:28,sex:'male',height:175,weight:70,goal:'maintain',activity:1.375}}]}})).status(),200);
    const provider={id:'rtmw-qa',presetId:'openai',apiKey:'QA-placeholder-never-sent-externally',models:[{id:'qa-vision',vision:true},{id:'qa-text',vision:false}]};
-   const configure=async model=>assert.equal((await context.request.put(origin+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:model}}})).status(),200);
+   const configure=async model=>{
+    const current=await context.request.get(origin+'/api/providers');assert.equal(current.status(),200);
+    const {version}=await current.json();assert(Number.isSafeInteger(version)&&version>=0);
+    assert.equal((await context.request.put(origin+'/api/providers',{data:{version,providers:[provider],tasks:{motion:provider.id},taskModels:{motion:model}}})).status(),200);
+   };
    const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
+   const motionNavigation=page.locator('.nav [data-page="motion"]');
+   const openMotion=async()=>{await motionNavigation.waitFor();await motionNavigation.click();await page.locator('[data-motion-exercise]').waitFor();};
+   const selectReadyClip=async()=>{
+    await page.locator('[data-motion-file]').setInputFiles(clip);
+    await page.waitForFunction(()=>{
+     const target=document.querySelector('[data-motion-action="pick-target"]');
+     return document.querySelector('[data-motion-metadata]')?.textContent.includes('squat-one-second.mp4')&&target&&!target.disabled;
+    });
+   };
    const response=await page.goto(origin),csp=response.headers()['content-security-policy'];assert(csp?.includes("default-src 'self'"));assert(csp.includes("worker-src 'self'"));
    if(config.ui){
-    await page.locator('#chat-input').waitFor();await page.locator('.nav [data-page="motion"]').click();
-    await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>document.querySelector('[data-motion-metadata]')?.textContent.includes('squat-one-second.mp4'));
+    await openMotion();await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'Unconfigured visual AI blocks analysis');
-    await configure('qa-text');await page.reload();await page.locator('#chat-input').waitFor();await page.locator('.nav [data-page="motion"]').click();
-    await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>document.querySelector('[data-motion-metadata]')?.textContent.includes('squat-one-second.mp4'));
+    await configure('qa-text');await page.reload();await openMotion();
+    await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'Text-only AI blocks analysis');
    }
-   await configure('qa-vision');await page.reload();await page.locator('#chat-input').waitFor();
+   await configure('qa-vision');await page.reload();await motionNavigation.waitFor();
    await page.evaluate(()=>{const input=document.createElement('input');input.type='file';input.id='qa-rtmw-file';input.hidden=true;document.body.append(input);});
    await page.locator('#qa-rtmw-file').setInputFiles(clip);
    console.log(`Analyze ${config.name}: real RTMW-L and local mock visual AI`);const started=Date.now();
    if(config.ui){
-    await page.locator('.nav [data-page="motion"]').click();
+    await openMotion();
     assert.equal(await page.locator('[data-motion-quality],[data-motion-ai-mode],[data-motion-recognition]').count(),0);
-    await page.locator('[data-motion-file]').setInputFiles(clip);
+    await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'An exercise must be selected before review');
     await page.locator('[data-motion-exercise]').selectOption('squat');
     await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);

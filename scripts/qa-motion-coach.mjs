@@ -3,7 +3,7 @@
 // The upstream model is explicitly mocked: this does not measure model accuracy.
 import assert from 'node:assert/strict';
 import {access,mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
-import {dirname,join,resolve} from 'node:path';
+import {basename,dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {startServer} from '../server.mjs';
 import {motionExercises} from '../public/motion-catalog.js';
@@ -27,7 +27,9 @@ const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:MOTION
  return {time,wholebodyLandmarks,landmarks:mapWholebodyLandmarks(wholebodyLandmarks),personCount:1};
 })};
 const source=await readFile(join(root,'public/motion-video.js'),'utf8');
-const replay=source.replace('export async function analyzeVideo(', 'async function unusedAnalyzeVideo(')+`\nexport async function analyzeVideo(file,{signal,onProgress,targetPoint}={}){window.__qaMotionTarget=targetPoint;if(window.__qaHoldPose)await new Promise(resolve=>{window.__qaReleasePose=resolve;});if(signal?.aborted)throw new DOMException('Aborted','AbortError');onProgress?.({progress:1});return ${JSON.stringify(pipeline)};}`;
+// Align this synthetic replay with the supplied clip so real JPEG extraction
+// checks its actual duration/dimensions. The numerical pose values remain mocked.
+const replay=source.replace('export async function analyzeVideo(', 'async function unusedAnalyzeVideo(')+`\nexport async function analyzeVideo(file,{signal,onProgress,targetPoint}={}){window.__qaMotionTarget=targetPoint;if(window.__qaHoldPose)await new Promise(resolve=>{window.__qaReleasePose=resolve;});if(signal?.aborted)throw new DOMException('Aborted','AbortError');const output=${JSON.stringify(pipeline)},video=document.querySelector('[data-motion-video]'),timeScale=video.duration/output.duration;output.duration=video.duration;output.width=video.videoWidth;output.height=video.videoHeight;output.frames=output.frames.map(frame=>({...frame,time:frame.time*timeScale}));onProgress?.({progress:1});return output;}`;
 const evidenceSource=await readFile(join(root,'public/motion-evidence.js'),'utf8');
 const heldEvidence=evidenceSource.replace('export async function buildMotionEvidence(', 'async function actualBuildMotionEvidence(')+`\nexport async function buildMotionEvidence(...args){if(window.__qaHoldEvidence)await new Promise(resolve=>{window.__qaReleaseEvidence=resolve;});return actualBuildMotionEvidence(...args);}`;
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'.qa/browser-tools/node_modules/playwright/index.mjs'))));
@@ -45,11 +47,15 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
   options.signal?.addEventListener('abort',()=>{pendingResolves.delete(resolve);reject(options.signal.reason);},{once:true});
  });
  if(upstreamMode==='error')return json({error:{message:'QA upstream temporarily unavailable'}},503);
- if(['full-data','synthesis','temporal-evidence','visual-keyframes'].includes(input.stage))await new Promise(resolve=>setTimeout(resolve,40));
+ if(['full-data','synthesis','temporal-evidence','visual-keyframes','guided-evidence'].includes(input.stage))await new Promise(resolve=>setTimeout(resolve,40));
  const times=input.frames.map(frame=>frame.time),visual=times.length>0;
  const output={action:{name:'徒手深蹲',status:'identified',confidence:'high',imageIndices:input.frames.slice(0,2).map(frame=>frame.imageIndex),evidenceTimes:[],evidence:'两张画面中可见同一训练者屈膝下蹲并起身。'},verdict:{status:'needs-improvement',summary:'这组动作需要调整，请先改善躯干控制。'},feedback:[],limitations:['此响应来自 QA 模拟模型，仅验证功能链路。']};
  if(equipmentAction)output.action=equipmentAction;
- if(input.stage==='visual-keyframes'){
+ if(input.stage==='guided-evidence'){
+  delete output.action;
+  output.selectionCheck={status:'consistent',imageIndices:[input.frames[0].imageIndex],evidence:'测试画面中的支撑和运动与用户所选动作相符，此为模拟核对结果。'};
+ }
+ if(['visual-keyframes','guided-evidence'].includes(input.stage)){
   output.feedback=['最低点的躯干控制','可见支撑位置','起身姿态控制'].map((title,index)=>({title,status:'improve',source:'visual',imageIndices:[Math.min(index,input.frames.length-1)],
    evidence:'测试截图中可见姿态需要改善，此为界面模拟反馈。<img src=x onerror=alert(1)>',correction:'下一组保持稳定支撑，控制动作过程。',priority:index+1}));
  }else if(input.stage==='full-data'||input.stage==='temporal-evidence'){
@@ -85,15 +91,17 @@ const page=await context.newPage();page.setDefaultTimeout(15000);
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{
  browserRequests.push({url:r.url(),method:r.method()});if(/^https?:/.test(r.url())&&!r.url().startsWith(base))external.push(r.url());
  if(r.method()==='POST'&&r.url()===base+'/api/motion/coach'){
-  const body=r.postDataJSON();motionRequests.push({reviewMode:body.reviewMode,schemaVersion:body.poseData.schemaVersion,format:body.poseData.format,
+  const body=r.postDataJSON();motionRequests.push({reviewMode:body.reviewMode,selectedExerciseId:body.selectedExerciseId,schemaVersion:body.poseData.schemaVersion,format:body.poseData.format,
    frameCount:body.poseData.frameCount,hasRawWholebody:body.poseData.frames.some(frame=>Object.hasOwn(frame,'wholebodyLandmarks')),
    retainedLandmarkIndices:body.poseData.retainedLandmarkIndices});
  }
 });
 const nav=async name=>{if(await page.locator('.mobile-menu').isVisible())await page.locator('.mobile-menu').click();await page.locator(`.nav [data-page="${name}"]`).click();};
+const reloadMotion=async()=>{await page.reload();await page.locator('.nav [data-page="motion"]').waitFor();await nav('motion');await page.locator('[data-motion-exercise]').waitFor();};
 const shot=name=>page.screenshot({path:join(dataDir,`${name}.png`),fullPage:true});
 const reports=async()=>{const r=await context.request.get(base+'/api/state');assert.equal(r.status(),200);return(await r.json()).records.filter(r=>r.kind==='motion-assessment'&&!r.deleted);};
-const analyze=async({selectTarget=false,waitForCoach=true}={})=>{
+const analyze=async({selectTarget=false,waitForCoach=true,exerciseId='squat'}={})=>{
+ await page.locator('[data-motion-exercise]').selectOption(exerciseId);
  await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
  if(selectTarget){
   await page.locator('[data-motion-video]').evaluate(v=>{v.currentTime=3;});await page.waitForFunction(()=>!document.querySelector('[data-motion-video]').seeking);
@@ -125,42 +133,57 @@ const noRuleUi=async()=>{
  const text=await page.locator('[data-motion-results]').textContent();assert(!/严格检查|参考分|逐项检查|分数上限|\/ 100/.test(text));
 };
 const checks=[];
+const saveProviderSettings=async data=>{
+ const response=await context.request.get(base+'/api/providers');assert.equal(response.status(),200);
+ const {version}=await response.json();
+ return context.request.put(base+'/api/providers',{data:{...data,version}});
+};
 try{
  const reg=await context.request.post(base+'/api/auth/register',{data:{name:'动作AI验证',email:`motion-coach-${Date.now()}@example.test`,password:'motion-qa-password-123'}});assert.equal(reg.status(),201);const {user}=await reg.json();
  assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes:[{id:'profile',kind:'profile',baseVersion:0,data:{age:28,sex:'male',height:175,weight:70,goal:'maintain',activity:1.375}}]}})).status(),200);
  const provider={id:'motion-qa',presetId:'openai',apiKey:'QA-fixture-key-no-external-request',models:[{id:'qa-motion-vision',vision:true},{id:'qa-motion-text',vision:false}]};
- assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
+ assert.equal((await saveProviderSettings({providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}})).status(),200);
  await page.goto(base);await page.locator('#chat-input').waitFor();await nav('motion');
  assert.equal(await page.locator('.motion-guide ol li').count(),3);await noRuleUi();
  assert.equal(await page.locator('[data-motion-ai-mode],[data-motion-quality]').count(),0);
  if(!reportsOnly){
+ console.log('guided-selection-and-pending-review');
+ await page.locator('[data-motion-file]').setInputFiles(clip);
+ await page.waitForFunction(()=>!document.querySelector('[data-motion-action="pick-target"]')?.disabled);
+ assert.equal(await page.locator('[data-motion-exercise]').inputValue(),'');
+ assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);
+ assert.equal(calls.length,0);checks.push('explicit-selection-required-before-analysis');
  upstreamMode='pending';await page.evaluate(()=>{window.__qaHoldEvidence=true;});
  await analyze({waitForCoach:false});await page.waitForFunction(()=>typeof window.__qaReleaseEvidence==='function');
  await unpublished();assert.equal(calls.length,0);assert.equal(await page.locator('[data-motion-action="cancel-coach"]').isVisible(),true);
  await page.evaluate(()=>{window.__qaHoldEvidence=false;window.__qaReleaseEvidence();window.__qaReleaseEvidence=null;});
  await page.waitForFunction(()=>/AI 正在|AI 已/.test(document.querySelector('[data-motion-coach-status]')?.textContent||''),{},{timeout:60000});
  for(let i=0;i<300&&!pendingRelease;i++)await new Promise(r=>setTimeout(r,20));assert(pendingRelease);
- await unpublished();assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);await page.waitForFunction(()=>/观察.*关键画面/.test(document.querySelector('[data-motion-coach-status]')?.textContent||''));await shot('waiting-for-ai');
+ await unpublished();assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);await page.waitForFunction(()=>/核对画面.*骨架/.test(document.querySelector('[data-motion-coach-status]')?.textContent||''));await shot('waiting-for-ai');
  pendingRelease();pendingRelease=null;upstreamMode='success';
  await page.locator('.motion-coach-evaluation').waitFor();await noRuleUi();assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'needs-improvement');await shot('desktop-visual');
  checks.push('no-result-during-evidence-preparation','no-result-before-ai-review','unreviewed-report-not-saveable');
  assert(calls.length>=1);assert.equal(calls[0].model,'qa-motion-vision');assert(calls[0].imageCount>=2&&calls[0].imageCount<=6);assert(calls[0].imageBytes<=2*1024*1024);
- const visualCalls=calls.filter(call=>call.input.stage==='visual-keyframes');
- assert.equal(visualCalls.length,1);assert.equal(calls.length,1,'The default UI needs one mocked provider call');
- const sentContext=visualCalls[0].input;
- assert.equal(sentContext.source.sourceFrameCount,pipeline.frames.length);
- assert.equal(sentContext.source.bodyProfile,'fitness-body17');assert(JSON.stringify(sentContext).length<6000);
- assert(!/measurements|landmarks|statistics|elbowAngle/.test(JSON.stringify(sentContext)));
- assert.deepEqual(motionRequests[0],{reviewMode:'efficient',schemaVersion:3,format:'rtmw-body17-full',frameCount:pipeline.frames.length,
+ const guidedCalls=calls.filter(call=>call.input.stage==='guided-evidence');
+ assert.equal(guidedCalls.length,1);assert.equal(calls.length,1,'The selected-exercise UI needs one mocked provider call');
+ const sentContext=guidedCalls[0].input,evidence=sentContext.evidence;
+ assert.equal(sentContext.selectedExercise.id,'squat');
+ assert.equal(evidence.sourceFrameCount,pipeline.frames.length);
+ assert.equal(evidence.poseSchema.profile,'fitness-body17');assert(JSON.stringify(evidence).length<=24000);assert(JSON.stringify(sentContext).length<=32000);
+ assert(evidence.frames.every(frame=>frame.landmarks.length===17));
+ assert.equal(evidence.sourceFrameIndices[0],0);assert.equal(evidence.sourceFrameIndices.at(-1),pipeline.frames.length-1);
+ assert.equal(evidence.windows.reduce((sum,window)=>sum+window.sourceFrameCount,0),pipeline.frames.length);
+ assert.deepEqual(motionRequests[0],{reviewMode:'guided',selectedExerciseId:'squat',schemaVersion:3,format:'rtmw-body17-full',frameCount:pipeline.frames.length,
   hasRawWholebody:false,retainedLandmarkIndices:[0,11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32]});
- assert.equal(await page.locator('.motion-ai-feedback').count(),1);assert(visualCalls[0].imageCount>0);assert.equal(calls.filter(call=>['context','synthesis','full-data','temporal-evidence'].includes(call.input.stage)).length,0);
+ assert.equal(await page.locator('.motion-ai-feedback').count(),1);assert(guidedCalls[0].imageCount>0);assert.equal(calls.filter(call=>['context','synthesis','full-data','temporal-evidence','visual-keyframes'].includes(call.input.stage)).length,0);
+ assert.equal(await page.locator('[data-motion-selection-check]').getAttribute('data-motion-selection-check'),'consistent');
  assert.match(await page.locator('.motion-ai-feedback').textContent(),/可见支撑位置/);
- checks.push('default-efficient-body17-request','visual-first-small-context','honest-picture-coverage');
- const progressMessages=await page.evaluate(()=>window.__qaMotionMessages);assert(progressMessages.some(text=>/观察.*关键画面/.test(text)));
- assert(!/"(?:checks|reps|qualified|threshold)":/.test(JSON.stringify(visualCalls.map(call=>call.input))));
+ checks.push('guided-selected-exercise-body17-request','bounded-pose-and-measurement-evidence','honest-picture-coverage','visible-selection-confirmation');
+ const progressMessages=await page.evaluate(()=>window.__qaMotionMessages);assert(progressMessages.some(text=>/核对画面.*骨架/.test(text)));
+ assert(!/"(?:checks|reps|qualified|threshold)":/.test(JSON.stringify(guidedCalls.map(call=>call.input))));
 
- checks.push('visible-feedback-display','stable-picture-indices-resolve-to-times','single-visual-model-call','no-raw-angles-or-points-in-default-ai-request','no-local-judgements-in-ai-request','streamed-phase-progress');
- assert(calls[0].input.stage==='visual-keyframes');
+ checks.push('visible-feedback-display','stable-picture-indices-resolve-to-times','single-guided-model-call','body17-time-series-and-window-statistics','no-local-judgements-in-ai-request','streamed-phase-progress');
+ assert(calls[0].input.stage==='guided-evidence');
  const evidenceFrames=calls[0].input.frames,contextFrames=[evidenceFrames[0],evidenceFrames.at(-1)];
  assert.equal(contextFrames.length,2);assert(contextFrames.every(frame=>frame.crop.xMin===0&&frame.crop.yMin===0&&frame.crop.xMax===1&&frame.crop.yMax===1));
  assert.match(await page.locator('.motion-coach').textContent(),/动作需要调整/);assert.equal(await page.locator('.motion-feedback-item').count(),3);
@@ -168,7 +191,7 @@ try{
  const target=page.locator('.motion-coach [data-motion-action="seek"]').first(),time=Number(await target.getAttribute('data-time'));await target.click();
  await page.waitForFunction(()=>!document.querySelector('[data-motion-video]').seeking);assert(Math.abs(await page.locator('[data-motion-video]').evaluate(v=>v.currentTime)-time)<.15);
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile overflow');await shot('mobile-visual');await page.setViewportSize({width:1440,height:1000});
- await save();let stored=(await reports())[0];assert.equal(stored.data.coach.verdict.status,'needs-improvement');assert.equal(stored.data.coach.mode,'visual');assert.equal(stored.data.coach.action.exerciseId,'squat');assert.equal(stored.data.coach.coverage.reviewedFrameCount,0);assert.equal(stored.data.coach.coverage.sourceFrameCount,pipeline.frames.length);assert.equal(stored.data.coach.coverage.strategy,'visual-keyframes');assert.equal(stored.data.coach.coverage.reviewedImageCount,evidenceFrames.length);assert.equal(stored.data.coach.coverage.summarizedMeasurementCount,0);assert.equal(stored.data.coach.checks,undefined);assert.equal(stored.data.coach.coverage.measurementCount,pipeline.frames.length);
+ await save();let stored=(await reports())[0];assert.equal(stored.data.coach.verdict.status,'needs-improvement');assert.equal(stored.data.coach.mode,'guided');assert.equal(stored.data.coach.action.exerciseId,'squat');assert.equal(stored.data.coach.action.source,'user');assert.equal(stored.data.coach.selectionCheck.status,'consistent');assert.equal(stored.data.coach.coverage.reviewedFrameCount,evidence.sourceFrameIndices.length);assert.equal(stored.data.coach.coverage.sourceFrameCount,pipeline.frames.length);assert.equal(stored.data.coach.coverage.strategy,'guided-evidence');assert.equal(stored.data.coach.coverage.reviewedImageCount,evidenceFrames.length);assert.equal(stored.data.coach.coverage.summarizedMeasurementCount,pipeline.frames.length);assert.equal(stored.data.coach.checks,undefined);assert.equal(stored.data.coach.coverage.measurementCount,pipeline.frames.length);
  const serialized=JSON.stringify(stored.data);assert(!/data:image|base64|blob:|landmarks|"score":|"checks":|"measurements":|"reps":/.test(serialized));assert(serialized.length<200*1024);checks.push('real-keyframe-extraction','dedicated-vision-route','plain-language-verdict-and-corrections','escaped-model-prose','timestamp-replay','mobile-layout','save-without-images');
  // A pending response must not steal focus from a saved report.
  upstreamMode='pending';await page.locator('[data-motion-action="coach"]').click();await waitPending();await unpublished();
@@ -197,14 +220,14 @@ try{
  assert.equal(await page.locator('#tasks-form select').count(),4);
  await page.locator('#task-motion').selectOption(JSON.stringify({providerId:provider.id,modelId:'qa-motion-text'}));await page.locator('#tasks-form button').click();
  await page.waitForTimeout(150);await nav('motion');assert.match(await page.locator('.motion-coach-mode').textContent(),/图片|视觉/);
- const beforeText=calls.length;await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(()=>document.querySelector('[data-motion-metadata]')?.textContent.includes('squat.mp4'));assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);assert.equal(calls.length,beforeText);checks.push('settings-four-task-routing','text-only-blocks-analysis');
- assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
- await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await analyze({selectTarget:true});checks.push('manual-target-first-frame-letterbox-coordinates');
- await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-coach-evaluation').waitFor();assert.equal(await page.locator('[data-motion-action="seek"]').count(),0);checks.push('coach-report-reloads');
+ const beforeText=calls.length;await page.locator('[data-motion-exercise]').selectOption('squat');await page.locator('[data-motion-file]').setInputFiles(clip);await page.waitForFunction(name=>document.querySelector('[data-motion-metadata]')?.textContent.includes(name),basename(clip));await page.waitForFunction(()=>!document.querySelector('[data-motion-action="pick-target"]')?.disabled);assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true);assert.equal(calls.length,beforeText);checks.push('settings-four-task-routing','text-only-blocks-analysis');
+ assert.equal((await saveProviderSettings({providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}})).status(),200);
+ await reloadMotion();await analyze({selectTarget:true});checks.push('manual-target-first-frame-letterbox-coordinates');
+ await reloadMotion();await page.locator('[data-motion-action="history"]').first().click();await page.locator('.motion-coach-evaluation').waitFor();assert.equal(await page.locator('[data-motion-action="seek"]').count(),0);checks.push('coach-report-reloads');
  }
  // Mock equipment responses pass through the real HTTP contract and report storage.
  // They are fixtures, not recognition-accuracy measurements.
- assert.equal((await context.request.put(base+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}}})).status(),200);
+ assert.equal((await saveProviderSettings({providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-motion-vision'}})).status(),200);
  const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=';
  const shortPipeline={...pipeline,duration:3,frames:pipeline.frames.filter(frame=>frame.time<=3)};
  const reportInput={reviewMode:'efficient',duration:3,poseData:buildMotionPoseData(shortPipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(shortPipeline.frames,shortPipeline),shortPipeline)};
@@ -219,7 +242,7 @@ try{
   {name:'引体向上',exerciseId:null,family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'none',expectedId:'bodyweight-pullup',evidence:'两帧可见训练者握单杠悬垂并拉起身体，双脚悬空，未接触助力垫、弹力带或他人。'},
   {name:'辅助引体向上',exerciseId:'pullup',family:'vertical-pull',equipment:'pullup-bar',support:'hanging',assistance:'band',expectedId:'pullup',evidence:'两帧可见训练者握单杠拉起身体，脚部持续踩住连接杆上的绷紧弹力带。'},
   {name:'壶铃摆荡',exerciseId:null,family:'hinge',equipment:'kettlebell',support:'standing',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手握壶铃，以髋部往返带动负重在身前摆动。'},
-  {name:'双杠臂屈伸',exerciseId:null,family:null,equipment:'parallel-bars',support:'suspended',assistance:'none',expectedId:null,evidence:'两帧可见训练者双手支撑双杠，通过屈伸肘让悬空身体上下移动。'},
+  {name:'双杠臂屈伸',exerciseId:null,family:null,equipment:'parallel-bars',support:'suspended',assistance:'none',expectedId:'dip',evidence:'两帧可见训练者双手支撑双杠，通过屈伸肘让悬空身体上下移动。'},
  ];
  for(const item of openCases){
   equipmentAction={exerciseId:item.exerciseId,name:item.name,family:item.family,evidence:item.evidence,status:'identified',confidence:'high',evidenceTimes:[1,2],observations:{equipment:item.equipment,support:item.support,movement:item.family,laterality:'bilateral',assistance:item.assistance,evidence:item.evidence,evidenceTimes:[1,2]}};
@@ -253,7 +276,7 @@ try{
  changes.push({id:'motion:legacy-local-score',kind:'motion-assessment',baseVersion:0,data:{exerciseId:'lunge',score:100,status:'complete',checks:[{status:'pass'}],reps:[{score:100}],createdAt:new Date().toISOString(),video:{duration:3}}});
  changes.push({id:'motion:standard-verdict',kind:'motion-assessment',baseVersion:0,data:{exerciseId:'pushup',score:49,status:'complete',quality:{usableRatio:1},coach:{mode:'visual',action:{name:'俯卧撑',status:'identified'},coverage:{complete:true,frameCount:2,reviewedFrameCount:2},verdict:{status:'standard',summary:'动作相对标准，继续保持当前控制。'},feedback:[{title:'保持肩髋同步',status:'good',source:'visual',evidence:'两张画面中肩髋保持同步，身体位置稳定。',correction:'下一组继续保持平稳的动作节奏。',evidenceTimes:[1,2]}]},createdAt:new Date().toISOString(),video:{duration:3}}});
  assert.equal((await context.request.post(base+'/api/sync',{data:{userId:user.id,changes}})).status(),200);
- await page.reload();await page.locator('#chat-input').waitFor();await nav('motion');await page.waitForFunction(count=>document.querySelectorAll('.motion-history-item').length>=count,changes.length);
+ await reloadMotion();await page.waitForFunction(count=>document.querySelectorAll('.motion-history-item').length>=count,changes.length);
  for(const {id,data}of changes){
   const exercise=motionExercises.find(item=>item.id===data.exerciseId),name=data.recognitionConflict?'动作名称待确认':data.exerciseName||exercise?.name;
   const item=page.locator('.motion-history-item').filter({has:page.getByText(name,{exact:true})});
@@ -282,5 +305,5 @@ try{
  checks.push('old-local-label-does-not-veto-ai-action','scores-and-rule-panels-removed','legacy-local-score-never-becomes-ai-verdict','explicit-standard-report-displays-maintenance-advice','no-issues-at-45-percent-coverage-remains-uncertain','report-and-history-preserve-evidence-verdict');
  assert.equal(browserRequests.filter(r=>r.method==='POST'&&r.url.includes('/api/attachments')).length,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  await writeFile(join(dataDir,'results.json'),JSON.stringify({checks,calls:calls.map(({input,...call})=>({...call,frameTimes:input.frames.map(f=>f.time),stage:input.stage||'legacy',checkCount:input.analysis?.checks?.length||0})),errors,external},null,2));console.log(JSON.stringify({dataDir,checks,errors,external},null,2));
-}catch(error){await shot('failure').catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}
+}catch(error){await shot('failure').catch(()=>{});await writeFile(join(dataDir,'failure.json'),JSON.stringify({message:error.message,errors,external,checks,calls:calls.map(call=>({model:call.model,stage:call.input.stage})),text:await page.locator('.motion-page').innerText().catch(()=>null)},null,2)).catch(()=>{});console.error('QA artifacts:',dataDir);throw error;}
 finally{pendingRelease?.();await browser.close();await new Promise(r=>{server.close(r);server.closeAllConnections();});}

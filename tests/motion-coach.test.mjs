@@ -86,7 +86,7 @@ test('saving an existing provider assigns an unconfigured motion task to a visua
   assert.equal(Object.hasOwn(settings.taskModels,'motion'),false);
   const editedProvider={...settings.providers[0],model:'text-default'};
   const selection=reconcileTasks([editedProvider],settings.tasks,settings.taskModels,editedProvider.id,{defaultTasks:['motion']});
-  const saved=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:[editedProvider],...selection}});
+  const saved=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{version:settings.version,providers:[editedProvider],...selection}});
   assert.equal(saved.status,200);
   settings=(await f.api('/api/providers',{cookie:f.alice.cookie})).body;
   assert.equal(settings.tasks.motion,'existing');
@@ -99,10 +99,10 @@ test('saving an existing provider assigns an unconfigured motion task to a visua
   assert.equal(f.calls.length,1);assert.equal(f.calls[0].body.model,'vision-alternative');
   assert.equal(f.calls[0].body.messages[1].content.filter(part=>part.type==='image_url').length,images.length);
 
-  const explicit=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:settings.providers,tasks:settings.tasks,taskModels:{...settings.taskModels,motion:'vision-alternative'}}});
+  const explicit=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{version:settings.version,providers:settings.providers,tasks:settings.tasks,taskModels:{...settings.taskModels,motion:'vision-alternative'}}});
   assert.equal(explicit.status,200);settings=explicit.body;
   const changedProvider={...settings.providers[0],model:'next-default'};
   const preserved=reconcileTasks([changedProvider],settings.tasks,settings.taskModels,changedProvider.id,{defaultTasks:['motion']});
-  const changed=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:[changedProvider],...preserved}});
+  const changed=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{version:settings.version,providers:[changedProvider],...preserved}});
   assert.equal(changed.status,200);assert.equal(changed.body.providers[0].model,'next-default');assert.equal(changed.body.taskModels.motion,'vision-alternative');
 });
