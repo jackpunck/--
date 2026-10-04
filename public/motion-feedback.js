@@ -2,6 +2,7 @@
  * A valid reference establishes that an observation was available to the model;
  * it does not prove that the model interpreted it correctly. Coaching quality still needs validation against independently labelled videos.
  */
+import {resolveMotionImageEvidenceTimes} from './motion-contract.js';
 export const MOTION_FEEDBACK_LIMITS = Object.freeze({maxFindings: 12, maxFrames: 1800, maxAnalysisPaths: 12, maxTitle: 80, maxText: 1200});
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const own = (value, key) => value !== null && typeof value === 'object' && Object.hasOwn(value, key);
@@ -24,16 +25,12 @@ function plainText(value, limit) {
 
 function reliablePoint(point) {
   if (!point || typeof point !== 'object') return false;
-  const tuple = Array.isArray(point), missing = tuple && point.length === 6 ? point[5] : 0;
-  if (tuple && (![5, 6].includes(point.length) || !Number.isInteger(missing) || missing < 0 || missing > 31)) return false;
+  const tuple = Array.isArray(point), missing = tuple && point.length === 4 ? point[3] : 0;
+  if (tuple && (![3, 4].includes(point.length) || !Number.isInteger(missing) || missing < 0 || missing > 7)) return false;
   const x = tuple ? point[0] : point.x, y = tuple ? point[1] : point.y;
-  const visibility = tuple ? point[3] : point.visibility;
-  if (missing & 11 || !finite(x) || !finite(y) || x < 0 || x > 1 || y < 0 || y > 1 || !finite(visibility) || visibility < 0.55 || visibility > 1) return false;
-  const presence = tuple ? point[4] : point.presence;
-  const hasPresence = tuple ? !(missing & 16) : own(point, 'presence') && point.presence !== undefined;
-  // Some MediaPipe workers supply null presence for every otherwise-visible
-  // point. Visibility remains observed evidence; unknown presence is not zero.
-  return !hasPresence || presence === null || finite(presence) && presence >= 0.55 && presence <= 1;
+  const visibility = tuple ? point[2] : point.visibility;
+  // This is the RTMW score clamped for tracking, not a visibility probability.
+  return !(missing & 7) && finite(x) && finite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 && finite(visibility) && visibility >= 0.55 && visibility <= 1;
 }
 
 function eligibleFrame(frame, {hasTracking, trackId, duration}) {
@@ -83,7 +80,7 @@ const poseCannotEstablish = text => /(?:脊柱中立|腰椎中立|腰椎曲线|�
  * those same measured frames. Optional allowedAnalysisPaths
  * restrict references to packet block prefixes or previously cited scalars.
  */
-export function sanitizeMotionFeedback(value, {poseData, keyframes = [], allowedFrameIndices, fullAnalysis, allowedAnalysisPaths} = {}) {
+export function sanitizeMotionFeedback(value, {poseData, keyframes = [], imageKeyframes = keyframes, allowedFrameIndices, fullAnalysis, allowedAnalysisPaths} = {}) {
   if (!Array.isArray(value)) return [];
   const frames = Array.isArray(poseData?.frames) ? poseData.frames : [];
   const hasTracking = frames.some(frame => frame?.subjectTracking);
@@ -104,13 +101,17 @@ export function sanitizeMotionFeedback(value, {poseData, keyframes = [], allowed
     if (['pose', 'analysis'].includes(item.source) && poseCannotEstablish(`${title} ${evidence}`)) continue;
     let analysisPaths = [];
     if (item.analysisPaths !== undefined) {
-      if (!Array.isArray(item.analysisPaths) || !item.analysisPaths.length || item.analysisPaths.length > MOTION_FEEDBACK_LIMITS.maxAnalysisPaths) continue;
-      analysisPaths = item.analysisPaths.map(path => normalizeAnalysisPath(path));
+      // Some models emit one valid path without the outer array. This changes
+      // only its container shape, never the path, value or evidence allowlist.
+      const suppliedPaths = Array.isArray(item.analysisPaths) && typeof item.analysisPaths[0] === 'string' ? [item.analysisPaths] : item.analysisPaths;
+      if (!Array.isArray(suppliedPaths) || !suppliedPaths.length || suppliedPaths.length > MOTION_FEEDBACK_LIMITS.maxAnalysisPaths) continue;
+      analysisPaths = suppliedPaths.map(path => normalizeAnalysisPath(path));
       if (!analysisPaths.every(path => path && validAnalysisPath(path, fullAnalysis) && finite(measurementTime(path,fullAnalysis,poseData?.duration)) && (!allowedPaths || allowedPaths.some(prefix => prefix.length <= path.length && prefix.every((part, index) => path[index] === part))))) continue;
       analysisPaths = [...new Map(analysisPaths.map(path => [JSON.stringify(path), path])).values()];
     }
     const indices = [...new Set((Array.isArray(item.frameIndices) ? item.frameIndices : []).filter(index => Number.isInteger(index) && validIndices.has(index)))].sort((a, b) => a - b);
-    const images = [...new Set((Array.isArray(item.evidenceTimes) ? item.evidenceTimes : []).filter(time => timeIsValid(time) && pictureTimes.has(time)))];
+    const images = [...new Set([...(Array.isArray(item.evidenceTimes) ? item.evidenceTimes : []).filter(time => timeIsValid(time) && pictureTimes.has(time)),
+      ...resolveMotionImageEvidenceTimes({imageIndices: item.imageIndices}, imageKeyframes).filter(time => pictureTimes.has(time))])];
     const analysisTimes = item.source === 'analysis' ? analysisPaths.map(path => measurementTime(path, fullAnalysis, poseData?.duration)) : [];
     if (item.source === 'analysis' ? !analysisTimes.length || !analysisTimes.every(finite) : item.source !== 'visual' && !indices.length || item.source !== 'pose' && !images.length) continue;
     const frameIndices = ['visual', 'analysis'].includes(item.source) ? [] : indices;

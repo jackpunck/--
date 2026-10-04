@@ -27,7 +27,7 @@ const DAY = 86400000;
 const MAX_FILE = 8 * 1024 * 1024;
 const ID = /^[\w:-]{1,100}$/;
 const FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
-const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.task': 'application/octet-stream' };
+const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream' };
 const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'demo.offline.js', 'atlas.worker.js', 'assets/anatomy-data.bin', 'model-loader.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
 
 async function passwordHash(password) {
@@ -335,6 +335,7 @@ export function createServer(options = {}) {
           const id = settings.tasks.motion, model = settings.taskModels.motion;
           if (!id || !model) throw new HttpError(400, '尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
           const provider = selectProviderModel(providerWithKey(user.id, id), model);
+          if (provider.models?.find(item => item.id === provider.model)?.vision !== true) throw new HttpError(400, '动作评估需要支持图片的 AI 模型，请在 AI 服务设置中更换动作点评模型。');
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
           res.once('close', disconnect);

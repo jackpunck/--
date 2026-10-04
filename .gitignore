@@ -97,3 +97,5 @@ Desktop.ini
 ~$*
 测试集
 
+# RTMW-L exceeds common Git host file limits. Restore from its pinned manifest.
+/public/vendor/rtmw/rtmw-l-384x288.onnx

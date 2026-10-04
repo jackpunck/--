@@ -36,13 +36,14 @@ test('source inspection sends the original File and releases the decoder after i
 });
 
 test('selected images retain requested times, geometry and exact JPEG bytes', async t => {
-  const original = file(), times = [0, 7 / 15, 29 / 15];
+  const original = file(), times = [0, 7 / 7.5, 14 / 7.5];
   const workers = installWorker(t, (worker, message) => queueMicrotask(() => worker.emit({ type: 'done', metadata, frames: message.times.map(time => ({ time, width: 180, height: 320, bytes })) })));
-  const frames = await readMotionSourceFrames(original, times, { maxDimension: 640 });
+  const frames = await readMotionSourceFrames(original, times, { maxDimension: 640, sampleFps: 7.5 });
   assert.deepEqual(frames.map(frame => frame.time), times);
   assert(frames.every(frame => frame.width === 180 && frame.height === 320 && frame.blob.type === 'image/jpeg' && frame.blob.size === bytes.length));
   assert.equal(workers[0].messages[0].file, original);
   assert.equal(workers[0].messages[0].maxDimension, 640);
+  assert.equal(workers[0].messages[0].sampleFps, 7.5);
   assert.equal(workers[0].terminated, 1);
 });
 

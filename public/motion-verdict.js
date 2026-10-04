@@ -5,8 +5,14 @@
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const statuses = new Set(['standard', 'needs-improvement', 'uncertain']);
 const sources = new Set(['pose', 'visual', 'combined', 'analysis']);
-const missingDataReasons = new Set(['INVALID_DIMENSIONS', 'NO_POSE', 'TOO_FEW_FRAMES', 'MULTIPLE_PEOPLE', 'LOW_POSE_COVERAGE', 'LOW_TARGET_COVERAGE', 'LOW_SOURCE_FRAME_RATE', 'LOW_SOURCE_RATE', 'LOW_SAMPLE_RATE', 'TARGET_ID_CHANGED', 'NO_FRAMES', 'INVALID_FRAME_TIME', 'NON_MONOTONIC_FRAME_TIMES', 'UNRESOLVED_TARGET']);
+const unusableDataReasons = new Set(['INVALID_DIMENSIONS', 'NO_POSE', 'NO_FRAMES']);
 const timeIsValid = value => finite(value) && value >= 0 && value <= 120;
+// Whole-name placeholders are shared by incoming identity validation and old
+// saved-report display; this does not reject legitimate uncatalogued variants.
+const unknownActionNames = new Set(['未知动作', '未知', '无法识别', '无法识别动作', '未识别', '动作未识别', 'unknown', 'unknown action', 'unidentified']);
+export function isUnknownMotionActionName(value) {
+  return typeof value === 'string' && unknownActionNames.has(value.trim().replace(/\s+/g, ' ').toLowerCase());
+}
 
 function cleanText(value, limit = 320) {
   if (typeof value !== 'string') return '';
@@ -25,37 +31,44 @@ function retainedFinding(item) {
     && Array.isArray(item.evidenceTimes) && item.evidenceTimes.some(timeIsValid);
 }
 
-function incompleteObservation(coverage, quality) {
+function incompleteReview(coverage) {
   if (coverage?.complete !== true) return true;
+  if (coverage.strategy === 'visual-keyframes' && (!Number.isInteger(coverage.reviewedImageCount) || coverage.reviewedImageCount < 1
+      || finite(coverage.imageCount) && coverage.reviewedImageCount < coverage.imageCount)) return true;
   if (finite(coverage.frameCount) && finite(coverage.reviewedFrameCount) && coverage.reviewedFrameCount < coverage.frameCount) return true;
-  if (finite(quality?.targetCoverage) && quality.targetCoverage < 0.7 || finite(quality?.usableRatio) && quality.usableRatio < 0.7) return true;
-  if (finite(quality?.validFrames) && quality.validFrames < 8 || finite(quality?.sourceFps) && quality.sourceFps < 5) return true;
-  return (Array.isArray(quality?.reasons) ? quality.reasons : []).some(reason => missingDataReasons.has(reason));
+  return false;
+}
+function noObservations(quality) {
+  return ['totalFrames','validFrames','usableRatio','targetCoverage'].some(key=>quality?.[key]===0)
+    || (Array.isArray(quality?.reasons)?quality.reasons:[]).some(reason=>unusableDataReasons.has(reason));
 }
 
-/** Accept model conclusions only when retained evidence supports them.
- * Coverage means all supplied data was reviewed, not that every joint was seen.
- * A visible problem can still warrant a correction when the rest is unknown.
- * No directory action ID or local rule verdict is needed to assess an exercise.
+/** A standard conclusion requires an explicit, supported AI assessment.
+ * Absence of detected problems is not evidence of correct form. Preserve an
+ * uncertain verdict, including when the model could not identify the action.
+ * A visible concrete problem can still be reported from a partial review.
  */
 export function sanitizeMotionVerdict(value, {feedback = [], coverage, quality, action} = {}) {
   const requested = value && typeof value === 'object' && !Array.isArray(value) && statuses.has(value.status) ? value.status : null;
   const findings = (Array.isArray(feedback) ? feedback : []).filter(retainedFinding);
-  const improvements = findings.filter(item => item.status === 'improve');
-  const incomplete = incompleteObservation(coverage, quality);
-  const unknownAction = action !== undefined && (!action || action.status !== 'identified' || typeof action.name !== 'string' || !action.name.trim());
+  const improvements = findings.filter(item => item.status === 'improve' && cleanText(item.correction));
+  const positives = findings.filter(item => item.status === 'good');
+  const identified = action?.status === 'identified' && !isUnknownMotionActionName(action.name) && (cleanText(action.name) || cleanText(action.exerciseId));
+  const identityChanged = quality?.reasons?.includes('TARGET_ID_CHANGED');
+  const incomplete = incompleteReview(coverage);
+  const visualEvidence = coverage?.strategy === 'visual-keyframes' && coverage.reviewedImageCount > 0
+    && positives.some(item => ['visual','combined'].includes(item.source));
   let status = 'uncertain';
   if (improvements.length) status = 'needs-improvement';
-  else if (requested === 'standard' && !incomplete && !unknownAction && findings.some(item => item.status === 'good') && !findings.some(item => item.status === 'uncertain')) status = 'standard';
+  else if (requested === 'standard' && identified && positives.length && !incomplete && (visualEvidence || !noObservations(quality)) && !identityChanged) status = 'standard';
   const defaults = {
-    standard: '已观察到的动作基本标准，继续保持当前动作控制。',
-    'needs-improvement': incomplete || unknownAction ? '已看到需要纠正的动作问题，其他片段仍有看不清的地方。请先按下面的建议调整。' : '动作有需要调整的地方，请先按下面的建议纠正。',
+    standard: coverage?.strategy === 'visual-keyframes' ? '动作相对标准，当前可见画面中未发现明确需要纠正的问题。' : '动作相对标准，当前可见画面和骨架数据中未发现明确需要纠正的问题。',
+    'needs-improvement': '发现了具体的动作问题，请按下面的建议调整。',
     uncertain: '目前还不能确认动作是否标准，请补充清晰、完整的动作视频后再评估。',
   };
-  // A rejected conclusion must not survive in its prose. For partial evidence,
-  // use a scoped sentence even if the model claimed to assess the whole video.
-  let summary = requested === status && !(status === 'needs-improvement' && (incomplete || unknownAction)) ? cleanText(value.summary) : '';
-  if (status === 'standard' && /(?:不标准|不规范|需要(?:改进|纠正)|needs? improvement|not standard)/i.test(summary)) summary = '';
+  // Use the requested relative wording consistently, including old AI responses
+  // that overstate certainty or only repeat general limitations of 2D poses.
+  let summary = status!=='standard' && requested === status ? cleanText(value.summary) : '';
   if (status !== 'standard' && /(?:完全|全部|非常|十分)(?:标准|规范)|没有(?:任何)?问题|无需(?:纠正|调整)|no (?:issues|correction needed)/i.test(summary)) summary = '';
   return {status, summary: summary || defaults[status]};
 }

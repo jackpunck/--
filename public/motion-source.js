@@ -1,6 +1,6 @@
 const aborted = () => new DOMException('已取消视频解码。', 'AbortError');
 
-function requestSource(file, type, { signal, onProgress = () => {}, times, maxDimension = 1280 } = {}) {
+function requestSource(file, type, { signal, onProgress = () => {}, times, maxDimension = 1280, sampleFps = 15 } = {}) {
   if (signal?.aborted) return Promise.reject(aborted());
   if (!file || !Number.isFinite(file.size) || file.size <= 0 || file.size > 200 * 1024 * 1024) return Promise.reject(new Error('请选择 200 MB 以内的视频。'));
   return new Promise((resolve, reject) => {
@@ -23,7 +23,7 @@ function requestSource(file, type, { signal, onProgress = () => {}, times, maxDi
       timer = setTimeout(() => finish(reject, new Error('视频解码超时，请使用较短的视频后重试。')), 10 * 60 * 1000);
       if (signal?.aborted) { cancel(); return; }
       onProgress({ stage: 'decoding', progress: 0, message: '正在直接读取视频画面…' });
-      if (!settled) worker.postMessage({ type, file, times, maxDimension });
+      if (!settled) worker.postMessage({ type, file, times, maxDimension, sampleFps });
     } catch (error) { finish(reject, error); }
   });
 }

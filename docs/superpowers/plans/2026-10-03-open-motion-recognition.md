@@ -1,3 +1,4 @@
+<!-- 历史设计与验证记录：姿态引擎已于 2026-10-04 替换为 RTMW-L，当前流程见 docs/视频动作评估.md。 -->
 # 开放动作识别实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.

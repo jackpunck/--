@@ -92,8 +92,7 @@ button.motion-time:hover{border-color:#aebdf2;background:#e7edff;color:var(--mot
 @media(max-width:560px){.motion-heading{gap:12px;margin-bottom:22px}.motion-heading h1{font-size:25px;letter-spacing:-.8px;margin-top:7px}.motion-heading p{font-size:11px;max-width:260px}.motion-heading .eyebrow{font-size:8px}.motion-local-badge{font-size:9px;gap:5px;padding:7px 8px;white-space:nowrap}.motion-input.card,.motion-results{padding:17px;border-radius:14px}.motion-section-head h2{font-size:17px}.motion-step{font-size:9px}.motion-dropzone{min-height:270px}.motion-dropzone strong{font-size:15px}.motion-dropzone>span:not(.motion-upload-mark):not(.motion-choose-label){font-size:10px}.motion-player{height:320px}.motion-guide{padding:18px}.motion-guide ol{grid-template-columns:1fr;gap:14px}.motion-guide li{gap:11px}.motion-guide li p{max-width:none;font-size:11px}.motion-guide h2{font-size:18px}.motion-guide-foot{font-size:10px}.motion-playback-note>span{font-size:9px}.motion-history-item{gap:10px;padding:13px}.motion-history-item p{font-size:9px}.motion-history-item .button{font-size:9px;padding:5px 7px}.motion-delete{font-size:9px}.motion-history-list{grid-template-columns:1fr}.motion-result-actions .button{font-size:11px}.motion-results{scroll-margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.motion-page *{scroll-behavior:auto!important;transition:none!important}}
 .motion-coach-mode{border:1px solid #e1e5f4;background:#f7f8fe;padding:15px;border-radius:10px;margin-top:18px}
-.motion-coach-mode label{display:flex;align-items:center;gap:9px;font-size:12px;color:#4f5f95;cursor:pointer}
-.motion-coach-mode input{width:15px;height:15px;accent-color:var(--motion-blue);margin:0;flex-shrink:0}
+.motion-coach-mode>strong{font-size:12px;font-weight:500;line-height:1.8;color:#4f5f95}
 .motion-coach-mode p{font-size:11px;color:#77809a;line-height:1.85;margin:9px 0}
 .motion-coach-mode .link-button{font-size:11px}
 .motion-coach{margin-top:26px;padding:20px;border:1px solid #dbe1f7;background:#f8f9ff;border-radius:13px;min-width:0}
@@ -134,8 +133,4 @@ button.motion-time:hover{border-color:#aebdf2;background:#e7edff;color:var(--mot
 .motion-history-verdict.is-needs-improvement{color:#a37450}
 .motion-history-verdict.is-pending{color:#8b92a7}
 .motion-coach-mode>small{display:block;font-size:10px;line-height:1.9;color:#8a93aa;margin:8px 0}
-.motion-quality-mode{margin:18px 0;padding-top:16px;border-top:1px solid #e7e9f0}
-.motion-quality-mode label{font-size:12px;color:#525d79}
-.motion-quality-mode select{font-size:13px;max-width:100%}
-.motion-quality-mode p{font-size:11px;line-height:1.85;color:#77809a;margin:9px 0 0}
 @media(max-width:560px){.motion-verdict{padding:18px}.motion-verdict h3{font-size:22px}.motion-verdict p{font-size:13px}.motion-feedback-list{grid-template-columns:1fr}.motion-feedback-item{padding:17px}.motion-history-item{flex-wrap:wrap}.motion-history-item>div{flex:1;min-width:140px}.motion-history-verdict{font-size:10px}.motion-coach-actions>.button{width:100%}}

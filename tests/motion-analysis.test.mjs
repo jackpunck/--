@@ -10,7 +10,7 @@ function pose({width = 1000, height = 1000, scale = 1, mirror = false} = {}) {
   for (const side of [0, 1]) {
     joints.forEach(([px, py], n) => {
       const x = (px + side * 250) * scale + 25, y = py * scale + 25;
-      landmarks[indices[n] + side] = {x: (mirror ? width - x : x) / width, y: y / height, visibility: 0.99, presence: null};
+      landmarks[indices[n] + side] = {x: (mirror ? width - x : x) / width, y: y / height, visibility: 0.99};
     });
   }
   return {time: 0, landmarks};
@@ -95,13 +95,9 @@ test('occluded joints null only the measurements that require them and retain th
   close(cropped.right.hipAngle, 180);
 });
 
-test('unknown presence uses visibility while missing or unreliable confidence cannot produce angles', () => {
-  for (const presence of [null, undefined, 0.99]) {
-    const frame = pose();
-    frame.landmarks.forEach(point => {if (point) point.presence = presence;});
-    close(analyzeMotion([frame], options).measurements[0].left.elbowAngle, 90);
-  }
-  for (const invalid of [{visibility: undefined}, {visibility: NaN}, {visibility: 0.4}, {visibility: 1.2}, {presence: 0.1}, {presence: -1}, {presence: NaN}]) {
+test('mapped RTMW visibility must be present and reliable to produce angles', () => {
+  close(analyzeMotion([pose()], options).measurements[0].left.elbowAngle, 90);
+  for (const invalid of [{visibility: undefined}, {visibility: NaN}, {visibility: 0.4}, {visibility: 1.2}]) {
     const frame = pose();
     frame.landmarks.forEach(point => {if (point) Object.assign(point, invalid);});
     const report = analyzeMotion([frame], options);

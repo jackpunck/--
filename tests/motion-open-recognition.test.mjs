@@ -10,11 +10,11 @@ test('open action names keep their visual identity independently of the teaching
   for (const name of ['引体向上', '负重引体向上', '弹力带面拉', '双杠臂屈伸']) {
     const coach = sanitize({action: action({name})});
     assert.equal(coach.action.status, 'identified');
-    assert.equal(coach.action.exerciseId, null);
+    assert.equal(coach.action.exerciseId, name==='引体向上'?'bodyweight-pullup':null);
     assert.equal(coach.action.name, name);
     const report = mergeCoachAssessment({quality: {usableRatio: 1}}, coach);
     assert.equal(report.exerciseName, name);
-    assert.equal(report.exerciseId, null);
+    assert.equal(report.exerciseId, name==='引体向上'?'bodyweight-pullup':null);
     assert.deepEqual(confirmedMotionAction(coach), coach.action);
   }
 });
@@ -25,6 +25,23 @@ test('an unknown movement family does not prohibit a visually evidenced open act
   assert.equal(coach.action.family, null);
   assert.equal(coach.action.name, '波比跳');
   assert.equal(mergeCoachAssessment({}, coach).exerciseFamily, null);
+});
+
+test('explicit unknown names cannot become identified or standard despite high confidence and positive evidence', () => {
+  for (const name of ['未知动作', '未知', '无法识别', '无法识别动作', '未识别', '动作未识别', 'unknown', ' Unknown   Action ', 'UNIDENTIFIED']) {
+    const raw = {mode: 'visual', action: action({name}), verdict: {status: 'standard'},
+      coverage: {complete: true, strategy: 'visual-keyframes', imageCount: 2, reviewedImageCount: 2},
+      feedback: [{title: '支撑稳定', status: 'good', source: 'visual', evidenceTimes: [1,2], evidence: '两张图中支撑位置保持稳定。', correction: '保持稳定支撑。'}]};
+    const coach = sanitize(raw);
+    assert.equal(coach.action.status, 'unknown', name);
+    assert.deepEqual(coach.candidates, [], name);
+    const report = mergeCoachAssessment({}, raw);
+    assert.equal(report.exerciseName, '', name);
+    assert.equal(report.coach.verdict.status, 'uncertain', name);
+  }
+  const open = sanitize({action: action({name: '反手窄距坐姿划船', family: 'row'})});
+  assert.equal(open.action.status, 'identified');
+  assert.equal(open.action.exerciseId, null);
 });
 
 test('an inconsistent known teaching ID cannot relabel an open action', () => {

@@ -1,17 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
-import { validateVideoFile, validateVideoMetadata, sampleVideoTimes, browserSeekTime, scaledVideoSize, analyzeVideo } from '../public/motion-video.js';
-import { getMotionModel } from '../public/motion-models.js';
-
-test('analysis uses Heavy by default and rejects unknown model paths before opening browser resources', async () => {
-  assert.equal(getMotionModel().id, 'heavy');
-  assert.equal(getMotionModel('full').asset, 'pose_landmarker_full.task');
-  for (const model of ['lite', '../model.task', 'constructor', null, {}, '']) {
-    await assert.rejects(analyzeVideo({ name: 'clip.mp4', size: 20 }, { model }), /分析模式/);
-  }
-});
+import { validateVideoFile, validateVideoMetadata, sampleVideoTimes, browserSeekTime, scaledVideoSize, analyzeVideo, MOTION_MODEL_VERSION } from '../public/motion-video.js';
+import { mapWholebodyLandmarks } from '../public/motion-rtmw.js';
 
 test('video intake rejects empty, oversize, unsupported and excessive-duration files', () => {
   assert.throws(() => validateVideoFile({ name: 'clip.mp4', size: 0 }));
@@ -23,19 +13,19 @@ test('video intake rejects empty, oversize, unsupported and excessive-duration f
   assert.throws(() => validateVideoMetadata({ duration: 12, width: 0, height: 1080 }));
 });
 
-test('sampling covers the entire clip with strictly increasing real timestamps', () => {
+for (const sampleFps of [15, 7.5]) test(`sampling at ${sampleFps} Hz covers the full clip with real timestamps`, () => {
   for (const duration of [0.02, 1, 1.037, 119.99, 120]) {
-    const times = sampleVideoTimes(duration);
+    const times = sampleVideoTimes(duration, sampleFps);
     assert.equal(times[0], 0);
     assert(times.at(-1) < duration);
-    assert(duration - times.at(-1) <= 1 / 15 + 1e-10);
-    for (let i = 1; i < times.length; i++) assert(Math.abs(times[i] - times[i - 1] - 1 / 15) < 1e-10);
+    assert(duration - times.at(-1) <= 1 / sampleFps + 1e-10);
+    for (let i = 1; i < times.length; i++) assert(Math.abs(times[i] - times[i - 1] - 1 / sampleFps) < 1e-10);
   }
 });
 
 test('frame resize preserves landscape and portrait proportions without enlarging', () => {
-  assert.deepEqual(scaledVideoSize(1920, 1080), { width: 960, height: 540 });
-  assert.deepEqual(scaledVideoSize(1080, 1920), { width: 540, height: 960 });
+  assert.deepEqual(scaledVideoSize(1920, 1080), { width: 1280, height: 720 });
+  assert.deepEqual(scaledVideoSize(1080, 1920), { width: 720, height: 1280 });
   assert.deepEqual(scaledVideoSize(640, 480), { width: 640, height: 480 });
 });
 
@@ -57,11 +47,112 @@ test('pre-cancelled analysis never opens browser resources', async () => {
   await assert.rejects(analyzeVideo({ name: 'clip.mp4', size: 20 }, { signal: controller.signal }), error => error.name === 'AbortError');
 });
 
-test('shipped MediaPipe runtime, model and notices match the pinned manifest', async () => {
-  const base = new URL('../public/vendor/mediapipe/', import.meta.url);
-  const manifest = JSON.parse(await readFile(new URL('manifest.json', base)));
-  for (const item of manifest.files) {
-    const bytes = await readFile(new URL(item.path, base));
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), item.sha256, item.path);
+test('invalid sampling rates reject before browser resources are opened', async () => {
+  for (const sampleFps of [0, -1, NaN, Infinity, 16, '7.5', null]) {
+    await assert.rejects(analyzeVideo({ name: 'clip.mp4', size: 20 }, { sampleFps }), /采样率/);
   }
 });
+
+function browserHarness(t, { decoder = 'webcodecs', failGpu = false, failParser = false, failDecode = false } = {}) {
+  const workers = [], requests = [], bitmaps = [], urls = new Set();
+  const metadata = { duration: .2, width: 320, height: 240, sourceFps: 30 };
+  const wholebodyLandmarks = Array.from({ length: 133 }, (_, i) => ({ x: i / 200, y: i / 300, score: .7 }));
+  const landmarks = mapWholebodyLandmarks(wholebodyLandmarks);
+  const frame = time => ({ time, landmarks, wholebodyLandmarks, personCount: 1, multiPersonCheck: true,
+    subjectTracking: { status: 'locked', confidence: .9 }, inferenceMs: 3 });
+  const replace = (object, key, value) => {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    Object.defineProperty(object, key, { configurable: true, writable: true, value });
+    t.after(() => descriptor ? Object.defineProperty(object, key, descriptor) : delete object[key]);
+  };
+  class Video extends EventTarget {
+    duration = metadata.duration; videoWidth = metadata.width; videoHeight = metadata.height; readyState = 2;
+    position = 0;
+    get currentTime() { return this.position; }
+    set currentTime(value) { this.position = value; queueMicrotask(() => this.dispatchEvent(new Event('seeked'))); }
+    load() { if (this.src) queueMicrotask(() => this.dispatchEvent(new Event(decoder === 'ffmpeg-direct' ? 'error' : 'loadedmetadata'))); }
+    pause() {}
+    removeAttribute(key) { delete this[key]; }
+  }
+  class Worker {
+    constructor(url) { this.url = String(url); this.stopped = false; workers.push(this); }
+    terminate() { this.stopped = true; }
+    postMessage(data) {
+      requests.push({ worker: this, ...data });
+      const emit = result => { if (!this.stopped) this.onmessage?.({ data: { id: data.id, ...result } }); };
+      queueMicrotask(() => {
+        if (this.stopped) return;
+        switch (data.type) {
+          case 'inspect': emit({ type: 'done', metadata, frames: [{ bytes: new Uint8Array([1]), time: 0 }] }); break;
+          case 'init': emit(failGpu && data.delegate === 'GPU' ? { error: 'WebGPU unavailable' } : { delegate: data.delegate, modelVersion: MOTION_MODEL_VERSION }); break;
+          case 'prepare-source': emit({ metadata }); break;
+          case 'prepare-mp4': this.sampleFps = data.options.sampleFps; emit(failParser ? { error: 'parser failed' } : { supported: decoder === 'webcodecs', sourceFps: 30 }); break;
+          case 'decode-source': case 'decode-mp4':
+            if (failDecode) { emit({ error: 'decode failed' }); break; }
+            for (const time of sampleVideoTimes(metadata.duration, data.options?.sampleFps ?? this.sampleFps)) emit({ type: 'frame-result', frame: frame(time) });
+            emit({ timing: { decodeMs: 2, codec: 'test' } }); break;
+          case 'frame': data.bitmap.close(); emit(frame(data.timestampMs / 1000)); break;
+          case 'close': emit({}); break;
+          default: emit({ error: `Unexpected worker request: ${data.type}` });
+        }
+      });
+    }
+  }
+  replace(globalThis, 'document', { createElement: () => new Video() });
+  replace(globalThis, 'Worker', Worker);
+  replace(globalThis, 'createImageBitmap', async () => { const bitmap = { closed: false, close() { this.closed = true; } }; bitmaps.push(bitmap); return bitmap; });
+  replace(URL, 'createObjectURL', () => { const url = `blob:test-${urls.size}`; urls.add(url); return url; });
+  replace(URL, 'revokeObjectURL', url => urls.delete(url));
+  return { workers, requests, bitmaps, urls, wholebodyLandmarks, landmarks };
+}
+
+for (const options of [
+  { decoder: 'webcodecs', failGpu: true },
+  { decoder: 'html-video', failGpu: true },
+  { decoder: 'ffmpeg-direct', failGpu: true },
+  { decoder: 'webcodecs', failParser: true },
+  { decoder: 'webcodecs', failDecode: true },
+]) test(`RTMW preserves all 133 points and releases resources: ${JSON.stringify(options)}`, async t => {
+  const state = browserHarness(t, options);
+  const result = await analyzeVideo({ name: 'clip.mp4', size: 20 });
+  assert.equal(result.decoder, options.failParser || options.failDecode ? 'html-video' : options.decoder);
+  assert.equal(result.modelVersion, 'RTMW-L 384x288 20231122 / COCO WholeBody 133 / flip-test');
+  assert.equal(result.delegate, options.failGpu ? 'CPU' : 'GPU');
+  assert.deepEqual(result.frames.map(item => item.time), sampleVideoTimes(.2));
+  for (const frame of result.frames) {
+    assert.deepEqual(frame.wholebodyLandmarks, state.wholebodyLandmarks);
+    assert.deepEqual(frame.landmarks, state.landmarks);
+    assert.equal('worldLandmarks' in frame, false);
+  }
+  assert(state.requests.filter(request => request.type === 'init').every(request => !('model' in request)));
+  assert.equal('actionRecognition' in result, false);
+  assert(state.workers.every(worker => worker.stopped));
+  assert(state.bitmaps.every(bitmap => bitmap.closed));
+  assert.equal(state.urls.size, 0);
+});
+
+for (const decoder of ['webcodecs', 'html-video', 'ffmpeg-direct']) {
+  test(`7.5 Hz reaches the ${decoder} decoder and preserves the full timeline`, async t => {
+    const state = browserHarness(t, { decoder });
+    const result = await analyzeVideo({ name: 'clip.mp4', size: 20 }, { sampleFps: 7.5 });
+    assert.equal(result.sampleFps, 7.5);
+    assert.equal(result.sourceFps, 30);
+    assert.equal(result.decoder, decoder);
+    assert.deepEqual(result.frames.map(frame => frame.time), [0, 1 / 7.5]);
+    const decodeRequest = state.requests.find(request => request.type === (decoder === 'ffmpeg-direct' ? 'decode-source' : 'prepare-mp4'));
+    assert.equal(decodeRequest.options.sampleFps, 7.5);
+    assert(state.workers.every(worker => worker.stopped));
+    assert(state.bitmaps.every(bitmap => bitmap.closed));
+  });
+
+  test(`cancelling RTMW stops ${decoder} inference and closes browser resources`, async t => {
+    const state = browserHarness(t, { decoder }), controller = new AbortController();
+    await assert.rejects(analyzeVideo({ name: 'clip.mp4', size: 20 }, {
+      signal: controller.signal,
+      onProgress: progress => { if (progress.stage === 'analyzing') controller.abort(); },
+    }), error => error.name === 'AbortError');
+    assert(state.workers.every(worker => worker.stopped));
+    assert(state.bitmaps.every(bitmap => bitmap.closed));
+    assert.equal(state.urls.size, 0);
+  });
+}

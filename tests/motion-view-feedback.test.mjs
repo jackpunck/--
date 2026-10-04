@@ -18,7 +18,7 @@ test('corrective UI prioritizes actual problems and excludes distracting praise'
 });
 
 test('standard verdict displays only maintenance suggestions',()=>{
-  const coach={coverage:{complete:true},verdict:{status:'standard',summary:'已看到的动作基本标准。'},feedback:[finding('good',{evidence:'肩髋保持同步，动作节奏稳定。'})]};
+  const coach={action:{status:'identified',name:'俯卧撑'},coverage:{complete:true},verdict:{status:'standard',summary:'已看到的动作基本标准。'},feedback:[finding('good',{evidence:'肩髋保持同步，动作节奏稳定。'})]};
   assert.equal(motionVerdict({coach}).status,'standard');
   assert.equal(motionFeedback({coach})[0].status,'good');
 });

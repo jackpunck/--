@@ -1,6 +1,6 @@
 /** Names and optional teaching links. Motion quality is evaluated by the AI;
  * this catalogue contains no posture thresholds, scoring or exercise rules. */
-export const MOTION_CATALOG_VERSION = 'motion-catalog-3.0.0';
+export const MOTION_CATALOG_VERSION = 'motion-catalog-3.1.0';
 export const motionFamilies = Object.freeze({
   squat: '深蹲', pushup: '俯卧撑', 'elbow-isolation': '屈伸肘孤立动作',
   'horizontal-press': '水平推胸', 'vertical-pull': '垂直拉', row: '水平划船',
@@ -23,6 +23,7 @@ const teachingEntries = [
   ['plank', '平板支撑', 'plank'], ['crunch', '卷腹', 'crunch'], ['calf-raise', '站姿提踵', 'calf'],
 ];
 const additionalEntries = [
+  ['barbell-deadlift', '杠铃硬拉', 'hinge'], ['bodyweight-pullup', '引体向上', 'vertical-pull'],
   ['barbell-bench', '杠铃卧推', 'horizontal-press'], ['incline-barbell-bench', '上斜杠铃卧推', 'horizontal-press'],
   ['smith-bench', '史密斯卧推', 'horizontal-press'], ['incline-smith-bench', '上斜史密斯卧推', 'horizontal-press'],
   ['barbell-row', '杠铃俯身划船', 'row'], ['machine-row', '器械划船', 'row'], ['chest-supported-row', '胸托划船', 'row'],

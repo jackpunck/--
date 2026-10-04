@@ -1,5 +1,5 @@
 import {motionExercises, motionFamilies, getMotionExercise} from './motion-catalog.js';
-import {sanitizeMotionVerdict} from './motion-verdict.js';
+import {isUnknownMotionActionName, sanitizeMotionVerdict} from './motion-verdict.js';
 
 export const MOTION_COACH_VERSION = 'motion-coach-v4';
 export const MOTION_REPORT_VERSION = 'motion-report-v1';
@@ -13,6 +13,19 @@ const times = (value, limit = 12) => [...new Set((Array.isArray(value) ? value :
 const supportedFamily = value => typeof value === 'string' && Object.hasOwn(motionFamilies, value) ? value : null;
 const confidences = new Set(['high', 'medium', 'low']);
 const qualityReasons = new Set(['NO_FRAMES', 'INVALID_DIMENSIONS', 'TARGET_ID_CHANGED', 'INVALID_FRAME_TIME', 'NON_MONOTONIC_FRAME_TIMES', 'TARGET_NOT_LOCKED', 'UNRESOLVED_TARGET', 'NO_VISIBLE_PERSON', 'MISSING_OR_UNCERTAIN_LANDMARKS']);
+
+/** Model-facing picture indices avoid float timestamp transcription errors.
+ * Resolve only exact supplied pictures; arbitrary or rounded times never snap
+ * to a nearby frame. Saved reports contain the resolved original times only. */
+export function resolveMotionImageEvidenceTimes(value, keyframes = []) {
+  const pictures = Array.isArray(keyframes) ? keyframes : [];
+  const available = new Set(pictures.map(frame => frame?.time).filter(validTime));
+  const supplied = times(value?.evidenceTimes).filter(time => available.has(time));
+  const indexed = (Array.isArray(value?.imageIndices) ? value.imageIndices : []).slice(0, MOTION_COACH_LIMITS.maxFrames)
+    .filter(index => Number.isInteger(index) && index >= 0 && index < pictures.length)
+    .map(index => pictures[index]?.time).filter(validTime);
+  return [...new Set([...supplied, ...indexed])];
+}
 
 function compactQuality(value) {
   const quality = {};
@@ -33,7 +46,7 @@ function compactEvidenceFrame(frame) {
   const result = {};
   for (const key of ['time', 'imageTime', 'requestedTime', 'poseTime', 'sourceTime']) if (validTime(frame?.[key])) result[key] = frame[key];
   if (['equipment-context', 'target-detail'].includes(frame?.framing)) result.framing = frame.framing;
-  if (['seek-target', 'source-pts'].includes(frame?.timePrecision)) result.timePrecision = frame.timePrecision;
+  if (['seek-target', 'source-pts', 'pose-source-pts'].includes(frame?.timePrecision)) result.timePrecision = frame.timePrecision;
   for (const key of ['crop', 'bbox', 'targetBox']) { const box = compactBox(frame?.[key]); if (box) result[key] = box; }
   for (const key of ['width', 'height']) if (Number.isSafeInteger(frame?.[key]) && frame[key] > 0 && frame[key] <= 16384) result[key] = frame[key];
   const tracking = frame?.subjectTracking;
@@ -58,6 +71,7 @@ export function compactMotionAnalysis(value = {}) {
 function identity(value) {
   if (!object(value)) return null;
   const name = text(value.name, 80).replace(/\s+/g, ' ');
+  if (isUnknownMotionActionName(name)) return null;
   const suppliedId = value.exerciseId;
   if (suppliedId !== undefined && suppliedId !== null && (typeof suppliedId !== 'string' || !getMotionExercise(suppliedId))) return null;
   const byId = getMotionExercise(suppliedId);
@@ -98,9 +112,10 @@ export function sanitizeMotionCoachResponse(value, {mode = 'evidence-only', keyf
   if (!object(value)) throw new Error('动作评价结构无效，请重试。');
   const available = new Set(times((Array.isArray(keyframes) ? keyframes : []).map(frame => frame?.time)));
   const visual = mode === 'visual' && available.size > 0;
-  const action = visual ? confirmedAction(value.action, available) || unknownAction() : unknownAction();
+  const withPictures = raw => object(raw) ? {...raw, evidenceTimes: resolveMotionImageEvidenceTimes(raw, keyframes)} : raw;
+  const action = visual ? confirmedAction(withPictures(value.action), available) || unknownAction() : unknownAction();
   const candidates = [];
-  if (visual) for (const raw of [value.action, ...(Array.isArray(value.candidates) ? value.candidates : [])].slice(0, 24)) {
+  if (visual) for (const raw of [value.action, ...(Array.isArray(value.candidates) ? value.candidates : [])].slice(0, 24).map(withPictures)) {
     const candidate = actionWithEvidence(raw, available);
     if (!candidate || candidates.some(item => item.name === candidate.name)) continue;
     candidates.push({...candidate, confidence: confirmedAction(raw, available) ? 'high' : confidences.has(raw.confidence) && raw.confidence !== 'high' ? raw.confidence : 'low'});
@@ -128,7 +143,8 @@ function compactCoach(value, quality) {
   for (const key of ['model', 'provider']) if (typeof value[key] === 'string') result[key] = text(value[key], 160);
   if (object(value.coverage)) {
     result.coverage = {complete: value.coverage.complete === true};
-    for (const key of ['frameCount', 'reviewedFrameCount', 'measurementCount', 'reviewedMeasurementCount', 'dataBatches', 'modelCalls']) if (Number.isSafeInteger(value.coverage[key]) && value.coverage[key] >= 0) result.coverage[key] = value.coverage[key];
+    for (const key of ['sourceFrameCount','frameCount', 'reviewedFrameCount', 'imageCount','reviewedImageCount','temporalChecks','measurementCount', 'reviewedMeasurementCount','summarizedMeasurementCount', 'dataBatches', 'modelCalls']) if (Number.isSafeInteger(value.coverage[key]) && value.coverage[key] >= 0) result.coverage[key] = value.coverage[key];
+    if (['visual-keyframes','temporal-evidence','full-data'].includes(value.coverage.strategy)) result.coverage.strategy=value.coverage.strategy;
   }
   if (object(value.timing)) result.timing = Object.fromEntries(['providerMs', 'totalMs'].filter(key => finite(value.timing[key]) && value.timing[key] >= 0).map(key => [key, value.timing[key]]));
   result.verdict = sanitizeMotionVerdict(value.verdict, {feedback: result.feedback, coverage: result.coverage, quality, action: result.action});

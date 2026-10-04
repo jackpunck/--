@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sanitizeMotionFeedback} from '../public/motion-feedback.js';
 
-const point = () => [0.5, 0.5, 0, 0.95, 0.9];
+const point = () => [0.5, 0.5, 0.95];
 const pose = (count = 20) => ({duration: count / 15, frames: Array.from({length: count}, (_, index) => ({time: index / 15, landmarks: Array.from({length: 33}, point), personCount: 1}))});
 const finding = extra => ({title: '后半程动作幅度变化', status: 'improve', source: 'pose', frameIndices: [1, 10, 19], evidenceTimes: [], evidence: '后几次肩关节活动幅度逐渐缩小。', correction: '减轻重量，保持前后几次相近的活动幅度。', priority: 1, ...extra});
 
@@ -29,6 +29,19 @@ test('visual and combined findings require their own real picture references wit
   assert.equal(sanitizeMotionFeedback([finding({source: 'combined', frameIndices: [], evidenceTimes: [0.31]})], options).length, 0);
   assert.equal(sanitizeMotionFeedback([finding({source: 'combined', evidenceTimes: [0.32]})], options).length, 0);
   assert.equal(sanitizeMotionFeedback([finding({source: 'pose', frameIndices: [], evidenceTimes: [0.31]})], options).length, 0);
+});
+
+test('picture indices resolve only actual supplied images and never inherited or invented ones', () => {
+  const options = {poseData: pose(), keyframes: [{time: .123456789}, {time: .5716666666666667}]};
+  const output = sanitizeMotionFeedback([finding({source: 'visual', imageIndices: [1], evidenceTimes: [.572]})], options);
+  assert.deepEqual(output[0].evidenceTimes, [.5716666666666667]);
+  assert.equal(output[0].imageIndices, undefined);
+  for (const imageIndices of [[-1], [2], [0.2], ['0'], [NaN]]) {
+    assert.equal(sanitizeMotionFeedback([finding({source: 'visual', imageIndices})], options).length, 0);
+  }
+  assert.equal(sanitizeMotionFeedback([finding({source: 'visual', imageIndices: [0]})], {...options, imageKeyframes: []}).length, 0,
+    'A text-only synthesis cannot relabel its inherited references as newly supplied images');
+  assert.equal(sanitizeMotionFeedback([finding({source: 'visual', evidenceTimes: [.123456789]})], {...options, imageKeyframes: []}).length, 1);
 });
 
 test('forged indices and indices outside the current chunk never establish evidence', () => {
@@ -68,8 +81,9 @@ test('missing poses, ambiguous targets and low tracking confidence cannot suppor
 
 test('low-confidence and explicitly unknown points cannot establish reliable pose evidence', () => {
   for (const bad of [
-    null, [0.5, 0.5, 0, 0.54, 0.9], [0.5, 0.5, 0, 0.9, 0.54], [0.5, 0.5, 0, null, 0.9],
-    [null, 0.5, 0, 0.9, 0.9, 1], [2, 0.5, 0, 0.9, 0.9], [0.5, 0.5, 0, 2, 0.9],
+    null, [0.5, 0.5, 0.54], [0.5, 0.5, null], [0.5, 0.5, null, 4],
+    [null, 0.5, 0.9, 1], [2, 0.5, 0.9], [0.5, 0.5, 2],
+    [0.5, 0.5, 0.9, 8], [0.5, 0.5, 0, 0.95, 0.9],
   ]) {
     const poseData = pose(); poseData.frames[1].landmarks = Array.from({length: 33}, () => structuredClone(bad));
     assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 0);
@@ -78,10 +92,10 @@ test('low-confidence and explicitly unknown points cannot establish reliable pos
   poseData.frames[1].landmarks = Array.from({length: 33}, () => null);
   for (const index of [0, 1, 2, 3, 4, 5, 6]) poseData.frames[1].landmarks[index] = point();
   assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 0, 'Only face points are insufficient');
-  for (const index of [11, 13, 15]) poseData.frames[1].landmarks[index] = [0.5, 0.5, null, 0.9, null, 20];
-  assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 1, 'Optional absent presence and depth do not erase observed image joints');
-  for (const index of [11, 13, 15]) poseData.frames[1].landmarks[index] = [0.5, 0.5, 0, 0.9, null];
-  assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 1, 'Worker-style null presence remains unknown, not zero, when visibility is observed');
+  for (const index of [11, 13, 15]) poseData.frames[1].landmarks[index] = [0.5, 0.5, 0.9, 0];
+  assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 1, 'Explicit zero missingMask retains observed image joints');
+  for (const index of [11, 13, 15]) poseData.frames[1].landmarks[index] = [0.5, 0.5, 0.9];
+  assert.equal(sanitizeMotionFeedback([finding({frameIndices: [1]})], {poseData}).length, 1, 'Unmasked RTMW tuples use their observed confidence directly');
 });
 
 test('original object landmarks are supported without treating unknown visibility as confidence', () => {
@@ -147,6 +161,16 @@ test('analysis evidence obeys packet and synthesis path restrictions',()=>{
  for(const allowedAnalysisPaths of [[],[['measurements',0]],[['poseData']]])assert.equal(sanitizeMotionFeedback([item],{fullAnalysis,allowedAnalysisPaths}).length,0);
  const allowedAnalysisPaths=[['measurements',1799,'left','elbowAngle']];
  assert.equal(sanitizeMotionFeedback([measuredFinding({analysisPaths:[['measurements',1799,'left','kneeAngle']]})],{fullAnalysis,allowedAnalysisPaths}).length,0);
+});
+
+test('single flat analysis paths normalize without broadening the evidence allowlist', () => {
+  const fullAnalysis = completeMeasurements(), allowedAnalysisPaths = [['measurements', 1799, 'left', 'elbowAngle']];
+  const result = sanitizeMotionFeedback([measuredFinding({analysisPaths: ['measurements', 1799, 'left', 'elbowAngle']})], {fullAnalysis, allowedAnalysisPaths});
+  assert.deepEqual(result[0].analysisPaths, allowedAnalysisPaths);
+  assert.deepEqual(result[0].evidenceTimes, [1799 / 15]);
+  for (const path of [['measurements', 1798, 'left', 'elbowAngle'], ['measurements', 1799, 'right', 'elbowAngle'], ['__proto__', 'x']]) {
+    assert.equal(sanitizeMotionFeedback([measuredFinding({analysisPaths: path})], {fullAnalysis, allowedAnalysisPaths}).length, 0);
+  }
 });
 
 test('analysis feedback rejects missing/invalid angles, times, identity, invented and legacy measurement paths',()=>{

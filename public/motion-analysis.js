@@ -17,8 +17,6 @@ function imagePoint(value, width, height) {
   if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y)
     || value.x < 0 || value.x > 1 || value.y < 0 || value.y > 1
     || !Number.isFinite(value.visibility) || value.visibility < 0.55 || value.visibility > 1) return null;
-  // MediaPipe may omit presence. Unknown presence does not mean zero confidence.
-  if (value.presence != null && (!Number.isFinite(value.presence) || value.presence < 0.55 || value.presence > 1)) return null;
   return {x: value.x * width, y: value.y * height};
 }
 

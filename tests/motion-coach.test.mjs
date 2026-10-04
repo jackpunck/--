@@ -1,3 +1,4 @@
+import {toRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
@@ -14,9 +15,9 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const images=[{time:0.2,mimeType:'image/png',data:png},{time:0.8,mimeType:'image/png',data:png}];
 const source=JSON.parse(await readFile(new URL('./fixtures/motion-squat-real.json',import.meta.url),'utf8'));
 function request(){
- const frames=source.frames.slice(0,20).map(([time,points])=>{const landmarks=Array(33).fill(null);source.landmarkIndices.forEach((index,i)=>{const[x,y,visibility]=points[i];landmarks[index]={x,y,visibility,presence:null};});return{time,landmarks,personCount:1};});
- const pipeline={...source.options,duration:1.5,sourceFps:30,sampleFps:15,frames};
- const fullAnalysis=buildFullMotionAnalysis(analyzeMotion(frames,pipeline),pipeline);
+ const frames=source.frames.slice(0,3).map(([time,points])=>{const landmarks=Array(33).fill(null);source.landmarkIndices.forEach((index,i)=>{const[x,y,visibility]=points[i];landmarks[index]={x,y,visibility};});return{time,landmarks,personCount:1};});
+ const pipeline=toRtmwPipeline({...source.options,duration:1.5,sourceFps:30,sampleFps:15,frames});
+ const fullAnalysis=buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline);
  return{duration:1.5,analysis:compactMotionAnalysis(fullAnalysis),fullAnalysis,poseData:buildMotionPoseData(pipeline),keyframes:images};
 }
 function output(){return {action:{exerciseId:'squat',name:'徒手深蹲',family:'squat',status:'identified',confidence:'high',evidenceTimes:[0.2,0.8],evidence:'训练者站立后屈髋屈膝下蹲，身体随后起身。'},verdict:{status:'needs-improvement',summary:'起身时请保持肩髋同步。'},feedback:[{title:'肩髋同步',status:'improve',source:'visual',evidenceTimes:[0.8],frameIndices:[],evidence:'起身时肩部与髋部移动不同步。',correction:'减轻负重，让肩部与髋部一起起身。'}],score:99,checks:[{status:'pass'}]};}
@@ -40,22 +41,22 @@ test('motion HTTP route evaluates complete observations with account-scoped mode
  for(const key of ['score','checks','assessment','reps','qualified'])assert.equal(Object.hasOwn(result.body,key),false);
  assert.equal(f.calls.length,1,'A small full-data request finishes in one model call');
  const sent=f.calls[0].body;assert.equal(sent.messages[1].content.filter(item=>item.type==='image_url').length,2);
- assert(!/"(?:score|checks|qualified|reps)"/.test(JSON.stringify(sent)));assert(!JSON.stringify(result).includes('private-test-key'));
+ assert(!/"(?:score|checks|qualified|reps)"\s*:/.test(JSON.stringify(sent)));assert(!JSON.stringify(result).includes('private-test-key'));
  const exported=await f.api('/api/export',{cookie:f.alice.cookie});assert.deepEqual(exported.body.attachments,[]);assert(!exported.body.records.some(r=>r.kind==='motion-assessment'));
  assert.equal((await f.api('/api/motion/coach',{cookie:f.bob.cookie,body:request()})).status,400);
  assert.equal((await f.api('/api/motion/coach',{cookie:f.alice.cookie,headers:{'X-Fitness-User':f.bob.body.user.id},body:request()})).status,409);
  assert.equal(f.calls.length,1);
 });
 
-test('text-only models receive objective data without pictures or inferred visual identity',async t=>{
+test('text-only models are rejected before any skeleton or screenshot reaches the provider',async t=>{
  const f=await fixture(t);await f.configure(false);const result=await f.api('/api/motion/coach',{cookie:f.alice.cookie,body:request()});
- assert.equal(result.status,200);assert.equal(result.body.mode,'evidence-only');assert.equal(result.body.action.status,'unknown');assert.deepEqual(result.body.feedback,[]);
- assert(!JSON.stringify(f.calls).includes('data:image'));assert.equal(result.body.verdict.status,'uncertain');
+ assert.equal(result.status,400);assert.match(result.body.error,/视觉|图片/);
+ assert.equal(f.calls.length,0);
 });
 
 test('request validation rejects scored legacy input, missing observations, malformed images and frame mismatches',async t=>{
  const f=await fixture(t);await f.configure();const base=request();
- const bad=[{duration:121},{poseData:null},{fullAnalysis:null},{fullAnalysis:{...base.fullAnalysis,score:100}},{keyframes:Array(7).fill(images[0])},{keyframes:[{...images[0],time:4}]},{keyframes:[images[0],images[0]]},{keyframes:[{...images[0],mimeType:'image/svg+xml'}]},{keyframes:[{...images[0],data:'%%%'}]},{keyframes:[{...images[0],data:Buffer.from('not png').toString('base64')}]}];
+ const bad=[{duration:121},{poseData:null},{fullAnalysis:null},{fullAnalysis:{...base.fullAnalysis,score:100}},{keyframes:[]},{keyframes:null},{keyframes:Array(7).fill(images[0])},{keyframes:[{...images[0],time:4}]},{keyframes:[images[0],images[0]]},{keyframes:[{...images[0],mimeType:'image/svg+xml'}]},{keyframes:[{...images[0],data:'%%%'}]},{keyframes:[{...images[0],data:Buffer.from('not png').toString('base64')}]}];
  for(const patch of bad)assert.equal((await f.api('/api/motion/coach',{cookie:f.alice.cookie,body:{...base,...patch}})).status,400);
  const shifted=structuredClone(base);shifted.fullAnalysis.measurements[1].time+=0.001;assert.throws(()=>validateMotionCoachRequest(shifted),/时间不一致/);
  assert.equal((await f.api('/api/motion/coach',{cookie:f.alice.cookie,body:{duration:3,analysis:{score:100,checks:[]},keyframes:images}})).status,400);
@@ -74,7 +75,7 @@ test('bad model JSON becomes a bounded error and cancellation aborts the provide
  });
 });
 
-test('saving an existing provider assigns an unconfigured motion task to its selected default',async t=>{
+test('saving an existing provider assigns an unconfigured motion task to a visual model',async t=>{
   const f=await fixture(t);
   const provider={id:'existing',name:'Existing AI',protocol:'openai',baseUrl:'http://127.0.0.1:9/v1',models:[{id:'text-default',vision:false},{id:'vision-alternative',vision:true},{id:'next-default',vision:false}],model:'vision-alternative'};
   const tasks={chat:'existing',meal:'existing',planning:'existing'},taskModels={chat:'text-default',meal:'vision-alternative',planning:'text-default'};
@@ -89,14 +90,14 @@ test('saving an existing provider assigns an unconfigured motion task to its sel
   assert.equal(saved.status,200);
   settings=(await f.api('/api/providers',{cookie:f.alice.cookie})).body;
   assert.equal(settings.tasks.motion,'existing');
-  assert.equal(settings.taskModels.motion,'text-default','The selected default takes priority over another vision model');
+  assert.equal(settings.taskModels.motion,'vision-alternative','A text default yields to an enabled visual model for motion');
   for(const task of Object.keys(tasks)) {
     assert.equal(settings.tasks[task],tasks[task]);assert.equal(settings.taskModels[task],taskModels[task]);
   }
   const result=await f.api('/api/motion/coach',{cookie:f.alice.cookie,body:request()});
-  assert.equal(result.status,200);assert.equal(result.body.model,'text-default');assert.equal(result.body.mode,'evidence-only');
-  assert.equal(f.calls[0].body.model,'text-default');
-  assert.equal(f.calls[0].body.messages[1].content.some(part=>part.type==='image_url'),false);
+  assert.equal(result.status,200);assert.equal(result.body.mode,'visual');
+  assert.equal(f.calls.length,1);assert.equal(f.calls[0].body.model,'vision-alternative');
+  assert.equal(f.calls[0].body.messages[1].content.filter(part=>part.type==='image_url').length,images.length);
 
   const explicit=await f.api('/api/providers',{cookie:f.alice.cookie,method:'PUT',body:{providers:settings.providers,tasks:settings.tasks,taskModels:{...settings.taskModels,motion:'vision-alternative'}}});
   assert.equal(explicit.status,200);settings=explicit.body;

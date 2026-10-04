@@ -1,4 +1,4 @@
-// Real MediaPipe target-selection QA; requires local videos from the fixture scripts.
+// Real RTMW-L target-selection QA; requires local videos from the fixture scripts.
 // QA_PLAYWRIGHT=/path/to/playwright/index.mjs QA_BROWSER=/path/to/browser node scripts/qa-motion-target.mjs
 // Coordinate GPU use with other browser QA jobs. Images/frames stay under .qa.
 // QA_TARGET_REPLAY=/path/to/prior/output reruns semantic checks without browser/GPU inference.

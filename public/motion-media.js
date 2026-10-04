@@ -1,6 +1,6 @@
 // Keep the original video and a small first-frame preview. Unsupported browser
 // codecs are decoded directly; preparation never re-encodes an entire video.
-export const MOTION_VIDEO_LIMITS = Object.freeze({ maxBytes: 200 * 1024 * 1024, maxDuration: 120, sampleFps: 15, maxDimension: 960 });
+export const MOTION_VIDEO_LIMITS = Object.freeze({ maxBytes: 200 * 1024 * 1024, maxDuration: 120, sampleFps: 15, maxDimension: 1280 });
 export const MOTION_VIDEO_ACCEPT = 'video/mp4,video/quicktime,video/webm,video/x-matroska,video/x-msvideo,video/3gpp,video/3gpp2,video/mpeg,video/mp2t,video/ogg,video/x-ms-wmv,video/x-flv,video/vnd.dlna.mpeg-tts,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.3g2,.mpg,.mpeg,.ts,.m2ts,.mts,.ogv,.wmv,.flv';
 const preparedVideos = new WeakMap();
 const aborted = () => new DOMException('已取消视频准备。', 'AbortError');

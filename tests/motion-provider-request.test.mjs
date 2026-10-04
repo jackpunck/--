@@ -22,7 +22,7 @@ test('motion evaluation disables reasoning and bounds JSON output on the two sup
   for (const model of ['deepseek-flash', 'deepseek-v4-pro']) {
     const request = await capture({...official, model}, 'motion-coach');
     assert.equal(request.url, 'https://api.deepseek.com/v1/chat/completions');
-    assert.deepEqual(request.body, {model, messages, stream: false, thinking: {type: 'disabled'}, response_format: {type: 'json_object'}, max_tokens: 2400});
+    assert.deepEqual(request.body, {model, messages, stream: false, thinking: {type: 'disabled'}, response_format: {type: 'json_object'}, max_tokens: 2400, temperature: 0});
     assert.equal(request.body.reasoning_effort, undefined);
   }
 });

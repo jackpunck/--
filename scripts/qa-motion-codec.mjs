@@ -1,4 +1,5 @@
-// Real browser regression for direct source decoding. No AI requests or source edits.
+// Real browser regression for direct source decoding. Visual AI is a local mock;
+// source videos are not edited or uploaded, and no paid provider is called.
 // QA_PLAYWRIGHT, QA_BROWSER and QA_FFMPEG can override the existing local tools.
 import assert from 'node:assert/strict';
 import {access,mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
@@ -47,7 +48,7 @@ const fixtures=[
 ];
 const audioOnly=await fixture('audio-only.mp4',['-f','lavfi','-i','anullsrc=r=44100:cl=mono','-t','1','-c:a','aac','-vn']);
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'.qa/browser-tools/node_modules/playwright/index.mjs'))));
-const server=await startServer({host:'127.0.0.1',port:0,dataDir});
+const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({action:{name:'',exerciseId:null,status:'unknown',confidence:'low',evidenceTimes:[],evidence:''},verdict:{status:'uncertain',summary:'此模拟响应只验证视频解码与完整数据流程。'},feedback:[],limitations:['QA 模拟 AI，不评价真实动作。']})}}]}),{headers:{'Content-Type':'application/json'}})});
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.QA_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
@@ -98,6 +99,8 @@ try{
  const registration=await context.request.post(origin+'/api/auth/register',{data:{name:'视频兼容回归',email:`codec-${Date.now()}@example.test`,password:'codec-qa-password-123'}});assert.equal(registration.status(),201);
  const {user}=await registration.json();
  assert.equal((await context.request.post(origin+'/api/sync',{data:{userId:user.id,changes:[{id:'profile',kind:'profile',baseVersion:0,data:{age:28,sex:'male',height:175,weight:70,goal:'maintain',activity:1.375}}]}})).status(),200);
+ const provider={id:'codec-qa',presetId:'openai',apiKey:'QA-placeholder-no-external-request',models:[{id:'qa-vision',vision:true}]};
+ assert.equal((await context.request.put(origin+'/api/providers',{data:{providers:[provider],tasks:{motion:provider.id},taskModels:{motion:'qa-vision'}}})).status(),200);
  await page.goto(origin);await page.locator('#chat-input').waitFor();await nav('motion');
  if(!formatsOnly){
  console.log('Real phone MOV: prepare, complete pose analysis, and evidence');
@@ -211,7 +214,7 @@ try{
  checks.push('preparation-cancel-replace-navigation-no-stale-result');
  }
  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
- assert.equal(requests.filter(item=>item.method==='POST'&&/\/api\/(motion\/coach|attachments)/.test(item.url)).length,0);
+ assert.equal(requests.filter(item=>item.method==='POST'&&/\/api\/attachments/.test(item.url)).length,0);
  assert(requests.some(item=>item.url.includes('motion-source-worker')));assert(!requests.some(item=>item.url.includes('motion-transcode')));
  assert(ffmpegCommands.length>0);assert(ffmpegCommands.every(args=>!args.some(value=>/libx264|compatible\.mp4|h264_nvenc/.test(String(value)))),'direct source decoding must not encode an H.264 copy');
  checks.push('local-source-decoding-no-video-encoding-no-upload-no-ai');

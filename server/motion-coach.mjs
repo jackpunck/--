@@ -2,8 +2,10 @@ import {HttpError} from './providers.mjs';
 import {compactMotionAnalysis, MOTION_COACH_LIMITS} from '../public/motion-contract.js';
 import {validateMotionPoseData, validateFullMotionAnalysis} from '../public/motion-pose-data.js';
 import {completeFullMotionCoach} from './motion-coach-full.mjs';
+import {completeTemporalMotionCoach} from './motion-coach-temporal.mjs';
+import {completeVisualMotionCoach} from './motion-coach-visual.mjs';
 
-export const MOTION_COACH_REQUEST_BYTES = 24 * 1024 * 1024;
+export const MOTION_COACH_REQUEST_BYTES = 40 * 1024 * 1024;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 
 function imageDimensions(bytes, type) {
@@ -32,6 +34,7 @@ function imageDimensions(bytes, type) {
 
 /** Frames are transient request data: this endpoint never creates attachments. */
 export function validateMotionCoachRequest(body) {
+  if(body?.reviewMode!==undefined&&!['full','efficient','temporal'].includes(body.reviewMode))throw new HttpError(400,'动作评估模式无效。');
   if(body?.stream!==undefined&&typeof body.stream!=='boolean')throw new HttpError(400,'动作评价进度设置无效。');
   if(!body||typeof body!=='object'||Array.isArray(body)||!finite(body.duration)||body.duration<=0||body.duration>120)throw new HttpError(400,'请提供 120 秒以内视频的有效时长。');
   if(!body.poseData||!body.fullAnalysis)throw new HttpError(400,'请刷新页面并重新提取完整骨架数据后评估。');
@@ -39,6 +42,7 @@ export function validateMotionCoachRequest(body) {
   if(Buffer.byteLength(JSON.stringify(body.analysis||{}))>MOTION_COACH_LIMITS.maxAnalysisBytes)throw new HttpError(413,'本地分析摘要过大，请缩短视频或精简摘要。');
   const supplied=body.keyframes??[];
   if(!Array.isArray(supplied)||supplied.length>MOTION_COACH_LIMITS.maxFrames)throw new HttpError(400,'一次最多发送 6 张关键帧。');
+  if(!supplied.length)throw new HttpError(400,'动作评估需要关键截图，请重新提取视频画面。');
   let bytes=0;
   const times=new Set();
   const keyframes=supplied.map(frame=>{
@@ -61,10 +65,12 @@ export function validateMotionCoachRequest(body) {
   if(fullAnalysis.quality.totalFrames!==poseData.frameCount||fullAnalysis.measurements.length!==poseData.frames.length)throw new HttpError(400,'客观测量与骨架帧数不一致，请重新分析当前视频。');
   if(fullAnalysis.measurements.some((row,index)=>row.frameIndex!==index||Math.abs(row.time-poseData.frames[index].time)>0.000001))throw new HttpError(400,'客观测量与骨架时间不一致，请重新分析当前视频。');
   const analysis=compactMotionAnalysis({...body.analysis,quality:fullAnalysis.quality});
-  return {duration:body.duration,analysis,keyframes,poseData,fullAnalysis,...(body.stream===true?{stream:true}:{})};
+  return {duration:body.duration,analysis,keyframes,poseData,fullAnalysis,...(body.reviewMode?{reviewMode:body.reviewMode}:{}),...(body.stream===true?{stream:true}:{})};
 }
 
-/** One complete observation pipeline; old scored summaries are no longer evaluated. */
+/** The UI defaults to visual evidence; detailed observation modes remain explicit. */
 export async function completeMotionCoach(options){
+  if(options.input?.reviewMode==='efficient')return completeVisualMotionCoach(options);
+  if(options.input?.reviewMode==='temporal')return completeTemporalMotionCoach(options);
   return completeFullMotionCoach(options);
 }

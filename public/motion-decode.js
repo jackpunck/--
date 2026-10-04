@@ -1,5 +1,6 @@
 // Runs only inside the pose worker. MP4Box parses samples; WebCodecs decodes
-// sequentially. Output is consumed synchronously, so VideoFrames never queue up.
+// sequentially. A bounded queue gives asynchronous inference backpressure while
+// closing native VideoFrames as soon as their selected pixels are copied.
 import { createFile, DataStream, Endianness } from './vendor/mp4box/mp4box.all.mjs';
 
 export function selectSampleTargets(samples, { duration, fps, offset = 0 }) {
@@ -75,32 +76,57 @@ export async function prepareMp4(file, { width, height, duration, sampleFps, max
   if (parseError || !samples.length || samples.some(sample => sample.description_index !== samples[0].description_index)) return unsupported();
   const targets = selectSampleTargets(samples, { duration, fps: sampleFps, offset });
   const scale = Math.min(1, maxDimension / Math.max(width, height));
-  const canvas = new OffscreenCanvas(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
+  const canvasWidth = Math.max(1, Math.round(width * scale)), canvasHeight = Math.max(1, Math.round(height * scale));
+  const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
   const context = canvas.getContext('2d');
   if (!context) return unsupported();
+  canvas.width = canvas.height = 1;
   return {
     codec: config.codec,
     sourceFps,
     async run(onFrame) {
       let failure, completed = 0, decoder, processingMs = 0;
+      const pending = [];
+      let processing, active = 0;
       const waiters = new Set(), wake = () => { for (const resolve of waiters) resolve(); waiters.clear(); };
       const started = performance.now();
+      const consume = async () => {
+        while (pending.length && !failure) {
+          const item = pending.shift();
+          active = 1;
+          const processingStarted = performance.now();
+          try {
+            for (const target of item.selected) {
+              if (failure) break;
+              await onFrame(item.canvas, { ...target, sourceTime: item.timestamp / 1e6 });
+              completed++;
+            }
+          } catch (error) { failure = error; }
+          finally {
+            processingMs += performance.now() - processingStarted;
+            item.canvas.width = item.canvas.height = 1;
+            active = 0; wake();
+          }
+        }
+      };
       decoder = new VideoDecoder({
         output(frame) {
-          let closed = false;
           try {
             if (failure) return;
             const timestamp = frame.timestamp;
             const selected = targets.get(timestamp);
             if (!selected) return;
-            context.drawImage(frame, 0, 0, canvas.width, canvas.height);
-            frame.close(); closed = true;
-            const processingStarted = performance.now();
-            for (const target of selected) { onFrame(canvas, { ...target, sourceTime: timestamp / 1e6 }); completed++; }
-            processingMs += performance.now() - processingStarted;
+            // The feeder normally pauses at two pending images. A decoder may
+            // deliver a burst of reordered frames already held internally; cap
+            // that burst too and let the caller use its HTMLVideo fallback.
+            if (pending.length + active >= 8) throw new Error('顺序解码等待帧过多，请改用浏览器逐帧解码。');
+            const image = new OffscreenCanvas(canvasWidth, canvasHeight);
+            image.getContext('2d').drawImage(frame, 0, 0, canvasWidth, canvasHeight);
+            pending.push({ canvas: image, timestamp, selected });
             targets.delete(timestamp);
+            if (!active) processing = consume();
           } catch (error) { failure = error; wake(); }
-          finally { if (!closed) frame.close(); }
+          finally { frame.close(); }
         },
         error(error) { failure = error; wake(); },
       });
@@ -108,7 +134,7 @@ export async function prepareMp4(file, { width, height, duration, sampleFps, max
       try {
         decoder.configure(config);
         for (let index = 0; index < samples.length; index++) {
-          while (!failure && decoder.decodeQueueSize >= 2) await new Promise(resolve => waiters.add(resolve));
+          while (!failure && (decoder.decodeQueueSize >= 2 || pending.length + active >= 2)) await new Promise(resolve => waiters.add(resolve));
           if (failure) throw failure;
           const sample = samples[index];
           decoder.decode(new EncodedVideoChunk({
@@ -121,10 +147,19 @@ export async function prepareMp4(file, { width, height, duration, sampleFps, max
           sample.data = undefined;
         }
         await decoder.flush();
+        await processing;
         if (failure) throw failure;
         if (targets.size || completed !== Math.ceil(duration * sampleFps)) throw new Error('顺序解码未覆盖所有采样点。');
         return { decodeMs: Math.max(0, performance.now() - started - processingMs), codec: config.codec };
-      } finally { if (decoder.state !== 'closed') decoder.close(); samples.length = 0; }
+      } catch (error) {
+        failure ||= error;
+        throw error;
+      } finally {
+        if (decoder.state !== 'closed') decoder.close();
+        await processing;
+        for (const item of pending) item.canvas.width = item.canvas.height = 1;
+        pending.length = samples.length = 0;
+      }
     },
   };
   } finally {

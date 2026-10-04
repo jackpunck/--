@@ -27,7 +27,9 @@ export function reconcileTasks(providers, tasks, taskModels, editedId, {defaultT
     if (!nextTasks[task] && edited && defaultTasks.includes(task)) {
       const models = enabledModels(edited);
       const preferred=models.find(model => model.id === edited.model) || models[0];
-      const candidate = task === 'meal' ? models.find(model => model.vision === true) : preferred;
+      const firstVisual = models.find(model => model.vision === true);
+      const candidate = task === 'motion' ? (preferred?.vision === true ? preferred : firstVisual)
+        : task === 'meal' ? firstVisual : preferred;
       if (candidate) {nextTasks[task] = edited.id;nextModels[task] = candidate.id;}
     }
   }

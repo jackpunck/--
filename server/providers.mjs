@@ -324,7 +324,7 @@ export async function complete({ provider, messages, purpose, fetchImpl, timeout
   // Complete motion observations need a short verdict, not an extended reasoning
   // response. This option is specific to the official DeepSeek API and models.
   if(purpose==='motion-coach'&&provider.protocol==='openai'&&new URL(provider.baseUrl).hostname==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(provider.model)){
-    body.thinking={type:'disabled'};body.response_format={type:'json_object'};body.max_tokens=2400;
+    body.thinking={type:'disabled'};body.response_format={type:'json_object'};body.max_tokens=2400;body.temperature=0;
   }
   // Daily suggestions use already calculated nutrition and a bounded JSON response.
   // Only send this vendor option to the official models that support it.

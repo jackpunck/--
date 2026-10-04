@@ -18,12 +18,12 @@ function restore(packets) {
 }
 
 function frame(index) {
-  return { time: index / 15, image: Array.from({ length: 33 }, (_, joint) => [joint / 33, index / 1800, -0.12456789012345, 0.98765432123456, null]), world: [], target: { status: index % 19 ? 'locked' : 'lost', confidence: index % 19 ? 0.9 : 0 } };
+  return { time: index / 15, wholebodyLandmarks: Array.from({ length: 133 }, (_, joint) => [joint / 133, index / 1800, 0.98765432123456]), landmarks: [], target: { status: index % 19 ? 'locked' : 'lost', confidence: index % 19 ? 0.9 : 0 } };
 }
 
 test('all 1800 observations and measurements reach bounded packets without sampling or rounding', () => {
   const input = {
-    poseData: { version: 'full-test', sampleFps: 15, duration: 120, pointFields: ['x', 'y', 'z', 'visibility', 'presence'], frames: Array.from({ length: 1800 }, (_, index) => frame(index)) },
+    poseData: { version: 'full-test', sampleFps: 15, duration: 120, wholebodyPointFields: ['x', 'y', 'score'], frames: Array.from({ length: 1800 }, (_, index) => frame(index)) },
     fullAnalysis: { quality: { reasons: ['MISSING_OR_UNCERTAIN_LANDMARKS'], usableRatio: 0.812345678901234 }, measurements: Array.from({ length: 1800 }, (_, frameIndex) => ({frameIndex, time: frameIndex / 15, left: {elbowAngle: 72.9876543212345 + frameIndex / 111, kneeAngle: null}, right: {elbowAngle: frameIndex / 31}})) },
     analysis: { measurements: [{ index: 'intentionally-small-summary' }] }, keyframes: [{ data: 'not-part-of-packets' }],
   };
@@ -77,12 +77,14 @@ function observedFrame(index) {
   const landmarks = Array.from({length: 33}, (_, joint) => [
     Math.fround((joint + index + 0.123456789) / 37),
     Math.fround((joint * 17 + index + 0.987654321) / 571),
-    Math.fround(-(joint * 7 + index + 0.137) / 199),
     Math.fround((joint + 67) / 100),
-    null,
   ]);
-  const worldLandmarks = landmarks.map((point, joint) => [Math.fround(point[0] - 0.5), Math.fround(point[1] - 0.5), Math.fround(joint / 999), point[3], null]);
-  return {time: index / 15, sourceTime: index / 25, landmarks, worldLandmarks, subjectTracking: {status: 'locked', trackId: 'subject-1', confidence: 0.9876543212345}};
+  const wholebodyLandmarks = Array.from({length: 133}, (_, joint) => [
+    Math.fround((joint + index + 0.123456789) / 137),
+    Math.fround((joint * 17 + index + 0.987654321) / 1571),
+    Math.fround(2 + (joint + index) / 399),
+  ]);
+  return {time: index / 15, sourceTime: index / 25, landmarks, wholebodyLandmarks, subjectTracking: {status: 'locked', trackId: 'subject-1', confidence: 0.9876543212345}};
 }
 
 const decodePackets = packets => JSON.parse(JSON.stringify(packets)).map(packet => ({...packet, blocks: packet.blocks.map(decodeMotionCoachBlock)}));
@@ -99,8 +101,9 @@ test('readable pose tables preserve every original double after JSON transport w
   assert.deepEqual(packed.flatMap(packet => packet.frameIndices), Array.from({length: 168}, (_, index) => index));
   const first = packed.flatMap(packet => packet.blocks).find(block => block.encoding);
   assert.equal(first.encoding, MOTION_COACH_POSE_ENCODING);
-  assert.equal(first.value.landmarks.constants.presence, null);
-  assert.equal(first.value.worldLandmarks.shared.visibility, 'landmarks');
+  assert(first.value.wholebodyLandmarks.columns.includes('score'));
+  assert.equal(first.value.wholebodyLandmarks.tupleLength, 3);
+  assert.equal(first.value.wholebodyLandmarks.rows.length, 133);
   assert(first.value.landmarks.float32.includes('x'));
   assert.notEqual(first.value.landmarks.rows[0][0], input.poseData.frames[0].landmarks[0][0]);
   assert.equal(Math.fround(first.value.landmarks.rows[0][0]), input.poseData.frames[0].landmarks[0][0]);
@@ -117,10 +120,9 @@ test('mixed float64 columns, null observations, distinct confidence values and m
   first.landmarks[0][0] = 0.12345678901234567; // Not representable in binary32.
   first.landmarks[4][2] = null;
   first.landmarks[7] = null;
-  first.worldLandmarks[7] = null;
-  first.worldLandmarks[8][3] = 0.12345678901234567; // Not shared with image.
+  first.wholebodyLandmarks[8][2] = 0.12345678901234567; // Raw score has independent precision.
   for (const point of first.landmarks) if (point) point.push(point[2] === null ? 4 : 0);
-  const frames = [first, {time: 1, landmarks: null, worldLandmarks: []}, {time: 2, landmarks: []}, observedFrame(3)];
+  const frames = [first, {time: 1, landmarks: null, wholebodyLandmarks: []}, {time: 2, landmarks: []}, observedFrame(3)];
   // Different tuple lengths cannot be mistaken for missingMask = 0.
   frames[3].landmarks[2].push(0);
   const input = {poseData: {frames}, fullAnalysis: {measurements: [], unknown: null}};
@@ -128,9 +130,9 @@ test('mixed float64 columns, null observations, distinct confidence values and m
   assert.deepEqual(restore(decodePackets(packets)), input);
   const block = packets.flatMap(packet => packet.blocks).find(block => block.path[2] === 0);
   assert(!block.value.landmarks.float32.includes('x'), 'A float64 value cannot be rounded to binary32');
-  assert(!block.value.worldLandmarks.shared?.visibility);
+  assert(!block.value.wholebodyLandmarks.float32?.includes('score'));
   assert.equal(block.value.landmarks.rows[7], null);
-  assert.equal(block.value.landmarks.tupleLength, 6);
+  assert.equal(block.value.landmarks.tupleLength, 4);
   assert.deepEqual(decodeMotionCoachBlock({path: ['other'], value: [1, null]}), {path: ['other'], value: [1, null]});
   assert.throws(() => decodeMotionCoachBlock({encoding: 'unknown'}), /不支持/);
 });
@@ -141,7 +143,7 @@ test('typed coordinate transport retains binary32 extremes and signed zeros', ()
   frame.landmarks[1][0] = largest;
   frame.landmarks[2][0] = -smallest;
   frame.landmarks[3][0] = -0;
-  for (const point of frame.worldLandmarks) point[2] = -0;
+  for (const point of frame.wholebodyLandmarks) point[2] = -0;
   const input = {poseData: {frames: [frame]}, fullAnalysis: {}};
   assert.deepEqual(restore(decodePackets(planMotionCoachBatches(input, {compactPose: true}))), input);
 });
@@ -153,4 +155,20 @@ test('small budgets split original fields without leaving table metadata in anot
   assert(packets.every(packet => JSON.stringify(packet).length <= 1024));
   assert.deepEqual(restore(decodePackets(packets)), input);
   assert(packets.flatMap(packet => packet.blocks).every(block => !block.encoding));
+});
+
+test('matching poses and measured angles stay in the same bounded packet', () => {
+  const input = {poseData: {frames: Array.from({length: 100}, (_, index) => observedFrame(index))},
+    fullAnalysis: {measurements: Array.from({length: 100}, (_, index) => ({frameIndex: index, time: index / 15, left: {elbowAngle: index + .125}}))}};
+  const packets = planMotionCoachBatches(input, {compactPose: true});
+  assert(packets.length > 1);
+  for (const packet of packets) {
+    assert.deepEqual(packet.frameIndices, packet.measurementIndices);
+    assert(JSON.stringify(packet).length <= 64000);
+    for (const index of packet.frameIndices) {
+      const posePosition = packet.blocks.findIndex(block => block.path[0] === 'poseData' && block.path[2] === index);
+      assert.deepEqual(packet.blocks[posePosition + 1].path, ['fullAnalysis', 'measurements', index]);
+    }
+  }
+  assert.deepEqual(restore(decodePackets(packets)), input);
 });

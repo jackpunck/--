@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectMotionEvidenceFrames, summarizeMotionAnalysis, buildMotionEvidence, evidenceCropRegion } from '../public/motion-evidence.js';
+import { selectMotionEvidenceFrames, summarizeMotionAnalysis, buildMotionEvidence, evidenceCropRegion, evidenceSequenceCrop } from '../public/motion-evidence.js';
 
 const frames = Array.from({ length: 151 }, (_, index) => ({ time: index / 15, sourceTime: index / 15, landmarks: [] }));
 
@@ -9,8 +9,8 @@ test('evidence covers video time and observed angle extrema without judging post
  const chosen=selectMotionEvidenceFrames(frames,observations);
  assert.equal(chosen.length,6);assert.equal(chosen[0].time,0);assert.equal(chosen.at(-1).time,10);assert(chosen.some(item=>item.time===5));
  const low=chosen.find(item=>item.time===2),high=chosen.find(item=>item.time===8);
- assert.equal(low.requestedTime,2.023);assert.equal(low.poseTime,2);assert.equal(low.sourceTime,2);
- assert(low.reasons.includes('left.elbowAngle 最小观测'));assert(high.reasons.includes('left.elbowAngle 最大观测'));
+ assert.equal(low.poseTime,2);assert.equal(low.sourceTime,2);
+ assert(low.reasons.includes('姿态与时序覆盖'));assert(high.reasons.includes('姿态与时序覆盖'));
 });
 
 test('evidence normalizes unsorted duplicate timestamps and bounds image count', () => {
@@ -19,6 +19,14 @@ test('evidence normalizes unsorted duplicate timestamps and bounds image count',
   assert.deepEqual(chosen.map(frame => frame.time), [0, 80 / 15, 10]);
   assert.equal(selectMotionEvidenceFrames(frames, {}, { maxImages: 2 }).length, 2);
   assert.throws(() => selectMotionEvidenceFrames([]), /分析帧/);
+});
+
+test('a single-frame pose glitch does not displace a sustained movement extreme', () => {
+  const measurements=frames.map((frame,index)=>({time:frame.time,left:{kneeAngle:index===30?0:index>=90&&index<=100?65:165}}));
+  const chosen=selectMotionEvidenceFrames(frames,{measurements});
+  assert(chosen.some(item=>item.time>=6&&item.time<=100/15),'retains the real bent-knee phase');
+  assert(!chosen.some(item=>item.time===2),'rejects the isolated erroneous angle as an extreme');
+  assert(chosen.some(item=>item.time===0)&&chosen.some(item=>item.time===10),'keeps temporal scene coverage');
 });
 
 test('old scores and rule failures cannot bias picture selection',()=>{
@@ -46,6 +54,13 @@ test('target crop includes context and maps normalized original-image coordinate
   assert.deepEqual(evidenceCropRegion(null), { xMin: 0, yMin: 0, xMax: 1, yMax: 1 });
 });
 
+test('a sequence crop retains both movement extremes in one fixed camera region', () => {
+ const boxes=[{xMin:.2,yMin:.2,xMax:.5,yMax:.8},{xMin:.4,yMin:.4,xMax:.7,yMax:.95}];
+ const crop=evidenceSequenceCrop(boxes.map(bbox=>({subjectTracking:{bbox}})));
+ assert(crop.xMin<.2&&crop.xMax>.7&&crop.yMin<.2&&crop.yMax>=.95);
+ assert.deepEqual(evidenceSequenceCrop([]),evidenceCropRegion(null));
+});
+
 test('extracted evidence retains two complete scenes for equipment and keeps the tracked target', async () => {
   const previousDocument = globalThis.document, draws = [];
   class Video extends EventTarget {
@@ -71,6 +86,9 @@ test('extracted evidence retains two complete scenes for equipment and keeps the
     assert(result.images.length <= 6);
     assert(result.images.every(image => image.subjectTracking.trackId === 'target'));
     assert(result.images.some(image => image.crop.xMin > 0), 'other frames retain detail crops');
+    const details=result.images.filter(image=>image.framing==='target-detail');
+    assert(details.every(image=>JSON.stringify(image.crop)===JSON.stringify(details[0].crop)), 'fixed detail crop does not invent body translation');
+    assert(scenes.every(image=>image.width===1000), 'full scene preserves available subject detail instead of shrinking to 640');
     assert.equal(draws.filter(([x, y, width, height]) => x === 0 && y === 0 && width === 1000 && height === 1000).length, 2);
     assert.equal(result.summary.evidenceFrames.filter(frame => frame.framing === 'equipment-context').length, 2);
   } finally { globalThis.document = previousDocument; }
@@ -83,6 +101,30 @@ test('summary contains only observation metadata without duplicated measurements
  assert.deepEqual(Object.keys(result.quality).sort(),['reasons','sourceFps','targetCoverage','totalFrames','usableRatio','validFrames'].sort());
  for(const key of ['score','reps','checks','issues','exerciseId','measurements'])assert.equal(result[key],undefined,key);
  assert(!/landmarks|private-name|data:image|old rule/.test(JSON.stringify(result)));
+});
+
+test('repeated source frames cannot become multiple visual evidence times when presentation callbacks are unavailable',async()=>{
+ const previous=globalThis.document;
+ class Video extends EventTarget{
+  duration=.5;videoWidth=200;videoHeight=200;readyState=4;time=0;
+  get currentTime(){return this.time;}
+  set currentTime(value){this.time=value;queueMicrotask(()=>this.dispatchEvent(new Event('seeked')));}
+  load(){if(this.src)queueMicrotask(()=>this.dispatchEvent(new Event('loadedmetadata')));}
+  pause(){} removeAttribute(){this.src='';}
+ }
+ globalThis.document={createElement(tag){
+  if(tag==='video')return new Video();
+  return{width:0,height:0,getContext:()=>({drawImage(){}}),toBlob:callback=>callback(new Blob(['image'],{type:'image/jpeg'}))};
+ }};
+ try{
+  const pipeline={duration:.5,width:200,height:200,sampleFps:7.5,frames:[0,1/7.5,2/7.5,3/7.5].map(time=>({time,sourceTime:0,landmarks:[]}))};
+  const result=await buildMotionEvidence(new File(['video'],'low-fps.mp4',{type:'video/mp4'}),pipeline,{});
+  assert.equal(result.images.length,1);
+  assert.equal(result.images[0].time,0);
+  assert.equal(result.images[0].imageTime,null,'do not invent a presentation callback result');
+  assert.equal(result.images[0].timePrecision,'pose-source-pts');
+  assert.equal(result.images[0].frameMappings.length,4);
+ }finally{globalThis.document=previous;}
 });
 
 test('pre-aborted evidence extraction never accesses video resources', async () => {

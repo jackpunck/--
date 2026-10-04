@@ -1,3 +1,4 @@
+import {toRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
@@ -20,16 +21,15 @@ const parseCall = options => {
 
 function requestFixture({frameCount = 75} = {}) {
   const duration = Math.max(8, frameCount / 15);
-  const pipeline = {duration, width: 1920, height: 1080, sampleFps: 15, sourceFps: 30, frames: Array.from({length: frameCount}, (_, frameIndex) => ({
+  const pipeline = toRtmwPipeline({duration, width: 1920, height: 1080, sampleFps: 15, sourceFps: 30, frames: Array.from({length: frameCount}, (_, frameIndex) => ({
     time: frameIndex / 15, sourceTime: frameIndex / 15, personCount: 1,
-    landmarks: Array.from({length: 33}, (_, pointIndex) => ({x: 0.123456789013579 + frameIndex / (frameCount * 1.8) + pointIndex / 331, y: 0.234567891027913 + pointIndex / 167, z: -(pointIndex + frameIndex) / 983 || 0, visibility: 0.9876543210123, presence: null})),
-    worldLandmarks: Array.from({length: 33}, (_, pointIndex) => ({x: -(frameIndex + pointIndex) / 197 || 0, y: (pointIndex + 0.123456789) / 457, z: (frameIndex + pointIndex + 0.987654321) / 983, visibility: 0.9987654321, presence: null})),
-  }))};
+    landmarks: Array.from({length: 33}, (_, pointIndex) => ({x: 0.123456789013579 + frameIndex / (frameCount * 1.8) + pointIndex / 331, y: 0.234567891027913 + pointIndex / 167, visibility: 0.9876543210123})),
+  }))});
   const fullAnalysis = buildFullMotionAnalysis(analyzeMotion(pipeline.frames, pipeline), pipeline);
   const body = {duration, poseData: buildMotionPoseData(pipeline), fullAnalysis, analysis: compactMotionAnalysis(fullAnalysis), keyframes: [{time: 0.25, mimeType: 'image/png', data: png}, {time: 0.75, mimeType: 'image/png', data: png}]};
   const input = validateMotionCoachRequest(body);
   const packets = planMotionCoachBatches(input, {compactPose: true});
-  if (frameCount === 75) assert(packets.length >= 3 && packets.length <= 10, `Fixture should exercise several manageable packets, got ${packets.length}`);
+  if (frameCount === 75) assert(packets.length >= 3 && packets.length <= 30, `Fixture should exercise several manageable packets, got ${packets.length}`);
   return {body, input, packets};
 }
 
@@ -65,7 +65,7 @@ function reconstruct(calls) {
 function assertNoRawData(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
-    assert(!['poseData', 'fullAnalysis', 'landmarks', 'worldLandmarks', 'blocks', 'keyframes', 'coordinates', 'dataUrl'].includes(key), `Response/history leaked raw ${key}`);
+    assert(!['poseData', 'fullAnalysis', 'landmarks', 'wholebodyLandmarks', 'blocks', 'keyframes', 'coordinates', 'dataUrl'].includes(key), `Response/history leaked raw ${key}`);
     assertNoRawData(child);
   }
   assert(!JSON.stringify(value).includes(png), 'Raw picture data must remain transient');
@@ -83,6 +83,7 @@ test('measurement packets retain evidence from the final frame rather than trimm
   const {input} = requestFixture();
   const result = await completeMotionCoach({provider: provider(), input, fetchImpl: async (_url, options) => {
     const call = parseCall(options), output = outputFor(call);
+    if(call.context.stage==='synthesis') output.feedback = [...call.context.data.reviewedParts.flatMap(part => part.report.feedback).filter(item => item.source === 'analysis'), ...output.feedback];
     if(call.context.stage==='full-data'&&call.context.data.measurementIndices.includes(74)) {
       output.feedback.push({title:'末帧肘部控制',status:'improve',source:'analysis',analysisPaths:[['measurements',74,'left','elbowAngle']],evidence:'末帧保留了肘部投影角度，需结合完整动作观察控制。',correction:'下一组控制肘部运动，不要突然伸直。',priority:1});
     }
@@ -109,7 +110,7 @@ test('full coach reviews every raw point and objective measurement without sendi
   assert.deepEqual(reconstruct(calls), {poseData: input.poseData, fullAnalysis: input.fullAnalysis}, 'Complete original values survive every packet without rounding or omitted tail frames');
   const rebuilt = reconstruct(calls);
   assert.deepEqual(rebuilt.poseData.frames[0].landmarks[0], input.poseData.frames[0].landmarks[0]);
-  assert.deepEqual(rebuilt.poseData.frames.at(-1).worldLandmarks.at(-1), input.poseData.frames.at(-1).worldLandmarks.at(-1));
+  assert.deepEqual(rebuilt.poseData.frames.at(-1).wholebodyLandmarks.at(-1), input.poseData.frames.at(-1).wholebodyLandmarks.at(-1));
   assert.deepEqual(rebuilt.fullAnalysis.measurements[74], input.fullAnalysis.measurements[74]);
   assert.deepEqual(Object.keys(input.analysis).sort(), ['evidenceFrames', 'quality']);
   assert.equal(result.coverage.complete, true);
@@ -135,7 +136,7 @@ test('full coach reviews every raw point and objective measurement without sendi
 });
 
 test('a small complete clip needs only one model call containing all pose, measurements and images', async () => {
-  const {input, packets} = requestFixture({frameCount: 8}), calls = [];
+  const {input, packets} = requestFixture({frameCount: 3}), calls = [];
   assert.equal(packets.length, 1);
   const result = await completeMotionCoach({provider: provider(), input, fetchImpl: async (_url, options) => {
     const call = parseCall(options); calls.push(call);
@@ -150,24 +151,62 @@ test('a small complete clip needs only one model call containing all pose, measu
   assertNoLocalJudgments(result); // Ignore legacy fields even if an upstream model supplies them.
 });
 
-test('text-only full coach receives every data packet with no images or visual evidence claims', async () => {
+test('text-only full coach is rejected before any provider call', async () => {
   const {input} = requestFixture(), calls = [];
-  const result = await completeMotionCoach({provider: provider(false), input, fetchImpl: async (_url, options) => {
+  await assert.rejects(completeMotionCoach({provider: provider(false), input, fetchImpl: async (_url, options) => {
     const call = parseCall(options); calls.push(call);
-    return modelResponse(outputFor(call, {visual: false}));
+    return modelResponse(outputFor(call));
+  }}), error => error.status === 400 && /视觉|图片/.test(error.message));
+  assert.equal(calls.length, 0);
+});
+
+test('all six key screenshots and their timestamps reach the configured visual model intact', async () => {
+  const {body} = requestFixture({frameCount: 3}), calls = [];
+  body.keyframes = Array.from({length: 6}, (_, index) => ({time: index / 3, mimeType: 'image/png', data: png}));
+  const input = validateMotionCoachRequest(body);
+  await completeMotionCoach({provider: provider(), input, fetchImpl: async (_url, options) => {
+    const call = parseCall(options); calls.push(call); const output=outputFor(call);
+    output.feedback.forEach(item=>{item.evidenceTimes=[input.keyframes[0].time];});
+    return modelResponse(output);
   }});
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].context.frames, input.keyframes.map(({time, mimeType}, imageIndex) => ({imageIndex, time, mimeType})));
+  assert.deepEqual(calls[0].body.messages[1].content.filter(part => part.type === 'image_url').map(part => part.image_url.url),
+    input.keyframes.map(frame => `data:${frame.mimeType};base64,${frame.data}`));
   assert.deepEqual(reconstruct(calls), {poseData: input.poseData, fullAnalysis: input.fullAnalysis});
-  assert(!calls.some(call => call.context.stage === 'context'));
-  assert.equal(calls.at(-1).context.stage, 'synthesis');
-  for (const call of calls) {
-    assert.deepEqual(call.context.frames, []);
-    assert.equal(call.body.messages[1].content.filter(part => part.type === 'image_url').length, 0);
-    assert(!JSON.stringify(call.body).includes(png));
-  }
-  assert(result.feedback.length > 0);
-  assert(result.feedback.every(item => item.source === 'pose'));
-  assert.equal(result.action.status, 'unknown');
-  assertNoRawData(result);
+});
+
+test('an uncertain review does not become standard merely because no concrete problem was returned', async () => {
+  const {input}=requestFixture({frameCount:3});
+  Object.assign(input.fullAnalysis.quality,{targetCoverage:.45,usableRatio:.45,sourceFps:4,reasons:['TARGET_NOT_LOCKED']});
+  const result=await completeMotionCoach({provider:provider(),input,fetchImpl:async()=>modelResponse({
+    action:{status:'unknown'},verdict:{status:'uncertain',summary:'二维骨架且目标覆盖率约45%，暂时无法判断。'},feedback:[],limitations:[],
+  })});
+  assert.equal(result.verdict.status,'uncertain');
+  assert.doesNotMatch(result.verdict.summary,/^动作相对标准/);
+  assert.deepEqual(result.feedback,[],'No positive findings or problems are fabricated');
+});
+
+test('AI output errors and rejected problem references cannot masquerade as no problems found', async () => {
+  const {input}=requestFixture({frameCount:3});
+  const invalidOutputs=[
+    {feedback:[]},
+    {verdict:{status:'needs-improvement'},feedback:[]},
+    {verdict:{status:'standard'},feedback:[{...feedback([999],false),evidence:'髋部出现明确偏移。'}]},
+    {verdict:{status:'needs-improvement'},feedback:[{...feedback([0],false),correction:''}]},
+  ];
+  for(const output of invalidOutputs)await assert.rejects(completeMotionCoach({provider:provider(),input,fetchImpl:async()=>modelResponse(output)}),error=>error.status===502);
+});
+
+test('an intermediate problem claim without details fails before it can be summarized as standard',async()=>{
+  const {input}=requestFixture(),calls=[];
+  await assert.rejects(completeMotionCoach({provider:provider(),input,fetchImpl:async(_url,options)=>{
+    const call=parseCall(options);calls.push(call);
+    return modelResponse(call.context.stage==='full-data'
+      ?{verdict:{status:'needs-improvement'},feedback:[]}
+      :{verdict:{status:'standard'},feedback:[]});
+  }}),error=>error.status===502&&/具体问题/.test(error.message));
+  assert.equal(calls.length,1);assert.equal(calls[0].context.stage,'full-data');
 });
 
 test('final synthesis can inspect its images but cannot invent uncited pose, measurement or absent image evidence', async () => {

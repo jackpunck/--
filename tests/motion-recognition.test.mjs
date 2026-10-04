@@ -4,7 +4,7 @@ import * as catalogue from '../public/motion-catalog.js';
 import {compactMotionAnalysis, confirmedMotionAction, motionCoachActionCatalog, sanitizeMotionCoachResponse, mergeCoachAssessment} from '../public/motion-contract.js';
 
 const teachingIds = ['squat','pushup','curl','bench','incline-bench','chest-press','lat-pulldown','row','dumbbell-row','pullup','shoulder-press','lateral-raise','reverse-fly','triceps','overhead-triceps','hammer-curl','goblet-squat','rdl','lunge','leg-curl','leg-extension','glute-bridge','plank','crunch','calf-raise'];
-const additionalIds = ['barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row'];
+const additionalIds = ['barbell-deadlift','bodyweight-pullup','barbell-bench','incline-barbell-bench','smith-bench','incline-smith-bench','barbell-row','machine-row','chest-supported-row'];
 const frames = [{time: 1}, {time: 2}, {time: 3}];
 const action = extra => ({exerciseId: 'barbell-bench', name: '杠铃卧推', family: 'horizontal-press', status: 'identified', confidence: 'high', evidenceTimes: [1, 2], evidence: '目标仰卧于凳面，双手将同一根杠铃推离胸部。', ...extra});
 const sanitize = (value, options = {}) => sanitizeMotionCoachResponse(value, {mode: 'visual', keyframes: frames, ...options});
@@ -18,8 +18,8 @@ function assertNoLegacyFields(value) {
 }
 
 test('catalogue preserves teaching names and adds identity hints without evaluation rules', () => {
-  assert.equal(catalogue.motionExercises.length, 32);
-  assert.equal(new Set(catalogue.motionExercises.map(item => item.id)).size, 32);
+  assert.equal(catalogue.motionExercises.length, 34);
+  assert.equal(new Set(catalogue.motionExercises.map(item => item.id)).size, 34);
   assert.deepEqual(catalogue.motionExercises.filter(item => item.hasTeaching).map(item => item.id), teachingIds);
   assert.deepEqual(catalogue.motionExercises.filter(item => !item.hasTeaching).map(item => item.id), additionalIds);
   assert.equal(catalogue.getMotionExercise('bench').name, '哑铃卧推');
@@ -82,6 +82,13 @@ test('analysis navigation includes only bounded quality and picture metadata', (
   assert.equal(result.evidenceFrames[0].subjectTracking.raw, undefined);
   assert.deepEqual(result.evidenceFrames[0].frameMappings, [{requestedTime: 1, poseTime: 1, sourceTime: 1.01}]);
   assertNoLegacyFields(result);
+});
+
+test('pose source presentation timestamps retain their precision label without admitting arbitrary labels', () => {
+  const evidenceFrames = ['source-pts', 'pose-source-pts', 'seek-target', 'invented'].map(timePrecision => ({time: 1, sourceTime: 1.01, poseTime: 1, timePrecision}));
+  const result = compactMotionAnalysis({evidenceFrames});
+  assert.deepEqual(result.evidenceFrames.map(frame => frame.timePrecision), ['source-pts', 'pose-source-pts', 'seek-target', undefined]);
+  assert(result.evidenceFrames.every(frame => frame.sourceTime === 1.01));
 });
 
 test('saved reports are an allowlist and retain every validated feedback reference and coverage count', () => {
