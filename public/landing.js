@@ -4,7 +4,7 @@ export function landingMarkup(auth, icon) {
   return `<div class="landing" id="landing-top">
     <a class="landing-skip" href="#auth-entry">跳到登录与注册</a>
     <header class="landing-nav">
-      <a class="landing-brand" href="#landing-top" aria-label="循序首页">循序<span>XUNXU</span></a>
+      <a class="landing-brand" href="#landing-top" aria-label="循序首页"><img class="landing-logo" src="/assets/logo.svg" alt="" width="43" height="43">循序<span>XUNXU</span></a>
       <div class="landing-nav-actions"><button type="button" class="landing-motion" aria-pressed="false" aria-label="暂停动态效果" title="暂停动态效果">Ⅱ</button><button type="button" class="landing-login" data-action="auth-jump" data-mode="login">登录账号 <i></i></button></div>
       <span class="landing-scroll-progress" aria-hidden="true"></span>
     </header>
@@ -30,7 +30,7 @@ export function landingMarkup(auth, icon) {
             <div class="project-meta"><p>饮食记录</p><button type="button" data-action="auth-jump" data-mode="register"><h3 id="landing-nutrition-title">吃了什么，随手记下。</h3>${arrow}</button><p class="project-description">用照片或文字记录餐食，核对份量，了解当天的营养摄入。</p></div>
           </article>
           <article class="landing-project" id="landing-companion">
-            <div class="project-visual project-chat landing-reveal"><span class="project-overline">03 / AI 陪伴</span><div class="chat-orb" aria-hidden="true">✳</div><div class="demo-conversation" aria-live="polite"><p class="demo-question">这周只有三天时间，可以怎么练？</p><div class="demo-answer"><span>循序 AI</span><h3>从你的时间出发。</h3><p>结合目标、可用器械与训练记录，<br>一起安排适合你的训练日程。</p><div class="demo-chat-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div><button type="button" class="demo-cycle" data-demo="chat">换个问题 ${arrow}</button><span class="project-note">对话示例 · 连接自己的 AI 服务后使用</span></div>
+            <div class="project-visual project-chat landing-reveal"><span class="project-overline">03 / AI 陪伴</span><div class="chat-orb" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="220" height="220"></div><div class="demo-conversation" aria-live="polite"><p class="demo-question">这周只有三天时间，可以怎么练？</p><div class="demo-answer"><span>循序 AI</span><h3>从你的时间出发。</h3><p>结合目标、可用器械与训练记录，<br>一起安排适合你的训练日程。</p><div class="demo-chat-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div><button type="button" class="demo-cycle" data-demo="chat">换个问题 ${arrow}</button><span class="project-note">对话示例 · 连接自己的 AI 服务后使用</span></div>
             <div class="project-meta"><p>AI 对话</p><button type="button" data-action="auth-jump" data-mode="register"><h3 id="landing-companion-title">有问题，一起理清楚。</h3>${arrow}</button><p class="project-description">把目标、时间和困惑告诉 AI，一起讨论下一步怎么安排。</p></div>
           </article>
           <article class="landing-project" id="landing-knowledge">
@@ -39,7 +39,7 @@ export function landingMarkup(auth, icon) {
           </article>
         </div>
       </section>
-    </main><footer class="landing-footer"><a class="landing-brand" href="#landing-top">循序<span>XUNXU</span></a><p>安排好今天，记住每一点进步。</p><a href="#landing-top">回到顶部 ${arrow}</a><div>© ${new Date().getFullYear()} 循序 · AI 健身助手</div></footer>
+    </main><footer class="landing-footer"><a class="landing-brand" href="#landing-top" aria-label="循序首页"><img class="landing-logo" src="/assets/logo.svg" alt="" width="43" height="43">循序<span>XUNXU</span></a><p>安排好今天，记住每一点进步。</p><a href="#landing-top">回到顶部 ${arrow}</a><div>© ${new Date().getFullYear()} 循序 · AI 健身助手</div></footer>
   </div>`;
 }
 
