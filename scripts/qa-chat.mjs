@@ -138,7 +138,7 @@ try {
   assert.equal((await page.locator('.message.assistant pre code').textContent()).trimEnd(), 'const sets = 3;');
   assert.equal(await page.evaluate(() => Boolean(window.qaInjected)), false);
   assert.equal(await page.locator('.message.assistant a[href^="javascript:"]').count(), 0);
-  assert.equal(await page.locator('.message.assistant img').count(), 0);
+  assert.equal(await page.locator('.message.assistant .message-text img').count(), 0);
   assert.equal(await page.locator('.message.assistant a[data-action]').count(), 0);
   assert.equal(await page.locator('.message.assistant a[href="/model/?exercise=squat"]').count(), 1);
   assert.equal(remoteRequests.length, 0);
@@ -197,7 +197,7 @@ try {
   assert.equal(await page.locator('[name="weight-0"]').inputValue(), '25');
   await page.locator('[data-action="close-modal"]').click();
 
-  step = 'mobile composer, Chinese IME and offline Markdown shell'; console.log(step);
+  step = 'mobile composer, Chinese IME and offline reconnection'; console.log(step);
   await nav('chat'); await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#chat-input').fill('中文输入第一行\n第二行');
   await page.locator('#chat-input').dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
@@ -206,12 +206,16 @@ try {
   await shot('mobile-chat-composer');
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   await page.locator('#sync-status').click(); await page.waitForFunction(() => document.querySelector('#sync-status')?.textContent === '已同步');
-  await context.setOffline(true); await page.reload(); await page.locator('#chat-input').waitFor();
+  await context.setOffline(true); await page.reload();
+  // Calculations now require the application server. Offline boot preserves
+  // local records and shows the existing reconnect screen, not the chat shell.
+  await page.getByRole('heading',{name:'等待计算服务器'}).waitFor();
+  await context.setOffline(false);await page.reload();await page.locator('#chat-input').waitFor();
   if (await page.locator('.mobile-menu').isVisible()) await page.locator('.mobile-menu').click();
   await page.locator('#history-list [data-action="open-chat"]').first().click();
   await page.locator('.message.assistant table').waitFor();
   assert.equal(errors.length, 0, errors.join('\n'));
-  const result = { passed: true, dataDir, upstreamAborts, checks: 'on-demand context, compact history, incremental Markdown, XSS, cancellation, create/update/delete persisted, historical workout survives deletion, IME, 390px layout, offline shell', errors };
+  const result = { passed: true, dataDir, upstreamAborts, checks: 'on-demand context, compact history, incremental Markdown, XSS, cancellation, create/update/delete persisted, historical workout survives deletion, IME, 390px layout, offline reconnect preserves chat', errors };
   await writeFile(join(dataDir, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } catch (error) {
   console.error('FAILED STEP:', step);

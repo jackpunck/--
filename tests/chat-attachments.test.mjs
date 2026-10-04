@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AttachmentManager, filesFromTransfer, normalizeChatFile } from '../public/chat-attachments.js';
+import {MOTION_VIDEO_ACCEPT,MOTION_VIDEO_LIMITS} from '../public/motion-media.js';
 
 const file = (name = '训练记录.txt', type = 'text/plain', text = '训练记录', lastModified = 1) => new File([text], name, {type,lastModified});
 const deferred = () => { let resolve,reject; const promise = new Promise((yes,no) => { resolve=yes;reject=no; }); return {promise,resolve,reject}; };
@@ -23,6 +24,48 @@ test('attachment normalization infers supported MIME but rejects executable mark
   assert.equal(normalizeChatFile(file('','image/png')).name,'粘贴图片.png');
   for (const f of [file('x.svg','image/svg+xml'),file('x.html','text/html'),file('empty.txt','text/plain',''),file('x.txt','text/plain','a'.repeat(8*1024*1024+1))]) assert.throws(()=>normalizeChatFile(f));
   assert.throws(()=>normalizeChatFile('C:\\private\\file.txt'));
+});
+
+test('local motion videos share the supported media formats and 200MB bound; ordinary attachments stay at 8MB',()=>{
+  const sized=(name,type,size)=>({name,type,size,arrayBuffer(){throw new Error('Normalization must not read video bytes');}});
+  for(const extension of MOTION_VIDEO_ACCEPT.split(',').filter(value=>value.startsWith('.'))){
+    const value=normalizeChatFile(sized('clip'+extension,'',MOTION_VIDEO_LIMITS.maxBytes));
+    assert(value.type.startsWith('video/'));assert.equal(value.isVideo,true);assert.equal(value.localVideo,true);
+  }
+  for(const type of MOTION_VIDEO_ACCEPT.split(',').filter(value=>value.startsWith('video/'))){
+    assert.equal(normalizeChatFile(sized('recording',type,9*1024*1024)).type,type);
+  }
+  assert.equal(normalizeChatFile(sized('clip.mp4','application/mp4',12)).type,'video/mp4');
+  assert.equal(normalizeChatFile(sized('clip.ogv','application/ogg',12)).type,'video/ogg');
+  assert.equal(normalizeChatFile(sized('clip.MOV','application/octet-stream',12)).type,'video/quicktime');
+  assert.throws(()=>normalizeChatFile(sized('clip.mp4','video/mp4',MOTION_VIDEO_LIMITS.maxBytes+1)),/200 MB/);
+  assert.throws(()=>normalizeChatFile(sized('doc.pdf','application/pdf',8*1024*1024+1)),/8 MB/);
+  assert.throws(()=>normalizeChatFile(sized('unknown.bin','video/unsupported',12)),/请选择/);
+  assert.throws(()=>normalizeChatFile(sized('empty.mp4','video/mp4',0)));
+  assert.throws(()=>normalizeChatFile(sized('clip.mp4','video/mp4',-1)));
+});
+
+test('video preparation creates no image preview and preserves local references for follow-up after commit',async()=>{
+  const original=URL.createObjectURL,prepared=[],removed=[];URL.createObjectURL=()=>{throw new Error('Video must not generate an image preview');};
+  try{
+    const manager=new AttachmentManager({upload:async(f,{metadata,ownerKey})=>{prepared.push({f,metadata,ownerKey});return{id:'local-video:one',...metadata};},removeRemote:async item=>removed.push(item.id)});
+    const clip=file('squat.mp4','video/mp4');manager.add('u:chat',[clip,clip]);await manager.whenIdle();
+    assert.equal(prepared.length,1);assert.equal(prepared[0].metadata.localVideo,true);assert.equal(prepared[0].f,clip);
+    assert.equal(manager.list('u:chat')[0].previewUrl,undefined);
+    const refs=manager.takeReady('u:chat');assert.equal(refs[0].id,'local-video:one');assert.equal(refs[0].localVideo,true);assert.deepEqual(removed,[]);
+    manager.seed('u:followup',refs);assert.equal(manager.list('u:followup')[0].localVideo,true);
+    await manager.remove('u:followup',manager.list('u:followup')[0].id);assert.deepEqual(removed,[]);
+  }finally{URL.createObjectURL=original;}
+});
+
+test('cancelled local-video preparation aborts and releases late references only for the original owner',async()=>{
+  const pending=deferred(),released=[];let signal;
+  const manager=new AttachmentManager({upload:(_file,options)=>{signal=options.signal;return pending.promise;},removeRemote:async(reference,options)=>released.push({reference,owner:options.ownerKey})});
+  const {added:[entry]}=manager.add('user:draft',[file('clip.mp4','video/mp4')]);await Promise.resolve();
+  await manager.remove('user:draft',entry.id);assert(signal.aborted);
+  pending.resolve({id:'local-video:late',type:'video/mp4',localVideo:true});await manager.whenIdle();
+  assert.deepEqual(manager.list('user:draft'),[]);assert.equal(released.length,1);assert.equal(released[0].owner,'user:draft');
+  assert.equal(released[0].reference.id,'local-video:late');
 });
 
 test('uploads are scoped to drafts, deduplicated, bounded and cannot send before completion', async () => {

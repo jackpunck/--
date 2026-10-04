@@ -9,6 +9,8 @@ import { MOTION_VIDEO_ACCEPT, prepareMotionVideo, releasePreparedMotionVideo, va
 import { createMotionFramePlayer } from './motion-frame-player.js';
 import { drawMotionOverlay } from './motion-overlay.js';
 import { buildSmoothedMotionFrames } from './motion-smoothing.js';
+import { buildMotionAssessmentReport } from './motion-report.js';
+export { buildMotionAssessmentReport, validateMotionAssessmentSize, MAX_MOTION_ASSESSMENT_BYTES } from './motion-report.js';
 
 const exerciseNames = Object.fromEntries(motionExercises.map(item=>[item.id,item.name]));
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -55,16 +57,6 @@ function reportName(report) {
   const family=motionFamilies[report.exerciseFamily];
   return report.requiresVisualConfirmation&&family?`${family}（变式待确认）`:exerciseNames[report.exerciseId]||report.exerciseFamilyName||family||'动作评估';
 }
-export const MAX_MOTION_ASSESSMENT_BYTES = 1024 * 1024;
-export function validateMotionAssessmentSize(report) {
-  if(new TextEncoder().encode(JSON.stringify(report)).byteLength>MAX_MOTION_ASSESSMENT_BYTES)throw new Error('单份动作评估报告超过 1 MB，尚未保存。请缩短视频后重新分析。');
-}
-
-const pickFields=(value,keys)=>value&&typeof value==='object'?Object.fromEntries(keys.filter(key=>Object.hasOwn(value,key)).map(key=>[key,value[key]])):{};
-const qualityFields=['totalFrames','validFrames','usableRatio','sourceFps','targetCoverage','reasons'];
-const actionFields=['exerciseId','name','family','status','confidence','source','evidenceTimes','evidence'];
-function savedAction(value){const action=pickFields(value,actionFields);if(value?.observations)action.observations=pickFields(value.observations,['equipment','support','movement','laterality','assistance','evidence','evidenceTimes']);return action;}
-
 export function motionSelectionNotice(report={}) {
   if(report.recognitionSource!=='user'&&report.coach?.action?.source!=='user')return null;
   const check=report.coach?.selectionCheck,status=['consistent','mismatch','uncertain'].includes(check?.status)?check.status:'uncertain';
@@ -79,31 +71,11 @@ function exerciseOptions() {
   }).join('');
 }
 
-/** Persist only the AI conclusion and its evidence references. Raw observations
- * are request data, not a second local judgement or a permanent video record. */
-export function buildMotionAssessmentReport(result,{file,pipeline,createdAt=new Date().toISOString()}) {
-  const report={version:'motion-report-v1',...pickFields(result,['exerciseId','exerciseName','exerciseFamily','recognitionSource']),quality:pickFields(result.quality,qualityFields),createdAt,
-    video:{name:file.name,size:file.size,width:pipeline.width,height:pipeline.height,duration:pipeline.duration},
-    analysis:pickFields(pipeline,['modelVersion','sampleFps','sourceFps','decoder','elapsedMs'])};
-  if(result.coach){
-    const source=result.coach,coach=pickFields(source,['version','mode','model','provider','limitations']);
-    coach.action=savedAction(source.action);
-    if(source.selectionCheck)coach.selectionCheck=pickFields(source.selectionCheck,['status','evidenceTimes','evidence']);
-    if(Array.isArray(source.candidates))coach.candidates=source.candidates.map(savedAction);
-    if(source.verdict)coach.verdict=pickFields(source.verdict,['status','summary']);
-    if(Array.isArray(source.feedback))coach.feedback=source.feedback.map(item=>pickFields(item,['title','status','source','frameIndices','evidenceTimes','analysisPaths','time','evidence','correction','priority']));
-    if(source.coverage)coach.coverage=pickFields(source.coverage,['complete','strategy','sourceFrameCount','frameCount','reviewedFrameCount','imageCount','reviewedImageCount','temporalChecks','measurementCount','reviewedMeasurementCount','summarizedMeasurementCount','dataBatches','modelCalls']);
-    if(source.timing)coach.timing=pickFields(source.timing,['providerMs','totalMs']);
-    report.coach=coach;
-  }
-  return structuredClone(report);
-}
-
 /** Local video analysis owns its media, abort controller and render loop. */
 export function mountMotionView(container,{saveAssessment,listAssessments,deleteAssessment,openExercise,getCoachConfiguration=()=>({configured:false,vision:false}),reviewAssessment,openCoachSettings,notify=()=>{}}={}) {
   let destroyed=false, file=null, objectUrl=null, pipeline=null, displayFrames=null, observations=null, result=null, controller=null;
-  let running=false, saved=false, saving=false, selectedHistory=null, history=[], historyRevision=0, animationId=0, analysisRevision=0;
-  let metadata=null, lastAnnouncement=0, deletionId=null;
+  let running=false, saved=false, saving=false, selectedHistory=null, history=[], historyRevision=0, reportOpenRevision=0, animationId=0, analysisRevision=0;
+  let metadata=null, lastAnnouncement=0, deletionId=null, historyRead=null;
   let coachController=null, coachRunning=false, awaitingCoach=false, coachMessage='', coachError='', coachRevision=0;
   let selectedExerciseId='', reviewCache=null;
   let targetPoint=null, selectingTarget=false, selectionCursor={x:.5,y:.4};
@@ -231,7 +203,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     if(saving){exerciseSelect.value=selectedExerciseId;return;}
     const next=getMotionExercise(value)?.id||'';
     if(next===selectedExerciseId)return;
-    selectedExerciseId=next;exerciseSelect.value=next;cancelCoach();
+    reportOpenRevision++;selectedExerciseId=next;exerciseSelect.value=next;cancelCoach();
     result=observations?{...observations,targetTracking:pipeline?.targetTracking}:null;
     saved=false;selectedHistory=null;coachError='';awaitingCoach=!!pipeline;
     find('[data-motion-results]').hidden=true;find('[data-motion-results]').replaceChildren();error('');controls();
@@ -239,6 +211,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   async function selectFile(chosen) {
     if(destroyed||!chosen)return;
     try {validateVideoFile(chosen);} catch(cause) {error(cause.message);return;}
+    reportOpenRevision++;
     cancel();selectingTarget=false;targetPoint=null;find('[data-motion-target-picker]').hidden=true;video.controls=true;releaseMedia();file=chosen;result=null;saved=false;selectedHistory=null;saving=false;coachError='';error('');
     find('[data-motion-results]').hidden=true;
     find('.motion-dropzone').hidden=true;
@@ -414,14 +387,41 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       ${coachHtml(report,fromHistory,canSeek)}
       ${report.coach?`<div class="motion-result-actions">${pipeline&&!fromHistory&&typeof saveAssessment==='function'?`<button type="button" class="button primary" data-motion-action="save" ${saved||saving||coachRunning?'disabled':''}>${saved?'已保存报告':saving?'正在保存…':'保存报告'}</button>`:''}${getMotionExercise(report.exerciseId)?.hasTeaching&&typeof openExercise==='function'?`<button type="button" class="button" data-motion-action="exercise" data-exercise="${escapeHtml(report.exerciseId)}">查看动作示范 <span aria-hidden="true">↗</span></button>`:''}</div>`:''}`;
   }
-  async function refreshHistory() {
+  function refreshHistory() {
     const revision=++historyRevision;
-    try {
-      const values=typeof listAssessments==='function'?await listAssessments():[];
-      if(destroyed||revision!==historyRevision)return;
-      history=(Array.isArray(values)?values:[]).map(normalizedReport).filter(item=>item&&typeof item.id==='string').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-      renderHistory();
-    } catch(cause) {if(!destroyed&&revision===historyRevision)find('[data-motion-history]').innerHTML='<p class="motion-empty">读取记录失败，可刷新页面重试。</p>';}
+    historyRead=(async()=>{
+      try {
+        const values=typeof listAssessments==='function'?await listAssessments():[];
+        if(destroyed||revision!==historyRevision)return null;
+        history=(Array.isArray(values)?values:[]).map(normalizedReport).filter(item=>item&&typeof item.id==='string').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+        renderHistory();
+        return history;
+      } catch(cause) {if(!destroyed&&revision===historyRevision)find('[data-motion-history]').innerHTML='<p class="motion-empty">读取记录失败，可刷新页面重试。</p>';}
+      return null;
+    })();
+    return historyRead;
+  }
+  async function openReport(id) {
+    if(destroyed)return false;
+    const revision=++reportOpenRevision;
+    let read=refreshHistory(),values;
+    for(;;){
+      values=await read;
+      if(destroyed||revision!==reportOpenRevision)return false;
+      if(read===historyRead)break;
+      // Store synchronization may start a newer history read while this jump
+      // is waiting. Join that read without losing the requested report ID.
+      read=historyRead;
+    }
+    const report=values?.find(item=>item.id===id);
+    if(!report){
+      selectedHistory=null;find('[data-motion-results]').hidden=true;find('[data-motion-results]').replaceChildren();
+      const message=values?'这份动作评估报告已删除或不存在。':'读取动作评估报告失败，请重试。';
+      error(message);notify(message,true);return false;
+    }
+    error('');selectedHistory=report.id;renderResult(report,true);
+    find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});
+    return true;
   }
   function renderHistory() {
     find('[data-motion-history-count]').textContent=history.length?`${history.length} 份报告`:'';
@@ -460,8 +460,8 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     else if(action==='pick-target')void beginTargetSelection();
     else if(action==='reset-target')chooseTarget(null);
     else if(action==='exercise')openExercise?.(button.dataset.exercise);
-    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){selectedHistory=report.id;renderResult(report,true);find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});}}
-    else if(action==='live-result'){selectedHistory=null;if(result)renderResult(result);}
+    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){reportOpenRevision++;selectedHistory=report.id;renderResult(report,true);find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});}}
+    else if(action==='live-result'){reportOpenRevision++;selectedHistory=null;if(result)renderResult(result);}
     else if(action==='delete')void removeReport(Number(button.dataset.history));
     else if(action==='seek'&&pipeline){context?.clearRect(0,0,canvas.width,canvas.height);void seekMedia(Number(button.dataset.time)||0).catch(()=>{});mediaSurface().focus({preventScroll:true});find('[data-motion-player]').scrollIntoView({behavior:'smooth',block:'center'});}
   });
@@ -488,5 +488,5 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   });
   listen(window,'resize',()=>{if(selectingTarget)positionPicker();});
   controls();void refreshHistory();
-  return {refreshHistory,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
+  return {refreshHistory,openReport,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
 }

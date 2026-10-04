@@ -31,7 +31,7 @@ class Element {
   pause(){this.paused=true;}
   load(){if(this.src){this.fire('loadedmetadata');this.fire('loadeddata');}}
   focus(){}
-  scrollIntoView(){}
+  scrollIntoView(){this.scrollCount=(this.scrollCount||0)+1;}
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 async function until(predicate){for(let i=0;i<30;i++){if(predicate())return;await flush();}assert.fail('UI operation did not settle');}
@@ -41,13 +41,13 @@ function coach(id){const exercise=getMotionExercise(id);return {mode:'guided',ac
 function setup(t){
   const previous={window:globalThis.window,cancelAnimationFrame:globalThis.cancelAnimationFrame,requestAnimationFrame:globalThis.requestAnimationFrame};
   globalThis.window=new Element();globalThis.cancelAnimationFrame=()=>{};globalThis.requestAnimationFrame=()=>0;
-  const h={analysisCalls:[],evidenceCalls:[],reviewCalls:[],saved:[],analysisQueue:[],evidenceQueue:[],reviewQueue:[],messages:[]};
+  const h={analysisCalls:[],evidenceCalls:[],reviewCalls:[],saved:[],analysisQueue:[],evidenceQueue:[],reviewQueue:[],messages:[],historyValues:[],historyQueue:[],historyCalls:0};
   h.analyze=async(file,options)=>{h.analysisCalls.push({file,options});return h.analysisQueue.shift()?.promise??pipeline();};
   h.evidence=async(file,p,base,options)=>{h.evidenceCalls.push({file,pipeline:p,options});return h.evidenceQueue.shift()?.promise??{summary:{quality:base.quality},images:[{time:0,imageTime:0,mimeType:'image/jpeg',dataUrl:'data:image/jpeg;base64,AAAA'}]};};
   globalThis.__guidedView=h;
   const container=new Element(),root=container.querySelector('.motion-page');
-  const view=mountMotionView(container,{getCoachConfiguration:()=>({configured:true,vision:true,provider:'mock',model:'mock'}),reviewAssessment:async(body,options)=>{h.reviewCalls.push({body,options});return h.reviewQueue.shift()?.promise??coach(body.selectedExerciseId);},saveAssessment:async report=>{h.saved.push(report);},notify:message=>h.messages.push(message)});
-  h.root=root;h.container=container;h.find=selector=>root.querySelector(selector);
+  const view=mountMotionView(container,{getCoachConfiguration:()=>({configured:true,vision:true,provider:'mock',model:'mock'}),reviewAssessment:async(body,options)=>{h.reviewCalls.push({body,options});return h.reviewQueue.shift()?.promise??coach(body.selectedExerciseId);},saveAssessment:async report=>{h.saved.push(report);},listAssessments:async()=>{h.historyCalls++;return h.historyQueue.shift()?.promise??h.historyValues;},notify:message=>h.messages.push(message)});
+  h.root=root;h.container=container;h.view=view;h.find=selector=>root.querySelector(selector);
   h.select=id=>{const input=h.find('[data-motion-exercise]');input.value=id;input.fire('change');};
   h.click=action=>{const button=h.find(`[data-motion-action="${action}"]`);button.dataset.motionAction=action;button.closest=()=>button;root.fire('click',{target:button});};
   h.file=async(name='clip.mp4')=>{const input=h.find('[data-motion-file]');input.files=[new File(['fixture'],name,{type:'video/mp4'})];input.fire('change');await flush();};
@@ -114,4 +114,60 @@ test('a response for a different exercise is rejected even if the request remain
   h.select('squat');await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
   wrong.resolve(coach('pushup'));await until(()=>h.find('[data-motion-coach-error]').textContent.includes('与所选动作不一致'));
   assert.equal(h.find('[data-motion-results]').hidden,true);h.click('save');await flush();assert.equal(h.saved.length,0);
+});
+
+function savedReport(id,exerciseId='squat'){
+  return {id,data:{exerciseId,recognitionSource:'user',createdAt:'2026-01-01T00:00:00Z',video:{duration:2},coach:coach(exerciseId)}};
+}
+
+test('openReport refreshes records, opens the exact saved ID and scrolls to it',async t=>{
+  const h=setup(t);await flush();
+  h.historyValues=[savedReport('other'),savedReport('requested','pushup')];
+  assert.equal(await h.view.openReport('requested'),true);
+  assert.equal(h.historyCalls,2,'Mount and open each read current history');
+  assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);
+  assert.equal(h.find('[data-motion-results]').hidden,false);
+  assert.equal(h.find('[data-motion-results]').scrollCount,1);
+});
+
+test('openReport never substitutes another saved report when its ID was deleted',async t=>{
+  const h=setup(t);h.historyValues=[savedReport('old','pushup')];
+  assert.equal(await h.view.openReport('old'),true);
+  h.historyValues=[savedReport('different')];
+  assert.equal(await h.view.openReport('old'),false);
+  assert.equal(h.find('[data-motion-results]').hidden,true);assert.equal(h.find('[data-motion-results]').innerHTML,'');
+  assert.match(h.messages.at(-1),/报告已删除或不存在/);
+});
+
+test('openReport reports a history read failure without presenting stale data',async t=>{
+  const h=setup(t);await flush();const read=deferred();h.historyQueue.push(read);
+  const opened=h.view.openReport('old');read.reject(new Error('offline'));
+  assert.equal(await opened,false);assert.match(h.messages.at(-1),/读取动作评估报告失败/);
+  assert.equal(h.find('[data-motion-results]').hidden,true);
+});
+
+test('only the latest requested report can publish after competing history reads',async t=>{
+  const h=setup(t);await flush();const first=deferred(),second=deferred();h.historyQueue.push(first,second);
+  const old=h.view.openReport('first'),latest=h.view.openReport('second');
+  second.resolve([savedReport('second','pushup')]);assert.equal(await latest,true);
+  first.resolve([savedReport('first')]);assert.equal(await old,false);
+  assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);assert.equal(h.messages.length,0);
+  assert.equal(h.find('[data-motion-results]').scrollCount,1);
+});
+
+test('a background history refresh cannot cancel or misdirect the latest report jump',async t=>{
+  const h=setup(t);await flush();const first=deferred(),sync=deferred();h.historyQueue.push(first,sync);
+  const opened=h.view.openReport('requested'),refreshed=h.view.refreshHistory();
+  first.resolve([savedReport('old')]);await flush();assert.equal(h.messages.length,0);
+  sync.resolve([savedReport('other'),savedReport('requested','pushup')]);await refreshed;
+  assert.equal(await opened,true);assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);
+  assert.equal(h.messages.length,0);
+});
+
+test('choosing another video or destroying the view invalidates a pending report jump',async t=>{
+  const h=setup(t);await flush();const first=deferred();h.historyQueue.push(first);
+  const opened=h.view.openReport('first');await h.file();first.resolve([savedReport('first')]);
+  assert.equal(await opened,false);assert.equal(h.find('[data-motion-results]').hidden,true);
+  const second=deferred();h.historyQueue.push(second);const destroyed=h.view.openReport('second');h.view.destroy();second.resolve([savedReport('second')]);
+  assert.equal(await destroyed,false);assert.equal(await h.view.openReport('second'),false);
 });

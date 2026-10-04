@@ -5,7 +5,10 @@ import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
 import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=25';
 import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} from './store.js?v=11';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
-import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
+import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=10';
+import {ChatMotionVideos} from './chat-motion.js';
+import {compactChatMotionResult, renderChatMotionResult} from './chat-motion-result.js';
+import {MOTION_VIDEO_ACCEPT} from './motion-media.js';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
 import {addDays, weekDates} from './schedule.js?v=12';
 import {formatMealNotes} from './meal-display.js';
@@ -16,7 +19,7 @@ const defaultTrainingExercise = id => structuredClone(defaultExercises[id]);
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
-import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=10';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=11';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {createProviderSettings} from './provider-settings.js?v=1';
@@ -89,11 +92,13 @@ function canonicalProfileHash(hash) {
 }
 const chatDrafts = new Map();
 const chatScroll = new Map();
+const chatMotionVideos = new ChatMotionVideos();
 let chatRun = null;
 let composerObserver = null;
 const attachmentOwner = (conversation=state.conversation,userId=state.user?.id) => `${userId}:${conversation||'new'}`;
 const chatUploads = new AttachmentManager({
  upload:async(file,{signal,ownerKey,metadata})=>{
+   if(metadata.type.startsWith('video/')){signal.throwIfAborted();return {...await chatMotionVideos.add(file,metadata),localVideo:true};}
    if(!navigator.onLine)throw new Error('当前离线，联网后可重试上传。');
    const data=await new Promise((resolve,reject)=>{
      const reader=new FileReader(),abort=()=>{reader.abort();reject(new DOMException('已取消上传','AbortError'));};
@@ -104,7 +109,7 @@ const chatUploads = new AttachmentManager({
    });
    return api('/attachments',{method:'POST',signal,headers:{'X-Fitness-User':ownerKey.split(':')[0]},body:{name:metadata.name,type:metadata.type,data}});
  },
- removeRemote:(attachment,{ownerKey})=>api('/attachments/'+attachment.id,{method:'DELETE',headers:{'X-Fitness-User':ownerKey.split(':')[0]},body:{}}),
+ removeRemote:async(attachment,{ownerKey})=>{if(attachment.localVideo){chatMotionVideos.remove(attachment.id);return;}return api('/attachments/'+attachment.id,{method:'DELETE',headers:{'X-Fitness-User':ownerKey.split(':')[0]},body:{}});},
  onChange:owner=>{if(state.user&&owner===attachmentOwner())renderChatFiles();}
 });
 const profile = () => state.store?.get('profile');
@@ -143,7 +148,7 @@ async function boot() {
   }
 }
 async function enter(user,offline=false) {
-  if(state.user?.id!==user.id){closeMotionView();await communityController?.destroy();communityController=null;modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.celebratedWeeks=new Set();state.achievementPage=0;state.achievementCategory='all';state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
+  if(state.user?.id!==user.id){closeMotionView();await communityController?.destroy();communityController=null;modelViewer.destroy();for(const key of Object.keys(knowledgeDrafts))delete knowledgeDrafts[key];await chatUploads.clearAll({removeUploaded:true});chatMotionVideos.clear();chatDrafts.clear();chatScroll.clear();state.conversation=null;state.chatScene='';state.files=[];state.weekCelebration=null;state.celebratedWeeks=new Set();state.achievementPage=0;state.achievementCategory='all';state.librarySelected=null;state.libraryDate=null;state.libraryEditing=null;}
   state.providersVersion=null;state.providersConflict=false;
   setApiUser(user.id);
   state.user=user; state.store=await new RecordStore(user).open(); localStorage.setItem('fitness:last-user',JSON.stringify(user));
@@ -254,7 +259,7 @@ async function render() {
   captureChatDraft();
   const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',community:'社区',settings:'个人中心'};
   $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}${state.page==='community'?' community-active':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['community','community','社区'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
-  updateSidebarQuote(); renderSidebarHistory(); updateSync(); renderPage();
+  updateSidebarQuote(); renderSidebarHistory(); updateSync(); await renderPage();
 }
 function updateSidebarQuote() {
   const card=$('.side-note'),now=new Date(),date=today(now);
@@ -339,7 +344,7 @@ async function openMealChat() {
 function updateChatScene() {
  const input=$('#chat-input');if(!input)return;
  const meal=state.chatScene==='meal';
- input.placeholder=meal?'描述这一餐吃了什么、吃了多少，或上传餐食照片，我会分析营养和热量并记录…':'聊聊训练、饮食，或粘贴图片和文件…';
+ input.placeholder=meal?'描述这一餐吃了什么、吃了多少，或上传餐食照片，我会分析营养和热量并记录…':'发送训练视频和动作名称，让 AI 帮你检查动作…';
  const scene=$('#chat-scene');
  if(scene){scene.hidden=!meal;scene.innerHTML=meal?`${icon('food')}<span>记录餐食 · 支持照片或文字</span><button type="button" class="icon-button" data-action="exit-meal-scene" aria-label="退出餐食记录模式">×</button>`:'';}
 }
@@ -385,7 +390,7 @@ function updateChatControls() {
  const actions=$('#chat-send-actions');if(!actions)return;
  const entries=chatUploads.list(attachmentOwner()),blocked=entries.some(entry=>entry.status!=='ready'),hasContent=$('#chat-input')?.value.trim()||entries.length;
  patchHTML(actions,chatRun?`${chatRun.id!==state.conversation?'<small class="muted">另一段对话正在回复</small>':''}<button type="button" class="button small stop-generation" data-action="stop-chat" aria-label="停止生成">■ 停止生成</button>`:`<button type="submit" class="send" aria-label="发送消息" ${blocked||!hasContent?'disabled':''} title="${blocked?'请等待上传完成，或重试 / 移除失败附件':'发送消息'}">${icon('send')}</button>`);
- const feedback=$('#chat-upload-status');if(feedback)feedback.textContent=entries.some(entry=>entry.status==='uploading')?'附件正在上传，完成后即可发送。':blocked?'附件上传失败，请重试或移除后再发送。':'';
+ const feedback=$('#chat-upload-status');if(feedback)feedback.textContent=entries.some(entry=>entry.status==='uploading')?'附件正在准备，完成后即可发送。':blocked?'附件准备失败，请重试或移除后再发送。':entries.some(entry=>entry.type.startsWith('video/'))?'原视频留在本机，AI 接收骨架与关键画面。刷新后重新评估需再添加视频，已保存报告可继续查看。':'';
 }
 function addChatFiles(files,owner=attachmentOwner()) {
  if(!files.length||!state.user||!owner.startsWith(state.user.id+':'))return;
@@ -395,8 +400,8 @@ function renderChatFiles() {
  const list=$('#chat-files');if(!list||!state.user)return;
  const entries=chatUploads.list(attachmentOwner());
  patchHTML(list,entries.map(entry=>{
-   const image=entry.type.startsWith('image/'),url=entry.previewUrl||entry.attachment?.url;
-   return `<div class="chat-file-card ${image?'image-file':''}" data-upload-id="${esc(entry.id)}" data-status="${entry.status}">${image&&url?`<button type="button" class="chat-file-thumb" data-action="preview-image" data-url="${esc(url)}" data-name="${esc(entry.name)}" aria-label="预览 ${esc(entry.name)}"><img src="${esc(url)}" alt="${esc(entry.name)}"></button>`:`<span class="chat-file-symbol">${icon('clip')}</span>`}<div class="chat-file-info"><strong title="${esc(entry.name)}">${esc(entry.name)}</strong><small>${formatFileSize(entry.size)} · ${entry.status==='uploading'?'上传中…':entry.status==='error'?'上传失败':'已就绪'}</small>${entry.error?`<span class="chat-file-error">${esc(entry.error)}</span>`:''}<div class="chat-file-actions">${entry.status==='error'?button('重试','retry-upload',`data-id="${esc(entry.id)}"`,'small'):''}${image&&url?button('复制图片','copy-image',`data-url="${esc(url)}"`,'small'):''}</div></div><button class="chat-file-remove" type="button" data-action="remove-file" data-id="${esc(entry.id)}" aria-label="移除 ${esc(entry.name)}">×</button></div>`;
+   const image=entry.type.startsWith('image/'),localVideo=entry.type.startsWith('video/'),url=entry.previewUrl||entry.attachment?.url;
+   return `<div class="chat-file-card ${image?'image-file':''}" data-upload-id="${esc(entry.id)}" data-status="${entry.status}">${image&&url?`<button type="button" class="chat-file-thumb" data-action="preview-image" data-url="${esc(url)}" data-name="${esc(entry.name)}" aria-label="预览 ${esc(entry.name)}"><img src="${esc(url)}" alt="${esc(entry.name)}"></button>`:`<span class="chat-file-symbol">${icon('clip')}</span>`}<div class="chat-file-info"><strong title="${esc(entry.name)}">${esc(entry.name)}</strong><small>${formatFileSize(entry.size)} · ${entry.status==='uploading'?'上传中…':entry.status==='error'?'准备失败':localVideo?'本机视频 · 已就绪':'已就绪'}</small>${entry.error?`<span class="chat-file-error">${esc(entry.error)}</span>`:''}<div class="chat-file-actions">${entry.status==='error'?button('重试','retry-upload',`data-id="${esc(entry.id)}"`,'small'):''}${image&&url?button('复制图片','copy-image',`data-url="${esc(url)}"`,'small'):''}</div></div><button class="chat-file-remove" type="button" data-action="remove-file" data-id="${esc(entry.id)}" aria-label="移除 ${esc(entry.name)}">×</button></div>`;
  }).join(''));
  updateChatControls();
 }
@@ -428,7 +433,7 @@ function renderChat() {
    renderChatBody();renderChatFiles();updateChatScene();const aside=$('.chat-aside');if(aside)aside.outerHTML=contextCards();return;
  }
  captureChatDraft();
- $('#page').innerHTML=`<div class="chat-layout"><section class="chat-main"><div class="chat-body" tabindex="0" aria-label="对话记录"></div><button type="button" class="chat-latest" data-action="chat-latest" hidden>↓ 回到最新</button><div class="chat-drop-overlay" aria-hidden="true">${icon('clip')}松开以添加图片或文件</div><form id="chat-form" class="composer"><div class="composer-box"><div id="chat-scene" class="chat-scene" hidden></div><div class="attachments" id="chat-files"></div><label class="sr-only" for="chat-input">给健身助手发送消息</label><textarea id="chat-input" data-conversation="${esc(key)}" name="message" placeholder="聊聊训练、饮食，或粘贴图片和文件…" rows="2" maxlength="16000"></textarea><div class="composer-tools"><div class="row"><button class="icon-button" type="button" data-action="attach" aria-label="上传图片或文件">${icon('clip')}</button><button class="icon-button" type="button" data-action="camera" aria-label="拍照上传">${icon('image')}</button><span class="composer-model">${esc(currentModel('chat')||'在设置中连接 AI 模型')}</span></div><div id="chat-send-actions" class="row"></div></div><div id="chat-upload-status" class="chat-upload-status" role="status"></div></div><p class="composer-note">粘贴 / 拖入图片或文件 · 最多 6 个，每个 8 MB · Enter 发送，Shift + Enter 换行。AI 可调整训练日程与今日饮食。</p></form></section>${contextCards()}</div>`;
+ $('#page').innerHTML=`<div class="chat-layout"><section class="chat-main"><div class="chat-body" tabindex="0" aria-label="对话记录"></div><button type="button" class="chat-latest" data-action="chat-latest" hidden>↓ 回到最新</button><div class="chat-drop-overlay" aria-hidden="true">${icon('clip')}松开以添加图片、视频或文件</div><form id="chat-form" class="composer"><div class="composer-box"><div id="chat-scene" class="chat-scene" hidden></div><div class="attachments" id="chat-files"></div><label class="sr-only" for="chat-input">给健身助手发送消息</label><textarea id="chat-input" data-conversation="${esc(key)}" name="message" placeholder="发送训练视频和动作名称，让 AI 帮你检查动作…" rows="2" maxlength="16000"></textarea><div class="composer-tools"><div class="row"><button class="icon-button" type="button" data-action="attach" aria-label="上传图片、视频或文件">${icon('clip')}</button><button class="icon-button" type="button" data-action="camera" aria-label="拍照上传">${icon('image')}</button><span class="composer-model">${esc(currentModel('chat')||'在设置中连接 AI 模型')}</span></div><div id="chat-send-actions" class="row"></div></div><div id="chat-upload-status" class="chat-upload-status" role="status"></div></div><p class="composer-note">支持图片、训练视频和文件 · 最多 6 个；视频 200 MB / 2 分钟，其他附件 8 MB。发送视频时请写明动作名称。</p></form></section>${contextCards()}</div>`;
  const input=$('#chat-input'),draft=chatDrafts.get(key);input.value=draft?.text||'';resizeComposer(input);
  if(draft){input.setSelectionRange(draft.start,draft.end,draft.direction);input.scrollTop=draft.scrollTop;if(draft.focused&&!$('#modal').open)input.focus({preventScroll:true});}
  let composing=false;
@@ -457,7 +462,7 @@ function messageBubble(m,skipText=false) {
  const visuals=assistant?messageVisuals(m):[],preview=assistant&&(chatConversation()?.messages||[]).filter(message=>message.role==='assistant').slice(-2).some(message=>message.id===m.id);
  const references=assistant&&!streaming?findKnowledge(text):[];
  const incomplete=assistant&&m.streaming&&!streaming,last=chatConversation()?.messages.at(-1)?.id===m.id;
- return `<div class="message-text ${assistant?'markdown-body':''}">${skipText?'':assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${esc(chatRun?.message===m&&chatRun.progress?chatRun.progress:text?'正在生成…':'正在思考你的问题…')}</div>`:''}</div><div class="message-attachments">${m.attachments?.length?renderAttachments(m.attachments):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.presentation?(result.ok?'✓ 展示已更新':'展示未完成'):result.readOnly?(result.ok?'✓ 已读取':'读取未完成'):(result.ok?'✓ 已执行':'操作未完成')}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
+ return `<div class="message-text ${assistant?'markdown-body':''}">${skipText?'':assistant?renderMarkdown(text):esc(text)}</div><div class="message-progress">${streaming?`<div class="stream-status" role="status">${esc(chatRun?.message===m&&chatRun.progress?chatRun.progress:text?'正在生成…':'正在思考你的问题…')}</div>`:''}</div><div class="message-attachments">${(m.attachments?.length||m.motionVideos?.length)?renderAttachments([...(m.attachments||[]),...(m.motionVideos||[])]):''}</div><div class="tool-results">${(m.toolResults||[]).map(result=>result.name==='assess_motion_video'?renderChatMotionResult(result):`<div class="tool-result ${result.ok?'success':'failed'}" role="status"><strong>${result.presentation?(result.ok?'✓ 展示已更新':'展示未完成'):result.readOnly?(result.ok?'✓ 已读取':'读取未完成'):(result.ok?'✓ 已执行':'操作未完成')}</strong><span>${esc(result.message||result.name||'训练计划操作')}</span></div>`).join('')}</div><div class="message-visuals">${visuals.map(visual=>renderVisualCard(visual,preview)).join('')}</div><div class="message-references">${references.length?`<div class="message-meta">${references.map(k=>button(icon('leaf')+' '+esc(k.title),'knowledge',`data-id="${k.id}"`,'small')).join('')}</div>`:''}</div><div class="message-errors">${m.error||m.stopped||incomplete?`<div class="${m.error?'error-box':'notice'} chat-message-status">${esc(m.error|| (m.stopped?'已停止生成，已保留收到的内容。':'上次回复未完成，已保留收到的内容。'))} ${last&&!chatRun?button('重试回答','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div>`:''}</div><div class="message-footer"><small>${m.model?esc(m.model)+' · ':''}${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small><div class="message-actions">${text?button('复制','copy-message',`data-id="${esc(m.id)}" aria-label="复制消息"`,'small'):''}${assistant&&last&&!chatRun&&!m.error&&!m.stopped&&!incomplete?button('重新生成','retry-chat',`data-id="${esc(m.id)}"`,'small'):''}</div></div>`;
 }
 function renderMessage(m) {return `<div class="message ${m.role==='user'?'user':'assistant'}" data-message-id="${esc(m.id)}"><div class="message-icon">${m.role==='user'?esc(state.user.name?.slice(0,1)||'我'):'<img class="assistant-logo" src="/assets/logo.svg" alt="循序 AI" width="30" height="30">'}</div><div class="bubble">${messageBubble(m)}</div></div>`;}
 function paintChatRun(run) {
@@ -487,6 +492,30 @@ function mealChatInstruction(intent) {
  if(!intent)return '';
  return `【餐食记录场景】用户通过“记录餐食”入口提交下方文字或照片，意图是分析本次实际吃下的食物并保存饮食记录。不划分早餐、午餐、晚餐或加餐，只保存记录时间。先读取 get_today_meals，识别食物、份量与营养后调用 create_meal 保存；若是在补充或更正同一餐，使用 update_meal 避免重复入账。数量或食物身份不清时先追问。仅在工具成功后说明已记录，并展示热量和营养估算；如果用户是在咨询、表示尚未吃或取消记录，则按其明确意思回答，不入账。\n用户描述：\n`;
 }
+async function prepareChatMotion(run, data) {
+ const signal=run.controller.signal;
+ if(!data||typeof data.jobId!=='string'||!/^[\w-]{16,100}$/.test(data.jobId))throw new Error('动作评估任务编号无效，请重试。');
+ const current=()=>state.store===run.store&&!run.discard&&!signal.aborted;
+ if(!current())return;
+ run.motionJobs ||= new Set();
+ if(run.motionJobs.has(data.jobId))return;
+ run.motionJobs.add(data.jobId);
+ const submit=body=>api('/chat/motion/'+data.jobId,{method:'POST',headers:{'X-Fitness-User':run.userId},signal,body});
+ let input;
+ try {
+   if(!run.motionVideoIds.has(data.videoId))throw new Error('这段视频不在当前对话中，请重新添加视频。');
+   input=await chatMotionVideos.prepare(data.videoId,data.exerciseId,{signal,onProgress:progress=>{
+     if(current()){run.progress=progress.message||'正在分析训练视频…';scheduleChatPaint(run);}
+   }});
+ } catch(error) {
+   if(!current())return;
+   await submit({error:String(error.message||'无法读取训练视频，请重新添加。').replace(/[\x00-\x1f\x7f]/g,' ').slice(0,500)});
+   return;
+ }
+ if(!current())return;
+ run.progress='正在将动作数据交给 AI 评价…';scheduleChatPaint(run);
+ await submit({input});
+}
 async function sendChat(text,retryId=null) {
  if(!await readyComputed())return;
  if(chatRun)return;
@@ -498,12 +527,12 @@ async function sendChat(text,retryId=null) {
  if(retryId&&conv.messages.at(-1)?.id!==retryId)throw new Error('只能重试最近一条回答，请在当前对话继续提问。');
  const outgoing=retryId?conv.messages.slice(0,conv.messages.indexOf(message)):[...conv.messages];
  if(!retryId&&state.chatScene==='meal')conv.scene='meal';
- if(!retryId){const userMessage={id:uid(),role:'user',content:text||'请帮我分析附件。',attachments,createdAt:new Date().toISOString()};if(state.chatScene==='meal')userMessage.mealIntent={createdAt:userMessage.createdAt};outgoing.push(userMessage);conv.messages.push(userMessage);}
+ if(!retryId){const userMessage={id:uid(),role:'user',content:text||'请帮我分析附件。',attachments:attachments.filter(file=>!file.localVideo),motionVideos:attachments.filter(file=>file.localVideo).map(({id,name,type,size})=>({id,name,type,size})),createdAt:new Date().toISOString()};if(state.chatScene==='meal')userMessage.mealIntent={createdAt:userMessage.createdAt};outgoing.push(userMessage);conv.messages.push(userMessage);}
  const requestId=message?.requestId||uid();
  message=message||{id:uid(),role:'assistant',content:'',createdAt:new Date().toISOString()};
  Object.assign(message,{content:'',requestId,streaming:true,error:null,stopped:false,toolResults:(message.toolResults||[]).filter(result=>result.name!=='set_chat_visuals')});
  if(!retryId)conv.messages.push(message);
- const controller=new AbortController(),run={id,conv,message,store,userId:user.id,controller,discard:false};
+ const controller=new AbortController(),run={id,conv,message,store,userId:user.id,controller,discard:false,motionTasks:new Set(),motionVideoIds:new Set(outgoing.flatMap(m=>m.motionVideos||[]).map(video=>video.id))};
  let finish;run.finished=new Promise(resolve=>{finish=resolve;});chatRun=run;state.busy=true;
  if(!retryId){captureChatDraft();chatDrafts.delete(state.conversation||'');chatUploads.takeReady(owner);state.files=[];const input=$('#chat-input');if(input){input.value='';input.dataset.conversation=id;resizeComposer(input);}state.conversation=id;}
  try {
@@ -513,16 +542,26 @@ async function sendChat(text,retryId=null) {
    const aiRelevant=record=>record&&(['plan','calendar-task','schedule','training-cycle','calendar-settings','meal','phase'].includes(record.kind)||['active-plan','profile','preferences'].includes(record.id));
    if([...store.pending.values()].some(aiRelevant)||store.conflicts.some(c=>aiRelevant(store.records.get(c.id))||aiRelevant(c.server)||aiRelevant(c.local)))throw new Error('个人资料、日程、训练计划或饮食还有待同步或冲突的本机修改。请先在「个人中心 → 数据与同步」处理后重试。');
    if(store.status==='offline')throw new Error('当前离线，消息已保存在本机。联网后可以重试。');
-   const response=await streamChat({requestId,conversationId:id,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({id,role,content,attachments,reasoningContent,toolResults,mealIntent})=>({id,role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.some(r=>r.name==='set_chat_visuals'&&r.ok)?'\n[本条回答的3D展示] '+JSON.stringify(chatVisuals({toolResults}).map(({type,id})=>({type,id}))):'')+(role==='assistant'&&toolResults?.some(r=>!r.readOnly)?'\n[已执行操作回执]\n'+toolResults.filter(r=>!r.readOnly).map(r=>r.message||r.name).join('\n'):''),attachments,reasoningContent})),context:{date:state.date,localToday:today(),timezoneOffset:new Date().getTimezoneOffset()}}, {
-     userId:user.id,signal:controller.signal,onEvent:(type,data)=>{
+   const response=await streamChat({requestId,conversationId:id,messages:outgoing.filter(m=>!m.error&&!m.stopped).slice(-80).map(({id,role,content,attachments,motionVideos,reasoningContent,toolResults,mealIntent})=>({id,role,content:mealChatInstruction(mealIntent)+(mealIntent?mealDishInstruction+'\n'+mealCategoryInstruction+'\n':'')+content+(role==='assistant'&&toolResults?.some(r=>r.name==='set_chat_visuals'&&r.ok)?'\n[本条回答的3D展示] '+JSON.stringify(chatVisuals({toolResults}).map(({type,id})=>({type,id}))):'')+(role==='assistant'&&toolResults?.some(r=>r.name==='assess_motion_video'&&r.ok)?'\n[已完成的动作评估] '+JSON.stringify(toolResults.filter(r=>r.name==='assess_motion_video'&&r.ok).map(compactChatMotionResult)):'')+(role==='assistant'&&toolResults?.some(r=>!r.readOnly)?'\n[已执行操作回执]\n'+toolResults.filter(r=>!r.readOnly).map(r=>r.message||r.name).join('\n'):''),attachments,motionVideos,reasoningContent})),context:{date:state.date,localToday:today(),timezoneOffset:new Date().getTimezoneOffset()}}, {
+     userId:user.id,signal:controller.signal,onEvent:async(type,data)=>{
        if(state.store!==store||run.discard||controller.signal.aborted)return;
        if(type==='meta'){message.model=data.model;message.provider=data.provider;}
        if(type==='delta'){message.content+=data.text||'';run.progress='';}
        if(type==='tool_start')run.progress=data.message||'正在处理…';
+       if(type==='motion_request'){
+         // Keep consuming the stream while local inference runs, so a server
+         // error or disconnect can immediately cancel video decoding as well.
+         const task=prepareChatMotion(run,data).catch(error=>{if(!controller.signal.aborted){run.motionError=error;controller.abort();}}).finally(()=>run.motionTasks.delete(task));
+         run.motionTasks.add(task);return;
+       }
+       if(type==='motion_progress')run.progress=data.message||'AI 正在评价动作…';
        if(type==='tool_result'){
          run.progress='正在整理回答…';
-         if(data.presentation||!message.toolResults.some(r=>JSON.stringify(r)===JSON.stringify(data)))message.toolResults.push(data);
-         if(!data.readOnly)run.toolSync=(run.toolSync||Promise.resolve()).then(()=>store.sync()).then(()=>{
+         data=compactChatMotionResult(data);
+         const motionIndex=data.name==='assess_motion_video'&&data.reportId?message.toolResults.findIndex(r=>r.name===data.name&&r.reportId===data.reportId):-1;
+         if(motionIndex>=0)message.toolResults[motionIndex]=data;
+         else if(data.presentation||!message.toolResults.some(r=>JSON.stringify(r)===JSON.stringify(data)))message.toolResults.push(data);
+         if(!data.readOnly||data.name==='assess_motion_video'&&data.ok)run.toolSync=(run.toolSync||Promise.resolve()).then(()=>store.sync()).then(()=>{
            if(state.store!==store)return;
            if(state.page==='training'&&!$('#modal').open)renderTraining();
            if(state.page==='nutrition'&&!$('#modal').open)renderNutrition();
@@ -534,13 +573,14 @@ async function sendChat(text,retryId=null) {
    });
    message.content=response.content??message.content;message.model=response.model||message.model;message.provider=response.provider||message.provider;
    if(response.reasoningContent)message.reasoningContent=response.reasoningContent;
-   if(response.toolResults?.length)message.toolResults=response.toolResults;
-   if(message.toolResults.some(r=>!r.readOnly))await store.sync().catch(error=>{run.syncError=error.message;});
+   if(response.toolResults?.length)message.toolResults=response.toolResults.map(compactChatMotionResult);
+   if(message.toolResults.some(r=>!r.readOnly||r.name==='assess_motion_video'&&r.ok))await store.sync().catch(error=>{run.syncError=error.message;});
    await run.toolSync;
    if(run.syncError)message.error='回答已完成，但记录同步暂未完成：'+run.syncError+'。请点击顶部同步状态重试。';
  } catch(error) {
-   if(controller.signal.aborted)message.stopped=true;else message.error=error.message;
+   if(run.motionError)message.error=run.motionError.message;else if(controller.signal.aborted)message.stopped=true;else message.error=error.message;
  } finally {
+   if(run.motionTasks.size){controller.abort();await Promise.allSettled([...run.motionTasks]);}
    message.streaming=false;clearTimeout(run.saveTimer);clearTimeout(run.paint);
    await saveChatRun(run).catch(error=>{if(state.store===store)toast('回复暂未保存：'+error.message,true);});
    if(chatRun===run){chatRun=null;state.busy=false;}
@@ -1575,7 +1615,7 @@ async function chooseFiles({camera=false,meal=false}={}) {
  const owner=attachmentOwner();
  const draft=meal?state.mealDraft:null;
  if(draft?._busy)return;
- const input=document.createElement('input');input.type='file';input.accept=meal||camera?'image/jpeg,image/png,image/webp,image/gif':'.jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.md,.csv,.json';input.multiple=!camera;if(camera)input.setAttribute('capture','environment');
+ const input=document.createElement('input');input.type='file';input.accept=meal||camera?'image/jpeg,image/png,image/webp,image/gif':'.jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.md,.csv,.json,'+MOTION_VIDEO_ACCEPT;input.multiple=!camera;if(camera)input.setAttribute('capture','environment');
  input.onchange=async()=>{
    if(!input.files?.length)return;
    if(!meal){addChatFiles(Array.from(input.files),owner);return;}
@@ -1641,7 +1681,8 @@ async function navigate(page,{fromHash=false}={}) {
   state.page=page;
   if(page==='settings'&&state.setting==='ai')await loadProviders();
   if(version!==navigationVersion)return;
-  render();window.scrollTo(0,0);
+  await render();if(version!==navigationVersion)return;
+  window.scrollTo(0,0);return true;
 }
 window.addEventListener('hashchange',()=>{
   if(!state.user){rememberCommunityReturn();return;}
@@ -1680,6 +1721,17 @@ document.addEventListener('click',async event=>{
  }
  case 'nav':if(target.dataset.page==='settings')state.setting='home';await navigate(target.dataset.page);break;
  case 'motion-open':modelViewer.close();closeModal();await navigate('motion');break;
+ case 'chat-motion-detail':{
+   const store=state.store,reportId=target.dataset.reportId;
+   if(!reportId?.startsWith('motion:'))throw new Error('动作报告编号无效。');
+   if(!store.records.get(reportId)||store.records.get(reportId).deleted)await store.sync();
+   if(state.store!==store)break;
+   const report=store.records.get(reportId);
+   if(!report||report.deleted||report.kind!=='motion-assessment')throw new Error('这份动作报告已删除或尚未同步，请同步后重试。');
+   const opened=await navigate('motion');
+   if(opened&&state.store===store&&state.page==='motion')await motionView?.openReport(reportId);
+   break;
+ }
  case 'toggle-sidebar': {
    state.sidebarCollapsed = !state.sidebarCollapsed;
    $('.layout').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
@@ -1694,7 +1746,7 @@ document.addEventListener('click',async event=>{
  case 'new-chat':selectConversation(null);await navigate('chat');break;
  case 'open-chat':selectConversation(id);await navigate('chat');break;
  case 'delete-chat':confirmDialog('删除这段对话','删除后，这段会话及消息将从账号记录中移除。','confirm-delete-chat',id);break;
- case 'confirm-delete-chat':if(chatRun?.id===id)await stopChat({discard:true});await state.store.remove(id);chatUploads.clear(attachmentOwner(id),{removeUploaded:true});if(state.conversation===id)selectConversation(null);chatDrafts.delete(id);chatScroll.delete(id);closeModal();render();break;
+ case 'confirm-delete-chat':if(chatRun?.id===id)await stopChat({discard:true});for(const message of state.store.get(id)?.messages||[])for(const video of message.motionVideos||[])chatMotionVideos.remove(video.id);await state.store.remove(id);chatUploads.clear(attachmentOwner(id),{removeUploaded:true});if(state.conversation===id)selectConversation(null);chatDrafts.delete(id);chatScroll.delete(id);closeModal();render();break;
  case 'attach':await chooseFiles();break;
  case 'camera':await chooseFiles({camera:true});break;
  case 'remove-file':await chatUploads.remove(attachmentOwner(),id);break;
@@ -1938,7 +1990,7 @@ async function deleteAccount(password) {
   try {await deletedStore.clear();}finally {await deletedStore.close();}
   // A newer login can occur during any of the cleanup awaits above.
   if(!current())return;
-  modelViewer.destroy();localStorage.removeItem('fitness:last-user');setApiUser(null);
+  chatMotionVideos.clear();modelViewer.destroy();localStorage.removeItem('fitness:last-user');setApiUser(null);
   state.user=null;state.store=null;state.providers=[];state.providersVersion=null;state.providersConflict=false;providerSettings=null;
   state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';
   chatDrafts.clear();chatScroll.clear();closeModal();renderAuth();toast('账号、个人记录与社区数据已删除');
@@ -1952,7 +2004,7 @@ async function logout() {
   if(!current())return;
   modelViewer.destroy();
   await chatUploads.clearAll({removeUploaded:true});if(!current())return;
-  await stopChat();if(!current())return;
+  await stopChat();if(!current())return;chatMotionVideos.clear();
   if(store?.status!=='expired')try{await api('/auth/logout',{method:'POST',headers:{'X-Fitness-User':user.id},body:{}});}catch(error){if(!current())return;if(![401,409].includes(error.status)){if(state.page==='motion')renderMotion();throw error;}}
   await store?.close?.();if(!current())return;
   localStorage.removeItem('fitness:last-user');setApiUser(null);state.user=null;state.store=null;state.providers=[];state.providersVersion=null;state.providersConflict=false;providerSettings=null;state.tasks={};state.taskModels={};state.providerDraft=null;state.files=[];state.conversation=null;state.authMode='login';chatDrafts.clear();chatScroll.clear();renderAuth();
