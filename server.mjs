@@ -1,4 +1,5 @@
 import {reconcileAchievements} from './server/achievements.mjs';
+import {compute} from './server/compute.mjs';
 import {beijingDate,validTrainingCompletion} from './public/achievements.js';
 import {createHolidayService} from './server/holidays.mjs';
 import http from 'node:http';
@@ -30,7 +31,7 @@ const DAY = 86400000;
 const MAX_FILE = 8 * 1024 * 1024;
 const ID = /^[\w:-]{1,100}$/;
 const FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
-const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.task': 'application/octet-stream' };
+const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream' };
 const MODEL_FILES = new Set(['index.html', 'style.css', 'demo.bundle.js', 'demo.offline.js', 'atlas.worker.js', 'assets/anatomy-data.bin', 'model-loader.js', 'embed-bootstrap.js', 'atlas-model.js', 'atlas-rig.js', 'src.js', 'embed-interface.js', 'muscle-data.js', 'exercise-catalog.js', 'static-poses.js', 'THIRD_PARTY_LICENSES.txt', 'assets/anatomy-atlas.json', 'assets/anatomy-manifest.json', 'assets/anatomy-regions.json', 'assets/ANATOMY-SOURCE.md', 'assets/CC-BY-SA-4.0.txt', 'assets/Z-ANATOMY-LICENSE.txt']);
 
 async function passwordHash(password) {
@@ -124,6 +125,7 @@ export function createServer(options = {}) {
     modelDir = join(root, '精细模型与动作开发'),
     fetchImpl,
     aiTimeoutMs = 60000,
+    motionAiTimeoutMs = options.aiTimeoutMs ?? 180000,
     allowPrivateProviders = process.env.ALLOW_PRIVATE_AI !== 'false',
     secureCookie = process.env.COOKIE_SECURE === 'true',
   } = options;
@@ -250,6 +252,10 @@ export function createServer(options = {}) {
         if (pathname === '/api/auth/me' && method === 'GET') { send(res, 200, { user: publicUser(user) }); return; }
         checkExpectedUser(req, user);
         if (await community.handle(req, res, user, pathname)) return;
+        if(pathname==='/api/compute'&&method==='POST') {
+          const body=await readBody(req,8*1024*1024);
+          send(res,200,{result:compute(body)});return;
+        }
         if (pathname === '/api/holidays' && method === 'GET') { const year=Number(new URL(req.url,'http://localhost').searchParams.get('year')); if(!Number.isInteger(year)||year<1900||year>2199)throw new HttpError(400,'节假日年份无效。');send(res,200,await loadHolidayYear(year));return; }
         if (pathname === '/api/state' && method === 'GET') {
           const expectedUser = new URL(req.url, 'http://localhost').searchParams.get('userId');
@@ -347,15 +353,31 @@ export function createServer(options = {}) {
           const id = settings.tasks.motion, model = settings.taskModels.motion;
           if (!id || !model) throw new HttpError(400, '尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
           const provider = selectProviderModel(providerWithKey(user.id, id), model);
+          if (provider.models?.find(item => item.id === provider.model)?.vision !== true) throw new HttpError(400, '动作评估需要支持图片的 AI 模型，请在 AI 服务设置中更换动作点评模型。');
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('已取消 AI 动作评估。', 'AbortError')); };
           res.once('close', disconnect);
+          const started=Date.now();let heartbeat,lastProgress={stage:'preparing',completed:0,total:0,message:'正在准备 AI 动作评价…'};
+          const event=async(name,data)=>{
+            if(controller.signal.aborted||res.destroyed||res.writableEnded)return;
+            if(!res.headersSent){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();}
+            if(!res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`))await new Promise(resolve=>{
+              const done=()=>{res.off('drain',done);res.off('close',done);resolve();};res.once('drain',done);res.once('close',done);
+            });
+          };
+          const progress=async data=>{lastProgress={...data,elapsedMs:Date.now()-started};if(body.stream)await event('progress',lastProgress);};
           try {
             if (req.aborted || res.destroyed) return;
-            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal}));
-            if (!controller.signal.aborted && !res.destroyed) send(res, 200, result);
-          } catch (error) { if (!controller.signal.aborted && !res.destroyed) throw error; }
-          finally { res.off('close', disconnect); }
+            if(body.stream){await progress(lastProgress);heartbeat=setInterval(()=>{void event('progress',{...lastProgress,elapsedMs:Date.now()-started});},15000);heartbeat.unref?.();}
+            const result = await withAiLimit(user.id, () => completeMotionCoach({provider, input: body, fetchImpl, timeoutMs: motionAiTimeoutMs, allowPrivateProviders, signal: controller.signal,onProgress:progress}));
+            if (!controller.signal.aborted && !res.destroyed){if(body.stream)await event('done',result);else send(res,200,result);}
+          } catch (error) {
+            if (!controller.signal.aborted && !res.destroyed){
+              if(body.stream)await event('error',{error:error instanceof HttpError?error.message:'AI 动作评价失败，请重试。'});
+              else throw error;
+            }
+          }
+          finally {clearInterval(heartbeat);res.off('close',disconnect);if(body.stream&&!res.destroyed&&!res.writableEnded)res.end();}
           return;
         }
         if (pathname === '/api/ai' && method === 'POST') {

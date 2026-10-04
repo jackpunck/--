@@ -1,3 +1,6 @@
 # Preserve pinned vendor bytes for manifest integrity checks on every platform.
 /public/vendor/mediapipe/** -text
 /public/vendor/mp4box/** -text
+/public/vendor/ffmpeg/** -text
+/public/vendor/onnxruntime/** -text
+/public/vendor/rtmw/** -text

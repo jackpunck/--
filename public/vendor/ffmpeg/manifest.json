@@ -1,0 +1,40 @@
+{
+  "package": "@ffmpeg/core",
+  "version": "0.12.10",
+  "license": "GPL-2.0-or-later",
+  "tarball": "https://registry.npmjs.org/@ffmpeg/core/-/core-0.12.10.tgz",
+  "integrity": "sha512-dzNplnn2Nxle2c2i2rrDhqcB19q9cglCkWnoMTDN9Q9l3PvdjZWd1HfSPjCNWc/p8Q3CT+Es9fWOR0UhAeYQZA==",
+  "files": [
+    {
+      "path": "ffmpeg-core.js",
+      "packagePath": "dist/umd/ffmpeg-core.js",
+      "size": 112059,
+      "sha256": "b266ab5b952555881dd6310663986994a182acb2b7ff25cf10a25f7a37ac2b21"
+    },
+    {
+      "path": "ffmpeg-core.wasm",
+      "packagePath": "dist/umd/ffmpeg-core.wasm",
+      "size": 32232419,
+      "sha256": "9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7"
+    },
+    {
+      "path": "COPYING.GPLv2",
+      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n5.1.4/COPYING.GPLv2",
+      "size": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    {
+      "path": "COPYING.LGPLv2.1",
+      "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n5.1.4/COPYING.LGPLv2.1",
+      "size": 26526,
+      "sha256": "b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe"
+    },
+    {
+      "path": "LICENSE.bindings",
+      "url": "https://raw.githubusercontent.com/ffmpegwasm/ffmpeg.wasm/f876f907c7e9b9bf51d4ed0b913a855a63ae63fc/LICENSE",
+      "size": 1066,
+      "sha256": "3e123e29517d76504ffce77b3f8e2ccffd4712493f27694b0aba3e376676459f"
+    }
+  ],
+  "sourceReference": "https://github.com/ffmpegwasm/ffmpeg.wasm/tree/f876f907c7e9b9bf51d4ed0b913a855a63ae63fc"
+}

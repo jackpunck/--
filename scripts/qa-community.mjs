@@ -437,9 +437,31 @@ try{
   checks.push('shared-link login return and required profile before detail');
 
   step='offline draft';console.log(step);
-  await route('#community/publish');await page.locator('#cm-note-title').fill('QA 离线草稿');await bobContext.setOffline(true);await page.locator('#cm-note-body').fill('离线时保存文字。');await page.locator('[data-cm="draft-save"]').click();
-  await route('#community/mine?tab=drafts');await page.locator('.cm-draft-card').getByText('QA 离线草稿',{exact:true}).waitFor();await bobContext.setOffline(false);
-  checks.push('offline draft editing without silently publishing');
+  await route('#community/publish');await page.locator('#cm-note-title').fill('QA 离线草稿');
+  await page.waitForFunction(()=>!!navigator.serviceWorker?.controller);
+  // Snapshot inputs include the current minute. Force a new key so a cached
+  // business snapshot cannot conceal an offline community navigation failure.
+  await page.evaluate(()=>{
+    const OriginalDate=Date,advance=2*60*1000;
+    globalThis.Date=class extends OriginalDate {
+      constructor(...args){super(...(args.length?args:[OriginalDate.now()+advance]));}
+      static now(){return OriginalDate.now()+advance;}
+    };
+  });
+  const offlineComputeRequests=[],trackOfflineCompute=request=>{if(new URL(request.url()).pathname==='/api/compute')offlineComputeRequests.push(request.method());};
+  page.on('request',trackOfflineCompute);
+  await bobContext.setOffline(true);await page.locator('#cm-note-body').fill('离线时保存文字。');await page.locator('[data-cm="draft-save"]').click();
+  await route('#community/mine?tab=drafts');await page.locator('.cm-draft-card').getByText('QA 离线草稿',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>location.hash),'#settings?tab=drafts');
+  await page.reload();await page.locator('.cm-draft-card').getByText('QA 离线草稿',{exact:true}).waitFor();
+  await page.locator('.cm-draft-card').filter({hasText:'QA 离线草稿'}).locator('a').click();await page.locator('#cm-note-title').waitFor();
+  assert.equal(await page.locator('#cm-note-title').inputValue(),'QA 离线草稿');assert.equal(await page.locator('#cm-note-body').inputValue(),'离线时保存文字。');
+  await page.reload();await page.locator('#cm-note-title').waitFor();
+  assert.equal(await page.locator('#cm-note-title').inputValue(),'QA 离线草稿');assert.equal(await page.locator('#cm-note-body').inputValue(),'离线时保存文字。');
+  await route('#settings?tab=drafts');await page.locator('.cm-draft-card').getByText('QA 离线草稿',{exact:true}).waitFor();
+  assert.deepEqual(offlineComputeRequests,[],'Offline community boot, personal draft navigation and editing must not depend on business calculations');
+  page.off('request',trackOfflineCompute);await bobContext.setOffline(false);
+  checks.push('offline draft editing, fresh snapshot minute, community/personal navigation and cached draft/editor reload without calculation requests or silent publishing');
 
   step='existing application navigation';console.log(step);await page.setViewportSize({width:1440,height:1000});
   for(const name of ['chat','nutrition','training','library','settings']){

@@ -1,4 +1,4 @@
-import {exercises} from './domain.js?v=9';
+import {exercises} from './compute-catalog.js';
 
 // IDs are shared with the local anatomy viewer. Aliases select an available
 // structure or muscle group; unknown exercises never fall back to a squat.

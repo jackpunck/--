@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "id": "mydeadlift-development-hinge-v1",
+  "purpose": "QA-only fixed visual-reference comparison. Seven development clips are calibration only; acceptance requires a frozen subject-disjoint evaluation.",
+  "selectedFrom": "development-subject-01-only",
+  "selectionNote": "Selected from the already inspected development cache before held-out evaluation; no held-out images, labels or model outputs were used to select these references.",
+  "limitations": "The two stills show different movement phases and framing. They illustrate a visible contour distinction, not a universal geometric template or clinical spinal diagnosis. The GB still is a lowering hinge, not a bottom-position exemplar. A model may still transfer appearance or copy a conclusion despite valid target citations; blinded target-image review remains necessary.",
+  "references": [
+    {
+      "id": "REFERENCE_HINGE",
+      "path": "../.qa/motion-main-five-final-evidence/003-keyframe-5.jpg",
+      "mimeType": "image/jpeg",
+      "sha256": "fb15cd27c77502221af6dd18b101e91a8371b3b5500e9a42e58ab02fc80487ca",
+      "width": 283,
+      "height": 621,
+      "time": 2.933333,
+      "caption": "独立教学参考：作者标注正确动作视频中的下降髋铰链阶段。髋部折叠、躯干前倾且肩背存在轻微自然曲线，并不单独构成明显圆背。这不是底部姿势标准模板，也不能据此假定待评者正确。",
+      "source": {
+        "dataset": "MyDeadlift Dataset: Labeled Deadlift Videos and Biomechanical Angle Data",
+        "datasetPage": "https://data.mendeley.com/datasets/w5prmmxyt9/1",
+        "filePage": "https://data.mendeley.com/datasets/w5prmmxyt9/1/files/8cd7b69a-a1cf-4299-98a6-77edb3c7d9fc",
+        "author": "Ivan Conanta; Gloria Virginia",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "videoId": "deadlift-GB_S01_R01",
+        "videoSha256": "00ac077b0468064837f37d627867d975c4d89923da1879a9c23d61449eb807db",
+        "subject": "01",
+        "split": "train",
+        "label": "GB / Correct Movement (Gerakan Benar)",
+        "labelScope": "Author-assigned video class; no per-frame curvature threshold supplied.",
+        "transformation": "Unaltered cached JPEG bytes: target union crop from source video; existing TARGET label and expanded target rectangle; 283x621 pixels. No synthetic reconstruction or visual retouching."
+      }
+    },
+    {
+      "id": "REFERENCE_ROUND",
+      "path": "../.qa/motion-main-five-final-evidence/004-keyframe-1.jpg",
+      "mimeType": "image/jpeg",
+      "sha256": "671a23c748fda674374873029927557ac674514540480bd079c361126cc4450c",
+      "width": 464,
+      "height": 832,
+      "time": 0,
+      "caption": "独立教学参考：作者标注圆背的视频起始底部，背部外轮廓呈明显拱起的弧形。区分的是可见背部轮廓，并非躯干前倾角、低头、膝屈程度或衣服颜色。不能把此参考的缺点转移到待评视频；仅当待评画面自身清楚呈现该现象时才指出。",
+      "source": {
+        "dataset": "MyDeadlift Dataset: Labeled Deadlift Videos and Biomechanical Angle Data",
+        "datasetPage": "https://data.mendeley.com/datasets/w5prmmxyt9/1",
+        "filePage": "https://data.mendeley.com/datasets/w5prmmxyt9/1/files/b2e7d36d-a715-41bb-99c4-fd7cd516a93d",
+        "author": "Ivan Conanta; Gloria Virginia",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "videoId": "deadlift-PB_S01_R01",
+        "videoSha256": "6828b5542b936345297ed84db8fe9178d0f3a048a04f0833d040ac4e0ac301c1",
+        "subject": "01",
+        "split": "train",
+        "label": "PB / Rounded Back (Punggung Bungkuk)",
+        "labelScope": "Author-assigned video class; no per-frame curvature threshold supplied.",
+        "transformation": "Unaltered cached JPEG bytes: full source frame; existing TARGET label and expanded target rectangle; 464x832 pixels. No synthetic reconstruction or visual retouching."
+      }
+    }
+  ]
+}

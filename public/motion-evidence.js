@@ -1,48 +1,29 @@
 import { browserSeekTime, scaledVideoSize, validateVideoFile, validateVideoMetadata } from './motion-video.js';
+import { prepareMotionVideo } from './motion-media.js';
 
-export const MOTION_EVIDENCE_LIMITS = Object.freeze({ maxImages: 6, maxBytes: 1900000, maxDimension: 640 });
+export const MOTION_EVIDENCE_LIMITS = Object.freeze({ maxImages: 6, maxBytes: 1900000, maxDimension: 1280 });
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const checkAbort = signal => { if (signal?.aborted) throw new DOMException('已取消关键帧提取。', 'AbortError'); };
 const jsonBytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
-const clipped = (value, length = 300) => typeof value === 'string' ? value.slice(0, length) : undefined;
 
-// Bound every field; a saved report must not accidentally send raw pose arrays,
-// arbitrary attachment data or an unbounded history to the model.
+// Keep target metadata bounded; complete pose samples travel separately.
 function compact(value, depth = 0) {
   if (value === null || typeof value === 'boolean') return value;
   if (finite(value)) return value;
   if (typeof value === 'string') return value.slice(0, 300);
   if (!value || typeof value !== 'object' || depth > 4) return undefined;
   if (Array.isArray(value)) return value.slice(0, 24).map(item => compact(item, depth + 1));
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !/^(landmarks|worldLandmarks|frames|dataurl|base64|images?|video|file)$/i.test(key)).slice(0, 24).map(([key, item]) => [key.slice(0, 64), compact(item, depth + 1)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !/^(landmarks|wholebodyLandmarks|frames|dataurl|base64|images?|video|file)$/i.test(key)).slice(0, 24).map(([key, item]) => [key.slice(0, 64), compact(item, depth + 1)]));
 }
 
-export function summarizeMotionAnalysis(assessment = {}, pipeline = {}) {
-  const reps = Array.isArray(assessment.reps) ? assessment.reps : [];
-  // Include representative and lowest-scoring repetitions, preserving chronology.
-  const chosen = new Set([0, Math.floor(reps.length / 2), reps.length - 1]);
-  reps.map((rep, index) => ({ index, score: finite(rep.score) ? rep.score : 101 })).sort((a, b) => a.score - b.score).slice(0, 12).forEach(item => chosen.add(item.index));
+export function summarizeMotionAnalysis(observations={},pipeline={}) {
+  const quality=observations.quality||{};
   return {
-    version: clipped(assessment.version, 100), exerciseId: clipped(assessment.exerciseId, 100) ?? null,
-    exerciseConfidence: finite(assessment.exerciseConfidence) ? assessment.exerciseConfidence : null,
-    exerciseFamily: compact(assessment.exerciseFamily), exerciseFamilyName: compact(assessment.exerciseFamilyName),
-    candidates: compact(assessment.candidates), requiresVisualConfirmation: assessment.requiresVisualConfirmation === true,
-    status: clipped(assessment.status, 40), score: finite(assessment.score) ? assessment.score : null,
-    duration: finite(pipeline.duration) ? pipeline.duration : null,
-    sampleFps: finite(pipeline.sampleFps) ? pipeline.sampleFps : null,
-    sourceFps: finite(pipeline.sourceFps) ? pipeline.sourceFps : null,
-    quality: compact(assessment.quality), summary: clipped(assessment.summary, 800),
-    attemptCount: finite(assessment.attemptCount) ? assessment.attemptCount : reps.length, qualifiedRepCount: finite(assessment.qualifiedRepCount) ? assessment.qualifiedRepCount : null,
-    incompleteAttemptCount: finite(assessment.incompleteAttemptCount) ? assessment.incompleteAttemptCount : null,
-    observedActiveRange: compact(assessment.observedActiveRange),
-    limitations: compact(assessment.limitations),
-    checks: compact(assessment.checks), scoreCoverage: compact(assessment.scoreCoverage),
-    observedScore: finite(assessment.observedScore) ? assessment.observedScore : null,
-    scoreStatus: clipped(assessment.scoreStatus, 100), visualReviewRequests: compact(assessment.visualReviewRequests),
-    targetTracking: compact(pipeline.targetTracking),
-    reps: [...chosen].filter(index => reps[index]).sort((a, b) => a - b).map(index => compact(reps[index])),
-    issues: compact(assessment.issues || []),
-    evidenceNote: '姿态规则是可见运动线索。肩髋连线不能证明腰椎中立；缺失或遮挡部位不可据此断言。',
+    version:'motion-observations-v1',duration:finite(pipeline.duration)?pipeline.duration:null,
+    sampleFps:finite(pipeline.sampleFps)?pipeline.sampleFps:null,sourceFps:finite(pipeline.sourceFps)?pipeline.sourceFps:null,
+    quality:Object.fromEntries(['totalFrames','validFrames','usableRatio','sourceFps','targetCoverage','reasons'].filter(key=>Object.hasOwn(quality,key)).map(key=>[key,key==='reasons'?(Array.isArray(quality[key])?quality[key].filter(item=>typeof item==='string').slice(0,64).map(item=>item.slice(0,100)):[]):quality[key]===null||finite(quality[key])?quality[key]:null])),
+    ...(pipeline.targetTracking?{targetTracking:compact(Object.fromEntries(['mode','point','trackId','coverage','lockedFrames','ambiguousFrames','lostFrames','totalFrames','maxPeople'].filter(key=>Object.hasOwn(pipeline.targetTracking,key)).map(key=>[key,pipeline.targetTracking[key]])))}:{}),
+    evidenceNote:'骨架为单目估计的运动观测；缺失或遮挡部位保持未知，不能据此断言动作质量。',
   };
 }
 
@@ -55,37 +36,63 @@ export function selectMotionEvidenceFrames(frames, assessment = {}, { maxImages 
   if (tracking && new Set(eligible.map(frame => frame.subjectTracking.trackId)).size > 1) throw new Error('分析中目标身份发生变化，无法生成同一人的关键帧。');
   const ordered = [...new Map(eligible.map(frame => [frame.time, frame])).values()].sort((a, b) => a.time - b.time);
   if (!ordered.length) throw new Error('没有可供提取证据的分析帧。');
-  const nearest = time => ordered.reduce((best, frame) => Math.abs(frame.time - time) < Math.abs(best.time - time) ? frame : best, ordered[0]);
+  // Binary lookup avoids rescanning up to 1,800 frames for every joint sample.
+  const nearest = time => {
+    let low = 0, high = ordered.length - 1;
+    while (low < high) { const mid = (low + high) >>> 1; if (ordered[mid].time < time) low = mid + 1; else high = mid; }
+    return low > 0 && time - ordered[low - 1].time <= ordered[low].time - time ? ordered[low - 1] : ordered[low];
+  };
   const selected = new Map();
-  const add = (time, reason, maxDistance = Infinity) => {
+  const add = (time, reason, maxDistance = Infinity, separation = 0) => {
     if (!finite(time)) return;
     const frame = nearest(time), existing = selected.get(frame.time);
     if (Math.abs(frame.time - time) > maxDistance) return;
     if (existing) { if (!existing.reasons.includes(reason)) existing.reasons.push(reason); return; }
+    if ([...selected.keys()].some(chosen => Math.abs(chosen - frame.time) < separation)) return;
     if (selected.size >= limit) return;
     selected.set(frame.time, { time: frame.time, requestedTime: time, poseTime: frame.time, sourceTime: finite(frame.sourceTime) ? frame.sourceTime : null, reasons: [reason], ...(tracking ? { subjectTracking: compact(frame.subjectTracking) } : {}) });
   };
-  const start = finite(assessment.observedActiveRange?.start) ? assessment.observedActiveRange.start : ordered[0].time;
-  const end = finite(assessment.observedActiveRange?.end) ? assessment.observedActiveRange.end : ordered.at(-1).time;
-  const reps = Array.isArray(assessment.reps) ? assessment.reps : [];
-  const middleRep = reps[Math.floor(reps.length / 2)];
-  add(start, '动作区间起始');
-  add(middleRep?.peak ?? middleRep?.bottom ?? middleRep?.time ?? (start + end) / 2, middleRep ? '代表动作顶点' : '动作区间中部');
-  add(end, '动作区间结束');
-  const severity = { error: 0, severe: 0, warning: 1, warn: 1, info: 3 };
-  const checkIssues = (Array.isArray(assessment.checks) ? assessment.checks : []).filter(item => item && !['pass', 'passed', 'unobservable', 'not_applicable'].includes(item.status)).flatMap(item => (item.evidenceTimes || []).filter(finite).map(time => ({ ...item, time })));
-  const issues = [...(assessment.issues || []), ...reps.flatMap(rep => rep.issues || []), ...checkIssues].filter(item => item && finite(item.time));
-  const scoredIssues = issues.map(item => ({ ...item, score: finite(item.score) ? item.score : reps.find(rep => item.time >= rep.start && item.time <= rep.end)?.score ?? 101 }));
-  scoredIssues.sort((a, b) => Number(b.critical === true) - Number(a.critical === true) || (severity[a.severity] ?? 2) - (severity[b.severity] ?? 2) || a.score - b.score || a.time - b.time);
-  const codes = new Set();
-  for (const item of scoredIssues) { if (codes.has(item.code)) continue; codes.add(item.code); add(item.time, '问题：' + (clipped(item.code, 80) || '可见动作'), 0.35); }
-  for (const request of Array.isArray(assessment.visualReviewRequests) ? assessment.visualReviewRequests : []) {
-    if (!request || typeof request !== 'object') continue;
-    const times = Array.isArray(request.evidenceTimes) ? request.evidenceTimes : [request.time];
-    for (const time of times) add(time, '待画面核查：' + (clipped(request.code, 80) || '细节'), 0.35);
+  const start=ordered[0].time,end=ordered.at(-1).time;
+  add(start,'视频起始');add(end,'视频结束');add((start+end)/2,'视频中部');
+  // Use observed extrema to capture changing postures without classifying an
+  // exercise or labelling any position as correct/incorrect.
+  const measurements=Array.isArray(assessment.measurements)?assessment.measurements:[];
+  const features=new Map();
+  for(const side of ['left','right'])for(const field of ['elbowAngle','shoulderAngle','hipAngle','kneeAngle','bodyAlignmentAngle','torsoLean']){
+    const values=measurements.filter(row=>finite(row?.time)&&finite(row?.[side]?.[field])&&Math.abs(nearest(row.time).time-row.time)<=0.035).sort((a,b)=>a.time-b.time);
+    if(!values.length)continue;
+    // An isolated pose spike should not consume a scarce evidence image. Only
+    // use contiguous neighbours; never smooth across missing/occluded periods.
+    const ranked=values.map((row,index)=>{
+      const neighbours=values.slice(Math.max(0,index-1),index+2).filter(other=>Math.abs(other.time-row.time)<=0.15).map(other=>other[side][field]).sort((a,b)=>a-b);
+      const value=values.length>=5&&neighbours.length===3?neighbours[1]:row[side][field];
+      return {row,value,error:Math.abs(row[side][field]-value)};
+    });
+    for(const {row,value} of ranked){
+      const time=nearest(row.time).time;
+      if(!features.has(time))features.set(time,{});
+      features.get(time)[side+'.'+field]=value/180;
+    }
   }
-  add(middleRep?.start, '代表动作起始'); add(middleRep?.end, '代表动作结束');
-  for (const fraction of [0.25, 0.75, 0.125, 0.875]) add(start + (end - start) * fraction, '动作过程');
+  // Cover distinct postures, not multiple extrema of nearly the same upright
+  // pose. A small time term also covers different portions of repeated motion.
+  const distance=(a,b)=>{
+    const left=features.get(a)||{},right=features.get(b)||{};
+    const keys=Object.keys(left).filter(key=>finite(right[key]));
+    const pose=keys.length?keys.reduce((sum,key)=>sum+(left[key]-right[key])**2,0)/keys.length:0;
+    return pose+0.06*((a-b)/Math.max(end-start,0.001))**2;
+  };
+  while(selected.size<limit&&features.size){
+    let best=null,bestDistance=-1;
+    for(const [time] of features){
+      if(selected.has(time)||[...selected.keys()].some(chosen=>Math.abs(chosen-time)<Math.min(0.25,(end-start)/20)))continue;
+      const closest=Math.min(...[...selected.keys()].map(chosen=>distance(time,chosen)));
+      if(closest>bestDistance){best=time;bestDistance=closest;}
+    }
+    if(best===null)break;
+    add(best,'姿态与时序覆盖');
+  }
+  for(const fraction of [0.25,0.75,0.125,0.875])add(start+(end-start)*fraction,'视频过程');
   return [...selected.values()].sort((a, b) => a.time - b.time);
 }
 
@@ -100,6 +107,12 @@ export function evidenceCropRegion(box) {
   // Keep extra room above it for visible head/neck assessment and the label.
   const headroom = Math.max(0.08, (box.yMax - box.yMin) * 0.25);
   return { xMin: Math.max(0, box.xMin - marginX), yMin: Math.max(0, box.yMin - headroom), xMax: Math.min(1, box.xMax + marginX), yMax: Math.min(1, box.yMax + marginY) };
+}
+
+export function evidenceSequenceCrop(frames) {
+  const boxes=frames.map(frame=>frame?.subjectTracking?.bbox).filter(validBox);
+  if(!boxes.length)return evidenceCropRegion(null);
+  return evidenceCropRegion({xMin:Math.min(...boxes.map(box=>box.xMin)),yMin:Math.min(...boxes.map(box=>box.yMin)),xMax:Math.max(...boxes.map(box=>box.xMax)),yMax:Math.max(...boxes.map(box=>box.yMax))});
 }
 
 function waitForMedia(video, event, signal, trigger) {
@@ -156,56 +169,93 @@ async function jpegDataUrl(canvas, budget, signal) {
 export async function buildMotionEvidence(file, pipeline, assessment, { signal, onProgress = () => {}, maxImages = 6, maxBytes = 1900000 } = {}) {
   checkAbort(signal); validateVideoFile(file);
   const selected = selectMotionEvidenceFrames(pipeline?.frames, assessment, { maxImages });
+  const sequenceCrop = evidenceSequenceCrop(selected);
+  if(!selected.length)throw new Error('未找到可用的训练者画面，请调整拍摄或点选训练者后重新评估。');
   const summary = summarizeMotionAnalysis(assessment, pipeline);
   const budget = Math.min(MOTION_EVIDENCE_LIMITS.maxBytes, finite(maxBytes) ? Math.floor(maxBytes) : MOTION_EVIDENCE_LIMITS.maxBytes);
   if (budget < 50000) throw new Error('关键帧请求大小限制过小。');
   const video = document.createElement('video'), canvas = document.createElement('canvas');
   video.preload = 'auto'; video.muted = true; video.playsInline = true;
-  const url = URL.createObjectURL(file);
-  let observation, lastImageTime = null;
+  const prepared = await prepareMotionVideo(file, { signal, onProgress });
+  const software = prepared.mode === 'software';
+  const url = software ? null : URL.createObjectURL(prepared.file);
+  let observation, sourceBitmap, lastImageTime = null;
+  const sourceImages = [];
   try {
-    await waitForMedia(video, 'loadedmetadata', signal, () => { video.src = url; video.load(); });
-    const duration = video.duration, width = video.videoWidth, height = video.videoHeight;
+    if (!software) await waitForMedia(video, 'loadedmetadata', signal, () => { video.src = url; video.load(); });
+    const { duration, width, height } = software ? prepared.metadata : { duration: video.duration, width: video.videoWidth, height: video.videoHeight };
     validateVideoMetadata({ duration, width, height });
     if (Math.abs(duration - pipeline.duration) > Math.max(0.1, duration * 0.001) || width !== pipeline.width || height !== pipeline.height) throw new Error('视频与分析结果不一致，请重新分析当前视频。');
-    if (video.readyState < 2) await waitForMedia(video, 'loadeddata', signal);
-    const result = { version: 'motion-evidence-v1', video: { width, height, duration, sampleFps: summary.sampleFps, sourceFps: summary.sourceFps }, summary, images: [], byteLength: 0 };
+    if (!software && video.readyState < 2) await waitForMedia(video, 'loadeddata', signal);
+    let decodedImages;
+    if (software) {
+      const { readMotionSourceFrames } = await import('./motion-source.js');
+      decodedImages = await readMotionSourceFrames(file, selected.map(item => item.sourceTime ?? item.poseTime), { signal, sampleFps: pipeline.sampleFps, maxDimension: 1280, onProgress: value => onProgress({ ...value, stage: 'evidence' }) });
+      if (decodedImages.length !== selected.length) throw new Error('关键图片未完整提取，请重试。');
+    }
+    const result = { version: 'motion-evidence-v2', video: { width, height, duration, sampleFps: summary.sampleFps, sourceFps: summary.sourceFps }, summary, images: [], byteLength: 0 };
     const perImageBudget = Math.floor((budget - jsonBytes(result) - 20000) / selected.length);
     for (const [index, item] of selected.entries()) {
       checkAbort(signal);
-      observation = observePresentedFrame(video, signal);
-      // Prefer the pose's actual source PTS, when available; seek-time epsilon
-      // compensates Chromium microsecond truncation without changing poseTime.
-      const seek = browserSeekTime(item.sourceTime ?? item.poseTime, duration);
-      const didSeek = Math.abs(video.currentTime - seek) > 0.000001;
-      if (didSeek) await waitForMedia(video, 'seeked', signal, () => { video.currentTime = seek; });
-      const presentedTime = await observation.promise; observation = undefined; checkAbort(signal);
-      const imageTime = presentedTime ?? (didSeek ? null : lastImageTime); lastImageTime = imageTime;
-      const time = imageTime ?? item.poseTime;
+      let imageTime, sourceBytes;
+      if (software) {
+        const decoded = decodedImages[index];
+        if (Math.abs(decoded.time - (item.sourceTime ?? item.poseTime)) > 0.00001) throw new Error('关键图片时间与分析结果不一致，请重新分析。');
+        imageTime = finite(decoded.sourceTime) ? decoded.sourceTime : null;
+        // FFmpeg's fps filter can repeat one source image without reporting its
+        // original PTS. Compare before target boxes/crops so repeated source
+        // pixels cannot masquerade as independent motion evidence.
+        sourceBytes = new Uint8Array(await decoded.blob.arrayBuffer());
+      } else {
+        observation = observePresentedFrame(video, signal);
+        // Prefer the pose's actual source PTS, when available; seek-time epsilon
+        // compensates Chromium microsecond truncation without changing poseTime.
+        const seek = browserSeekTime(item.sourceTime ?? item.poseTime, duration);
+        const didSeek = Math.abs(video.currentTime - seek) > 0.000001;
+        if (didSeek) await waitForMedia(video, 'seeked', signal, () => { video.currentTime = seek; });
+        const presentedTime = await observation.promise; observation = undefined; checkAbort(signal);
+        imageTime = presentedTime ?? (didSeek ? null : lastImageTime); lastImageTime = imageTime;
+      }
+      // A decoded source PTS is still known when HTML video cannot report a
+      // presentation callback. Repeated samples of that frame are one image,
+      // not independent visual observations at different requested times.
+      const time = imageTime ?? item.sourceTime ?? item.poseTime;
       const mapping = { requestedTime: item.requestedTime, poseTime: item.poseTime, sourceTime: item.sourceTime };
-      const duplicate = result.images.find(image => Math.round(image.time * 1e6) === Math.round(time * 1e6));
+      const duplicate = (sourceBytes && sourceImages.find(entry=>entry.bytes.length===sourceBytes.length&&entry.bytes.every((byte,index)=>byte===sourceBytes[index]))?.image) || result.images.find(image => Math.round(image.time * 1e6) === Math.round(time * 1e6));
       if (duplicate) {
         duplicate.reasons = [...new Set([...duplicate.reasons, ...item.reasons])];
         duplicate.frameMappings.push(mapping);
         onProgress({ stage: 'evidence', processedFrames: index + 1, totalFrames: selected.length, progress: (index + 1) / selected.length });
         continue;
       }
-      const box = item.subjectTracking?.bbox, crop = evidenceCropRegion(box);
-      const cropWidth = (crop.xMax - crop.xMin) * width, cropHeight = (crop.yMax - crop.yMin) * height;
-      const size = scaledVideoSize(cropWidth, cropHeight, MOTION_EVIDENCE_LIMITS.maxDimension);
+      // Two distant views retain benches, bar ends, rails and cable origins.
+      // The remaining target crops preserve detail for posture checks.
+      const framing = index === 0 || index === selected.length - 1 ? 'equipment-context' : 'target-detail';
+      // The same crop throughout the detail sequence preserves screen-space
+      // motion. Per-frame recentering/zooming can look like body sway to a VLM.
+      const box = item.subjectTracking?.bbox, crop = framing === 'equipment-context' ? evidenceCropRegion(null) : sequenceCrop;
+      if (software) { sourceBitmap = await createImageBitmap(decodedImages[index].blob); checkAbort(signal); }
+      const source = sourceBitmap || video, sourceWidth = software ? sourceBitmap.width : width, sourceHeight = software ? sourceBitmap.height : height;
+      const cropWidth = (crop.xMax - crop.xMin) * sourceWidth, cropHeight = (crop.yMax - crop.yMin) * sourceHeight;
+      const size = scaledVideoSize(cropWidth, cropHeight, framing === 'equipment-context' ? MOTION_EVIDENCE_LIMITS.maxDimension : 960);
       canvas.width = size.width; canvas.height = size.height;
       const context = canvas.getContext('2d'); if (!context) throw new Error('浏览器无法读取视频画面。');
-      context.drawImage(video, crop.xMin * width, crop.yMin * height, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      context.drawImage(source, crop.xMin * sourceWidth, crop.yMin * sourceHeight, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      sourceBitmap?.close(); sourceBitmap = undefined;
       if (box) {
-        const x = (box.xMin - crop.xMin) / (crop.xMax - crop.xMin) * canvas.width, y = (box.yMin - crop.yMin) / (crop.yMax - crop.yMin) * canvas.height;
-        const boxWidth = (box.xMax - box.xMin) / (crop.xMax - crop.xMin) * canvas.width, boxHeight = (box.yMax - box.yMin) / (crop.yMax - crop.yMin) * canvas.height;
-        context.strokeStyle = '#ffdf00'; context.lineWidth = 3; context.strokeRect(x, y, boxWidth, boxHeight);
+        // Joint bounds can cut through the back/head silhouette. Place the
+        // target marker outside those bounds, leaving the contour readable.
+        const marker=evidenceCropRegion(box);
+        const x = Math.max(2,(marker.xMin - crop.xMin) / (crop.xMax - crop.xMin) * canvas.width), y = Math.max(2,(marker.yMin - crop.yMin) / (crop.yMax - crop.yMin) * canvas.height);
+        const right=Math.min(canvas.width-2,(marker.xMax-crop.xMin)/(crop.xMax-crop.xMin)*canvas.width),bottom=Math.min(canvas.height-2,(marker.yMax-crop.yMin)/(crop.yMax-crop.yMin)*canvas.height);
+        context.strokeStyle = '#ffdf00'; context.lineWidth = 2; context.strokeRect(x, y, right-x, bottom-y);
         // Put the label in the crop margin, not over the target's head/neck.
         context.fillStyle = '#ffdf00'; context.fillRect(4, 4, 70, 22);
         context.fillStyle = '#111'; context.font = 'bold 14px sans-serif'; context.fillText('TARGET', 9, 20);
       }
       const dataUrl = await jpegDataUrl(canvas, perImageBudget, signal);
-      result.images.push({ ...item, time, imageTime, timePrecision: imageTime === null ? 'seek-target' : 'source-pts', frameMappings: [mapping], crop, width: canvas.width, height: canvas.height, mimeType: 'image/jpeg', dataUrl });
+      result.images.push({ ...item, time, imageTime, timePrecision: imageTime !== null ? 'source-pts' : item.sourceTime !== null ? 'pose-source-pts' : 'seek-target', frameMappings: [mapping], framing, crop, width: canvas.width, height: canvas.height, mimeType: 'image/jpeg', dataUrl });
+      if(sourceBytes)sourceImages.push({bytes:sourceBytes,image:result.images.at(-1)});
       onProgress({ stage: 'evidence', processedFrames: index + 1, totalFrames: selected.length, progress: (index + 1) / selected.length });
     }
     summary.evidenceFrames = result.images.map(({ dataUrl, ...metadata }) => metadata);
@@ -213,6 +263,6 @@ export async function buildMotionEvidence(file, pipeline, assessment, { signal, 
     if (result.byteLength >= budget) throw new Error('关键帧请求超过大小限制。');
     checkAbort(signal); return result;
   } finally {
-    observation?.cancel(); video.pause(); video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url); canvas.width = canvas.height = 0;
+    sourceBitmap?.close(); observation?.cancel(); video.pause(); video.removeAttribute('src'); video.load(); if (url) URL.revokeObjectURL(url); canvas.width = canvas.height = 0;
   }
 }

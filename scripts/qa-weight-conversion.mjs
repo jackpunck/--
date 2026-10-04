@@ -27,8 +27,9 @@ try {
   await page.locator('.nav [data-page="library"]').click();
   const tab=id=>page.locator(`#knowledge-tab-${id}`).click();
   const preset=(side,reps)=>page.locator(`#weight-conversion-form [data-action="rm-preset"][data-side="${side}"][data-reps="${reps}"]`);
-  const maxWeight=()=>page.locator('[data-rm-max]').textContent();
-  const targetWeight=()=>page.locator('[data-rm-target]').textContent();
+  const settled=()=>page.waitForFunction(()=>{const form=document.querySelector('#weight-conversion-form');return form&&form.dataset.computing!=='true';});
+  const maxWeight=async()=>{await settled();return page.locator('[data-rm-max]').textContent();};
+  const targetWeight=async()=>{await settled();return page.locator('[data-rm-target]').textContent();};
   const formula=method=>page.locator(`.rm-formula-comparison [data-method="${method}"]`);
   await tab('weights');
   const beforeRecords=(await savedState()).records;
@@ -85,6 +86,7 @@ try {
   await formula('epley').click();
   for(const [id,value] of [['weight-known',''],['weight-known','-1'],['weight-current-reps','16'],['weight-current-reps','2.5'],['weight-target-reps','0']]) {
     await page.locator('#'+id).fill(value);
+    await settled();
     assert((await page.locator('#weights-error').textContent()).trim());
     assert.equal(await page.locator('#weights-result').isVisible(),false);
     assert.equal(await page.locator('#rm-target-result').isVisible(),false);

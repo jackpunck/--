@@ -1,202 +1,189 @@
-import {motionExercises, motionCheckDefinitions, getMotionExercise, getMotionFamily} from './motion-catalog.js';
+import {motionExercises, motionFamilies, getMotionExercise} from './motion-catalog.js';
+import {isUnknownMotionActionName, sanitizeMotionVerdict} from './motion-verdict.js';
 
-export const MOTION_COACH_VERSION = 'motion-coach-v1';
-export const MOTION_COACH_LIMITS = Object.freeze({maxFrames:6, maxFrameBytes:512*1024, maxImageBytes:2*1024*1024, maxAnalysisBytes:128*1024});
-export const MOTION_HARD_QUALITY_FAILURES = Object.freeze(['INVALID_DIMENSIONS','NO_POSE','TOO_FEW_FRAMES','MULTIPLE_PEOPLE','LOW_POSE_COVERAGE','LOW_TARGET_COVERAGE','LOW_SOURCE_FRAME_RATE','LOW_SOURCE_RATE','LOW_SAMPLE_RATE','SIDE_VIEW_REQUIRED','EXERCISE_HINT_CONFLICT','INSUFFICIENT_CHECK_COVERAGE','TARGET_ID_CHANGED']);
+export const MOTION_COACH_VERSION = 'motion-coach-v5';
+export const MOTION_REPORT_VERSION = 'motion-report-v1';
+export const MOTION_COACH_LIMITS = Object.freeze({maxFrames: 6, maxFrameBytes: 512 * 1024, maxImageBytes: 2 * 1024 * 1024, maxAnalysisBytes: 128 * 1024});
 const finite = value => typeof value === 'number' && Number.isFinite(value);
-const clamp = value => Math.max(0, Math.min(100, value));
-const text = (value, limit=500) => typeof value === 'string' ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0,limit) : '';
-const statuses = new Set(['pass','fail','unobservable']);
-const severities = new Set(['info','warning','severe']);
-const confidences = new Set(['high','medium','low']);
-const exercise = id => typeof id === 'string' ? getMotionExercise(id) : null;
-const familyTemplate = name => typeof name === 'string' ? getMotionFamily(name)[0]||null : null;
-const definition = code => typeof code === 'string' && Object.hasOwn(motionCheckDefinitions,code) ? motionCheckDefinitions[code] : null;
-const evidenceObject = value => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([key,v])=>/^[a-zA-Z][\w]{0,39}$/.test(key)&&(finite(v)||typeof v==='string'||typeof v==='boolean')).slice(0,16).map(([key,v])=>[key,typeof v==='string'?text(v,200):v])) : {};
-const compactBox = value => {
-  const keys=['xMin','yMin','xMax','yMax'];
-  if(!value||!keys.every(key=>finite(value[key])&&value[key]>=0&&value[key]<=1)||value.xMin>=value.xMax||value.yMin>=value.yMax)return undefined;
-  return Object.fromEntries(keys.map(key=>[key,value[key]]));
-};
-const compactSubject = value => {
-  const result={};
-  if(['locked','ambiguous','lost'].includes(value?.status))result.status=value.status;
-  if(typeof value?.trackId==='string')result.trackId=text(value.trackId,80);
-  if(finite(value?.confidence)&&value.confidence>=0&&value.confidence<=1)result.confidence=value.confidence;
-  const bbox=compactBox(value?.bbox);if(bbox)result.bbox=bbox;
-  return result;
-};
-const boundedTimes = value => [...new Set((Array.isArray(value)?value:[]).filter(time=>finite(time)&&time>=0&&time<=120))].slice(0,12);
-function compactCheck(value) {
-  const rule=definition(value?.code);
-  if(!rule)return null;
-  const status=statuses.has(value.status)?value.status:'unobservable';
-  return {code:rule.code,status,severity:severities.has(value.severity)?value.severity:'info',time:finite(value.time)?value.time:null,
-    evidence:evidenceObject(value.evidence),message:text(value.message),correction:text(value.correction),
-    weight:rule.weight,critical:rule.critical,score:finite(value.score)?clamp(value.score):null,source:'pose',
-    scope:['whole-repetition','sampled-frames','unobservable'].includes(value.scope)?value.scope:'unobservable',evidenceTimes:boundedTimes(value.evidenceTimes)};
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const text = (value, limit = 500) => typeof value === 'string' ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, limit) : '';
+const narrative = value => text(value, 1200).split(/(?<=[。！？；;\n])|(?<=[.!?])\s+/).filter(sentence => !/(?:\d+(?:\.\d+)?\s*分(?!钟)|\d+\s*\/\s*100|满分|参考分|(?:评分|得分|分数|标准率|合格率)[^。！？\n]{0,40}\d)/i.test(sentence)).join('').trim();
+const validTime = value => finite(value) && value >= 0 && value <= 120;
+const times = (value, limit = 12) => [...new Set((Array.isArray(value) ? value : []).filter(validTime))].slice(0, limit);
+const supportedFamily = value => typeof value === 'string' && Object.hasOwn(motionFamilies, value) ? value : null;
+const confidences = new Set(['high', 'medium', 'low']);
+const qualityReasons = new Set(['NO_FRAMES', 'INVALID_DIMENSIONS', 'TARGET_ID_CHANGED', 'INVALID_FRAME_TIME', 'NON_MONOTONIC_FRAME_TIMES', 'TARGET_NOT_LOCKED', 'UNRESOLVED_TARGET', 'NO_VISIBLE_PERSON', 'MISSING_OR_UNCERTAIN_LANDMARKS']);
+
+/** Model-facing picture indices avoid float timestamp transcription errors.
+ * Resolve only exact supplied pictures; arbitrary or rounded times never snap
+ * to a nearby frame. Saved reports contain the resolved original times only. */
+export function resolveMotionImageEvidenceTimes(value, keyframes = []) {
+  const pictures = Array.isArray(keyframes) ? keyframes : [];
+  const available = new Set(pictures.map(frame => frame?.time).filter(validTime));
+  const supplied = times(value?.evidenceTimes).filter(time => available.has(time));
+  const indexed = (Array.isArray(value?.imageIndices) ? value.imageIndices : []).slice(0, MOTION_COACH_LIMITS.maxFrames)
+    .filter(index => Number.isInteger(index) && index >= 0 && index < pictures.length)
+    .map(index => pictures[index]?.time).filter(validTime);
+  return [...new Set([...supplied, ...indexed])];
 }
 
-/** Whitelist an analysis summary; pixel data and landmark sequences never enter it. */
-export function compactMotionAnalysis(value={}) {
-  const result={};
-  for(const key of ['version','status','scoreStatus','summary','family','exerciseFamily','exerciseFamilyName'])if(typeof value[key]==='string')result[key]=text(value[key],key==='summary'?2000:80);
-  result.exerciseId=exercise(value.exerciseId)?.id||null;
-  result.requiresVisualConfirmation=value.requiresVisualConfirmation===true;
-  result.candidates=(Array.isArray(value.candidates)?value.candidates:[]).slice(0,25).map(item=>typeof item==='string'?{exerciseId:exercise(item)?.id}:typeof item==='object'&&item?{...evidenceObject(item),exerciseId:exercise(item.exerciseId||item.id)?.id}:null).filter(item=>item?.exerciseId);
-  for(const key of ['score','observedScore','scoreCoverage','exerciseConfidence','attemptCount','qualifiedRepCount','incompleteAttemptCount'])if(finite(value[key]))result[key]=value[key];
-  result.quality=evidenceObject(value.quality);
-  if(Array.isArray(value.quality?.reasons))result.quality.reasons=value.quality.reasons.slice(0,20).map(v=>text(v,100));
-  result.checks=(Array.isArray(value.checks)?value.checks:[]).slice(0,80).map(compactCheck).filter(Boolean);
-  result.issues=(Array.isArray(value.issues)?value.issues:[]).filter(item=>item&&typeof item==='object').slice(0,40).map(item=>({code:text(item.code,80),time:finite(item.time)?item.time:null,message:text(item.message),severity:severities.has(item.severity)?item.severity:'info'}));
-  result.reps=(Array.isArray(value.reps)?value.reps:[]).filter(rep=>rep&&typeof rep==='object').slice(0,40).map(rep=>({
-    index:finite(rep.index)?rep.index:null,start:finite(rep.start)?rep.start:null,end:finite(rep.end)?rep.end:null,bottom:finite(rep.bottom)?rep.bottom:null,time:finite(rep.time)?rep.time:null,score:finite(rep.score)?clamp(rep.score):null,qualified:rep.qualified===true,
-    metrics:evidenceObject(rep.metrics),checks:(Array.isArray(rep.checks)?rep.checks:[]).slice(0,33).map(compactCheck).filter(Boolean),issues:(Array.isArray(rep.issues)?rep.issues:[]).filter(item=>item&&typeof item==='object').slice(0,8).map(item=>({code:text(item.code,80),time:finite(item.time)?item.time:null,message:text(item.message)})),
-  }));
-  result.visualReviewRequests=(Array.isArray(value.visualReviewRequests)?value.visualReviewRequests:[]).filter(item=>definition(item?.code)).slice(0,33).map(item=>({code:item.code,reason:text(item.reason),evidenceTimes:boundedTimes(item.evidenceTimes)}));
-  if(value.observedActiveRange)result.observedActiveRange=evidenceObject(value.observedActiveRange);
-  result.evidenceFrames=(Array.isArray(value.evidenceFrames)?value.evidenceFrames:[]).slice(0,6).map(frame=>{
-    const result=evidenceObject(frame);
-    for(const key of ['crop','bbox','targetBox'])if(frame?.[key])result[key]=evidenceObject(frame[key]);
-    if(frame?.subjectTracking)result.subjectTracking=compactSubject(frame.subjectTracking);
-    if(Array.isArray(frame?.frameMappings))result.frameMappings=frame.frameMappings.slice(0,6).map(mapping=>Object.fromEntries(['requestedTime','poseTime','sourceTime'].filter(key=>finite(mapping?.[key])&&mapping[key]>=0&&mapping[key]<=120).map(key=>[key,mapping[key]])));
-    return result;
-  });
-  if(value.targetTracking){result.targetTracking=evidenceObject(value.targetTracking);if(value.targetTracking.point)result.targetTracking.point=evidenceObject(value.targetTracking.point);}
+function compactQuality(value) {
+  const quality = {};
+  for (const key of ['totalFrames', 'validFrames']) if (Number.isSafeInteger(value?.[key]) && value[key] >= 0 && value[key] <= 1800) quality[key] = value[key];
+  for (const key of ['usableRatio', 'targetCoverage']) if (value?.[key] === null || finite(value?.[key]) && value[key] >= 0 && value[key] <= 1) quality[key] = value[key];
+  if (value?.sourceFps === null || finite(value?.sourceFps) && value.sourceFps > 0 && value.sourceFps <= 1000) quality.sourceFps = value.sourceFps;
+  quality.reasons = [...new Set((Array.isArray(value?.reasons) ? value.reasons : []).filter(reason => qualityReasons.has(reason)))];
+  return quality;
+}
+
+function compactBox(value) {
+  const keys = ['xMin', 'yMin', 'xMax', 'yMax'];
+  if (!value || !keys.every(key => finite(value[key]) && value[key] >= 0 && value[key] <= 1) || value.xMin >= value.xMax || value.yMin >= value.yMax) return undefined;
+  return Object.fromEntries(keys.map(key => [key, value[key]]));
+}
+
+function compactEvidenceFrame(frame) {
+  const result = {};
+  for (const key of ['time', 'imageTime', 'requestedTime', 'poseTime', 'sourceTime']) if (validTime(frame?.[key])) result[key] = frame[key];
+  if (['equipment-context', 'target-detail'].includes(frame?.framing)) result.framing = frame.framing;
+  if (['seek-target', 'source-pts', 'pose-source-pts'].includes(frame?.timePrecision)) result.timePrecision = frame.timePrecision;
+  for (const key of ['crop', 'bbox', 'targetBox']) { const box = compactBox(frame?.[key]); if (box) result[key] = box; }
+  for (const key of ['width', 'height']) if (Number.isSafeInteger(frame?.[key]) && frame[key] > 0 && frame[key] <= 16384) result[key] = frame[key];
+  const tracking = frame?.subjectTracking;
+  if (object(tracking)) {
+    const subject = {};
+    if (['locked', 'ambiguous', 'lost'].includes(tracking.status)) subject.status = tracking.status;
+    if (typeof tracking.trackId === 'string') subject.trackId = text(tracking.trackId, 80);
+    if (finite(tracking.confidence) && tracking.confidence >= 0 && tracking.confidence <= 1) subject.confidence = tracking.confidence;
+    const bbox = compactBox(tracking.bbox); if (bbox) subject.bbox = bbox;
+    result.subjectTracking = subject;
+  }
+  if (Array.isArray(frame?.frameMappings)) result.frameMappings = frame.frameMappings.slice(0, 6).map(mapping => Object.fromEntries(['requestedTime', 'poseTime', 'sourceTime'].filter(key => validTime(mapping?.[key])).map(key => [key, mapping[key]])));
   return result;
 }
 
-// Model prose must not bypass the deterministic score with an invented rating.
-function narrative(value, fallback='') {
-  const clean=text(value,1200);
-  return clean.split(/(?<=[。！？\n])/).filter(sentence=>!/(?:\d+(?:\.\d+)?\s*(?:分|%|％)|\d+\s*\/\s*100|满分|准确率|标准率|合格率)/i.test(sentence)).join('').trim()||fallback;
+/** Only quality and supplied-picture metadata belong in the navigation summary.
+ * Complete pose samples and measurements travel separately, without scoring. */
+export function compactMotionAnalysis(value = {}) {
+  return {quality: compactQuality(value?.quality), evidenceFrames: (Array.isArray(value?.evidenceFrames) ? value.evidenceFrames : []).slice(0, 6).filter(object).map(compactEvidenceFrame)};
 }
-const alignTime = (value, available) => finite(value) ? available.find(time=>Math.abs(time-value)<=0.05) : undefined;
-const matchTimes = (values, available) => [...new Set((Array.isArray(values)?values:[]).map(time=>alignTime(time,available)).filter(finite))].slice(0,6);
 
-/** Sanitize untrusted model output against the evidence actually sent upstream. */
-export function sanitizeMotionCoachResponse(value,{mode='evidence-only',analysis={},keyframes=[]}={}) {
-  if(!value||typeof value!=='object'||Array.isArray(value)||!Array.isArray(value.checks))throw new Error('动作点评结构无效，请重试。');
-  const visual=mode==='visual'&&keyframes.length>0, frameTimes=boundedTimes(keyframes.map(frame=>frame.time));
-  const local=compactMotionAnalysis(analysis);
-  const actionTimes=matchTimes(value.action?.evidenceTimes,frameTimes);
-  const selected=visual&&value.action?.status==='identified'&&value.action?.confidence==='high'&&actionTimes.length>=2?exercise(value.action.exerciseId):null;
-  const action={exerciseId:selected?.id||null,status:selected?'identified':'unknown',confidence:selected?'high':'low',evidenceTimes:selected?actionTimes:[]};
-  const candidates=[];
-  if(visual)for(const item of [value.action,...(Array.isArray(value.candidates)?value.candidates:[])]){
-    const itemExercise=exercise(item?.exerciseId),times=matchTimes(item?.evidenceTimes,frameTimes);
-    if(!itemExercise||!times.length||candidates.some(candidate=>candidate.exerciseId===itemExercise.id))continue;
-    candidates.push({exerciseId:itemExercise.id,confidence:confidences.has(item.confidence)?item.confidence:'low',evidenceTimes:times});
-    if(candidates.length===3)break;
+function identity(value) {
+  if (!object(value)) return null;
+  const name = text(value.name, 80).replace(/\s+/g, ' ');
+  if (isUnknownMotionActionName(name)) return null;
+  const suppliedId = value.exerciseId;
+  if (suppliedId !== undefined && suppliedId !== null && (typeof suppliedId !== 'string' || !getMotionExercise(suppliedId))) return null;
+  const byId = getMotionExercise(suppliedId);
+  const byName = motionExercises.find(item => item.name === name);
+  if (byId && name && name !== byId.name) return null;
+  const catalog = byId || byName;
+  if (catalog && value.family !== undefined && value.family !== null && value.family !== catalog.family) return null;
+  const resolvedName = name || catalog?.name;
+  if (!resolvedName) return null;
+  return {exerciseId: catalog?.id || null, name: resolvedName, family: catalog?.family || supportedFamily(value.family)};
+}
+
+function actionWithEvidence(value, available) {
+  const resolved = identity(value);
+  if (!resolved) return null;
+  const evidenceTimes = times(value.evidenceTimes).filter(time => available.has(time));
+  const evidence = narrative(value.evidence || value.observations?.evidence);
+  if (evidence.replace(/\s/g, '').length < 4 || !evidenceTimes.length) return null;
+  return {...resolved, evidenceTimes, evidence};
+}
+
+function confirmedAction(value, available) {
+  if (value?.status !== 'identified' || value?.confidence !== 'high') return null;
+  const action = actionWithEvidence(value, available);
+  return action && action.evidenceTimes.length >= 2 ? {...action, status: 'identified', confidence: 'high'} : null;
+}
+
+const unknownAction = () => ({exerciseId: null, name: '', family: null, status: 'unknown', confidence: 'low', evidenceTimes: [], evidence: ''});
+
+/** Only call with a coach whose image references have already been validated. */
+export function confirmedMotionAction(coach) {
+  return coach?.mode === 'visual' ? confirmedAction(coach.action, new Set(times(coach.action?.evidenceTimes))) : null;
+}
+
+/** A user's selection names the requested review, not a model prediction. */
+export function selectedMotionAction(coach) {
+  if (coach?.mode !== 'guided' || coach.action?.status !== 'selected' || coach.action?.source !== 'user') return null;
+  const exercise = getMotionExercise(coach.action.exerciseId);
+  if (!exercise || coach.action.name !== exercise.name || coach.action.family !== exercise.family) return null;
+  return {exerciseId: exercise.id, name: exercise.name, family: exercise.family, status: 'selected', confidence: null, source: 'user', evidenceTimes: [], evidence: ''};
+}
+
+function selectionWithEvidence(value, keyframes) {
+  const evidenceTimes = resolveMotionImageEvidenceTimes(value, keyframes);
+  const evidence = narrative(value?.evidence);
+  const supported = evidenceTimes.length > 0 && evidence.replace(/\s/g, '').length >= 4;
+  const status = supported && ['consistent', 'mismatch'].includes(value?.status) ? value.status : 'uncertain';
+  return {status, evidenceTimes, evidence: supported ? evidence : ''};
+}
+
+/** Validate identity against the pictures actually sent. No action-specific
+ * posture or equipment rules decide the answer, and no checks are generated. */
+export function sanitizeMotionCoachResponse(value, {mode = 'evidence-only', keyframes = [], selectedExerciseId} = {}) {
+  if (!object(value)) throw new Error('动作评价结构无效，请重试。');
+  const available = new Set(times((Array.isArray(keyframes) ? keyframes : []).map(frame => frame?.time)));
+  const visual = mode === 'visual' && available.size > 0;
+  const selected = mode === 'guided' ? getMotionExercise(selectedExerciseId) : null;
+  if (mode === 'guided' && !selected) throw new Error('请选择有效的动作类型后再评价。');
+  const withPictures = raw => object(raw) ? {...raw, evidenceTimes: resolveMotionImageEvidenceTimes(raw, keyframes)} : raw;
+  const action = selected ? {exerciseId: selected.id, name: selected.name, family: selected.family, status: 'selected', confidence: null, source: 'user', evidenceTimes: [], evidence: ''}
+    : visual ? confirmedAction(withPictures(value.action), available) || unknownAction() : unknownAction();
+  const candidates = [];
+  if (visual) for (const raw of [value.action, ...(Array.isArray(value.candidates) ? value.candidates : [])].slice(0, 24).map(withPictures)) {
+    const candidate = actionWithEvidence(raw, available);
+    if (!candidate || candidates.some(item => item.name === candidate.name)) continue;
+    candidates.push({...candidate, confidence: confirmedAction(raw, available) ? 'high' : confidences.has(raw.confidence) && raw.confidence !== 'high' ? raw.confidence : 'low'});
+    if (candidates.length >= 3) break;
   }
-  const target=selected||exercise(local.exerciseId)||familyTemplate(local.exerciseFamily),allowed=new Set(target?.checks.map(check=>check.code)||[]),checks=[];
-  for(const item of value.checks.slice(0,66)){
-    const rule=definition(item?.code);if(!rule||!allowed.has(rule.code))continue;
-    const base=local.checks.find(check=>check.code===rule.code);
-    if(!visual){
-      // A text model can phrase existing observations; it cannot add visual facts.
-      if(!base||base.status==='unobservable')continue;
-      checks.push({code:rule.code,status:base.status,severity:base.severity,time:base.time,evidence:text(base.message)||JSON.stringify(base.evidence),correction:narrative(item.correction),
-        source:'pose-explanation',scope:base.scope,evidenceTimes:base.evidenceTimes});
-      continue;
-    }
-    const times=matchTimes([...(Array.isArray(item.evidenceTimes)?item.evidenceTimes:[]),item.time],frameTimes);
-    const evidence=narrative(item.evidence),valid=times.length>0&&evidence.length>=4;
-    const status=valid&&['pass','fail','uncertain'].includes(item.status)?item.status:'uncertain';
-    checks.push({code:rule.code,status,severity:status==='fail'?(item.severity==='severe'?'severe':'warning'):'info',
-      time:times[0]??null,evidence:valid?(rule.code==='SPINE_NEUTRAL'?'仅关键帧可见外形：':'')+evidence:'现有关键帧不足以确认这一项。',correction:narrative(item.correction),source:'visual',scope:'sampled-frames',evidenceTimes:times});
+  return {version: MOTION_COACH_VERSION, mode: selected ? 'guided' : visual ? 'visual' : 'evidence-only', action, candidates,
+    ...(selected ? {selectionCheck: selectionWithEvidence(value.selectionCheck, keyframes)} : {}),
+    overallEvaluation: narrative(value.overallEvaluation), limitations: (Array.isArray(value.limitations) ? value.limitations : []).map(narrative).filter(Boolean).slice(0, 3)};
+}
+
+function compactFeedback(value) {
+  return (Array.isArray(value) ? value : []).slice(0, 12).filter(item => object(item) && ['good', 'improve', 'uncertain'].includes(item.status) && ['pose', 'visual', 'combined', 'analysis'].includes(item.source)).map(item => {
+    const evidenceTimes = times(item.evidenceTimes, 1806);
+    const frameIndices = [...new Set((Array.isArray(item.frameIndices) ? item.frameIndices : []).filter(index => Number.isInteger(index) && index >= 0 && index < 1800))];
+    const paths = (Array.isArray(item.analysisPaths) ? item.analysisPaths : []).filter(path => Array.isArray(path) && path.length >= 2 && path.length <= 12 && path[0] === 'measurements' && path.every(part => Number.isInteger(part) && part >= 0 || typeof part === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,79}$/.test(part) && !['__proto__', 'constructor', 'prototype'].includes(part))).slice(0, 12);
+    return {title: text(item.title, 80), status: item.status, source: item.source, frameIndices, evidenceTimes, time: evidenceTimes[0] ?? null,
+      ...(paths.length ? {analysisPaths: paths.map(path => [...path])} : {}), evidence: narrative(item.evidence), correction: narrative(item.correction), priority: [1, 2, 3].includes(item.priority) ? item.priority : 2};
+  }).filter(item => item.title && item.evidence.replace(/\s/g, '').length >= 4 && item.evidenceTimes.length);
+}
+
+function compactCoach(value, quality) {
+  if (!object(value)) return null;
+  const selected = selectedMotionAction(value);
+  if (value.mode === 'guided' && !selected) return null;
+  const references = [...times(value.action?.evidenceTimes), ...times(value.selectionCheck?.evidenceTimes), ...(Array.isArray(value.candidates) ? value.candidates : []).flatMap(candidate => times(candidate?.evidenceTimes))];
+  const clean = sanitizeMotionCoachResponse(value, {mode: value.mode, keyframes: times(references).map(time => ({time})), selectedExerciseId: selected?.exerciseId});
+  const result = {version: clean.version, mode: clean.mode, action: clean.action, candidates: clean.candidates, ...(clean.selectionCheck ? {selectionCheck: clean.selectionCheck} : {}), feedback: compactFeedback(value.feedback), limitations: clean.limitations};
+  if (clean.mode === 'guided' && clean.selectionCheck.status !== 'consistent') result.feedback = [];
+  for (const key of ['model', 'provider']) if (typeof value[key] === 'string') result[key] = text(value[key], 160);
+  if (object(value.coverage)) {
+    result.coverage = {complete: value.coverage.complete === true};
+    for (const key of ['sourceFrameCount','frameCount', 'reviewedFrameCount', 'imageCount','reviewedImageCount','temporalChecks','measurementCount', 'reviewedMeasurementCount','summarizedMeasurementCount', 'dataBatches', 'modelCalls']) if (Number.isSafeInteger(value.coverage[key]) && value.coverage[key] >= 0) result.coverage[key] = value.coverage[key];
+    if (['visual-keyframes','temporal-evidence','guided-evidence','full-data'].includes(value.coverage.strategy)) result.coverage.strategy=value.coverage.strategy;
   }
-  const limitations=(Array.isArray(value.limitations)?value.limitations:[]).map(item=>narrative(item)).filter(Boolean).slice(0,5);
-  limitations.unshift(visual?'视觉点评只覆盖所提供的关键帧，无法确认关键帧之间的完整动作过程。':'当前模型仅解释本地分析证据，没有进行视觉动作确认。');
-  if(!selected)limitations.push('AI 未可靠确认动作名称；候选动作不能作为已确认结果。');
-  if(checks.some(check=>check.code==='SPINE_NEUTRAL'))limitations.push('可见身体外形不能证明真实腰椎三维中立位。');
-  return {version:MOTION_COACH_VERSION,mode:visual?'visual':'evidence-only',action,candidates,
-    overallEvaluation:narrative(value.overallEvaluation,'请结合下方有时间依据的检查与纠正建议查看本次动作。'),checks,limitations:[...new Set(limitations)]};
+  if (object(value.timing)) result.timing = Object.fromEntries(['providerMs', 'totalMs'].filter(key => finite(value.timing[key]) && value.timing[key] >= 0).map(key => [key, value.timing[key]]));
+  result.verdict = sanitizeMotionVerdict(value.verdict, {feedback: result.feedback, coverage: result.coverage, quality, action: result.action, selectionCheck: result.selectionCheck});
+  return result;
 }
 
-function combineChecks(rules,localChecks,coachChecks) {
-  return rules.map(rule=>{
-    const local=(Array.isArray(localChecks)?localChecks:[]).find(check=>check.code===rule.code);
-    const offered=coachChecks.filter(check=>check.code===rule.code&&check.source==='visual'&&boundedTimes(check.evidenceTimes).length&&text(check.evidence).length>=4);
-    const failed=offered.find(check=>check.status==='fail'&&check.severity==='severe')||offered.find(check=>check.status==='fail');
-    let selected;
-    if(local?.status==='fail')selected=failed?{...local,severity:local.severity==='severe'||failed.severity==='severe'?'severe':local.severity,score:Math.min(finite(local.score)?local.score:40,failed.severity==='severe'?0:40),visualEvidence:{time:failed.time,message:failed.evidence,correction:failed.correction}}:local;
-    else if(failed)selected={...failed,status:'fail',message:failed.evidence,evidence:{description:failed.evidence},score:failed.severity==='severe'?0:40};
-    else if(local?.status==='pass')selected=local;
-    else {const passed=offered.find(check=>check.status==='pass');selected=passed?{...passed,message:passed.evidence,evidence:{description:passed.evidence},score:100}:local;}
-    return {...(selected||{status:'unobservable',score:null,severity:'info',time:null,message:'现有证据不足以核验。',scope:'unobservable',evidenceTimes:[]}),code:rule.code,weight:rule.weight,critical:rule.critical,label:rule.label};
-  });
+/** Build the saved report from an allowlist. Local measurements are request
+ * evidence only; no raw sequences, repetition engine or rule results persist. */
+export function mergeCoachAssessment(analysis, coach) {
+  const quality = compactQuality(analysis?.quality);
+  const cleanedCoach = compactCoach(coach, quality);
+  const selected = selectedMotionAction(cleanedCoach);
+  const action = selected || confirmedMotionAction(cleanedCoach);
+  return {version: MOTION_REPORT_VERSION, quality, exerciseId: action?.exerciseId || null, exerciseName: action?.name || '', exerciseFamily: action?.family || null,
+    recognitionSource: selected ? 'user' : action ? 'visual' : 'unknown', coach: cleanedCoach};
 }
 
-function checkScores(checks,baseline,{familyOnly=false}={}) {
-  const total=checks.reduce((sum,check)=>sum+check.weight,0),observed=checks.filter(check=>['pass','fail'].includes(check.status));
-  const weight=observed.reduce((sum,check)=>sum+check.weight,0);
-  const observedScore=weight?Math.round(observed.reduce((sum,check)=>sum+check.weight*(finite(check.score)?clamp(check.score):check.status==='pass'?100:40),0)/weight):null;
-  let score=observedScore;
-  const unknown=checks.filter(check=>!['pass','fail'].includes(check.status)||check.scope==='sampled-frames');
-  const failures=checks.filter(check=>check.status==='fail');
-  const ceilings=[];
-  if(failures.some(check=>check.severity==='severe'))ceilings.push(49);
-  if(failures.some(check=>check.critical))ceilings.push(59);
-  if(failures.length)ceilings.push(79);
-  if(unknown.some(check=>check.critical))ceilings.push(69);else if(unknown.length)ceilings.push(84);
-  if(familyOnly)ceilings.push(84);
-  if(finite(baseline))ceilings.push(baseline);
-  if(score!==null&&ceilings.length)score=Math.round(Math.min(score,...ceilings));
-  const scoreStatus=score===null?'unavailable':unknown.length||familyOnly?'provisional':'assessed';
-  const verifiedWeight=observed.filter(check=>check.scope==='whole-repetition').reduce((sum,check)=>sum+check.weight,0);
-  return {score,observedScore,scoreCap:ceilings.length?Math.min(100,...ceilings):100,scoreCoverage:total?Math.round(verifiedWeight/total*1000)/1000:0,scoreStatus,qualified:scoreStatus==='assessed'&&!failures.length&&score>=80};
-}
-function issuesFromChecks(checks) {return checks.filter(check=>check.status==='fail'&&(check.source==='visual'||check.visualEvidence)).map(check=>({code:check.code,time:check.visualEvidence?.time??check.time,message:check.visualEvidence?.message??check.message,severity:check.severity,source:'visual'}));}
-
-/** Keep local failures; a family recipe never becomes an exact exercise label. */
-export function mergeCoachAssessment(analysis,coach,{originalAnalysis}={}) {
-  let base=analysis&&typeof analysis==='object'?analysis:{};
-  const original=originalAnalysis&&typeof originalAnalysis==='object'?originalAnalysis:null;
-  const originalHard=(Array.isArray(original?.quality?.reasons)?original.quality.reasons:[]).filter(code=>MOTION_HARD_QUALITY_FAILURES.includes(code));
-  if(originalHard.length)base={...base,quality:{...base.quality,reasons:[...new Set([...(base.quality?.reasons||[]),...originalHard])]}};
-  if((Array.isArray(base.quality?.reasons)?base.quality.reasons:[]).some(code=>MOTION_HARD_QUALITY_FAILURES.includes(code)))return {...base,status:base.status==='unsupported'?'unsupported':'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(rep=>({...rep,qualified:false})),coach};
-  const localExercise=exercise(base.exerciseId),localFamily=localExercise||familyTemplate(base.exerciseFamily);
-  const identified=coach?.mode==='visual'&&coach.action?.status==='identified'?exercise(coach.action.exerciseId):null;
-  const conflict=localFamily&&identified&&localFamily.family!==identified.family;
-  let target=conflict?null:identified||localExercise||localFamily;
-  const familyOnly=!!target&&!identified&&(!localExercise||base.requiresVisualConfirmation===true);
-  if(familyOnly)target={...target,id:null,name:target.familyName};
-  if(!target)return {...base,score:null,observedScore:null,scoreCoverage:0,scoreStatus:'unavailable',status:'insufficient',qualified:false,qualifiedRepCount:0,reps:(Array.isArray(base.reps)?base.reps:[]).map(rep=>({...rep,qualified:false})),coach,
-    summary:conflict?'本地分析与视觉识别的动作类别不一致，请补充更清晰的完整动作视频。':'尚未可靠确认动作，暂不合并评分。'};
-  if(!Array.isArray(base.reps)||!base.reps.length)return {...base,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:familyOnly,status:'insufficient',score:null,observedScore:null,scoreStatus:'unavailable',scoreCoverage:0,qualified:false,qualifiedRepCount:0,coach,summary:'动作名称可以由画面补充确认，但缺少完整动作过程，暂不评分。'};
-  const coachChecks=coach?.mode==='visual'&&Array.isArray(coach.checks)?coach.checks:[];
-  const originalFamily=exercise(original?.exerciseId)?.family||original?.exerciseFamily;
-  const originalFailures=originalFamily===target.family?(Array.isArray(original?.checks)?original.checks:[]).filter(check=>check.status==='fail'&&(!check.source||check.source==='pose')&&target.requiredChecks.includes(check.code)):[];
-  const localChecks=target.checks.map(rule=>{
-    const current=(Array.isArray(base.checks)?base.checks:[]).find(check=>check.code===rule.code);
-    const prior=originalFailures.find(check=>check.code===rule.code);
-    if(!prior||current?.status==='fail'&&(current.severity==='severe'||prior.severity!=='severe')&&(current.score??0)<=(prior.score??0))return current;
-    return {...prior,preservedFromFamily:true};
-  }).filter(Boolean);
-  const preserved=localChecks.filter(check=>check.preservedFromFamily);
-  const checks=combineChecks(target.checks,localChecks,coachChecks);
-  let scores=checkScores(checks,base.score,{familyOnly});
-  const visualIssues=issuesFromChecks(checks);
-  const preservedIssues=preserved.map(check=>({code:check.code,time:check.time,message:check.message,severity:check.severity,source:'pose',preservedFromFamily:true}));
-  const reps=(Array.isArray(base.reps)?base.reps:[]).map(rep=>{
-    const relevant=coachChecks.flatMap(check=>{
-      if(!finite(rep.start)||!finite(rep.end))return [];
-      const times=boundedTimes([...(Array.isArray(check.evidenceTimes)?check.evidenceTimes:[]),check.time]).filter(time=>time>=rep.start&&time<=rep.end);
-      return times.length?[{...check,time:times[0],evidenceTimes:times}]:[];
-    });
-    const repChecks=combineChecks(target.checks,rep.checks,relevant);
-    return {...rep,checks:repChecks,...checkScores(repChecks,rep.score,{familyOnly}),issues:[...(rep.issues||[]),...issuesFromChecks(repChecks)]};
-  });
-  // A global check may be unobservable because one repetition was obscured.
-  // Preserve the measured weight of all other repetitions. Global failures
-  // still impose their strict cap, including evidence outside counted reps.
-  if(reps.length&&(Array.isArray(base.reps)?base.reps:[]).every(rep=>Array.isArray(rep.checks)&&rep.checks.length)){
-    const measured=checkScores(reps.flatMap(rep=>rep.checks),base.score,{familyOnly});
-    scores={...measured,observedScore:preserved.length&&finite(scores.observedScore)&&finite(measured.observedScore)?Math.min(measured.observedScore,scores.observedScore):measured.observedScore,score:measured.score===null?null:Math.min(measured.score,scores.scoreCap),scoreCap:Math.min(measured.scoreCap,scores.scoreCap),scoreStatus:measured.score===null?'unavailable':measured.scoreStatus==='provisional'||scores.scoreStatus==='provisional'?'provisional':'assessed',qualified:measured.qualified&&scores.qualified};
-  }
-  return {...base,exerciseId:target.id,exerciseFamily:target.family,exerciseFamilyName:target.familyName,requiresVisualConfirmation:familyOnly,status:scores.score===null?'insufficient':'complete',checks,...scores,reps,qualifiedRepCount:reps.filter(rep=>rep.qualified).length,issues:[...(base.issues||[]),...preservedIssues,...visualIssues],coach,
-    summary:scores.score===null?'证据不足，暂不评分。':`${target.name}：${scores.scoreStatus==='provisional'?'当前为部分证据参考分，尚有未完整核验的项目。':checks.some(check=>check.status==='fail')?'检测到需要纠正的动作问题。':'已检查项目未发现明显问题。'}`};
-}
-
-export const motionCoachActionCatalog = () => motionExercises.map(({id,name,family,checks})=>({id,name,family,checks:checks.map(({code,label,critical,requiredView,visual})=>({code,label,critical,requiredView,visual}))}));
+/** Identity hints for known teaching names, never an evaluation rubric. */
+export const motionCoachActionCatalog = () => motionExercises.map(({id, name, family}) => ({id, name, family}));
