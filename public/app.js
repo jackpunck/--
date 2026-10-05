@@ -1,8 +1,9 @@
-import {landingMarkup, mountLanding} from './landing.js?v=13';
+import {landingMarkup, mountLanding} from './landing.js?v=14';
+import {animateViewEntry, transitionView} from './view-transitions.js?v=1';
 import {dailyMealAdvicePrompt} from './meal-advice-prompt.js?v=1';
 import {getDailyQuote} from './daily-quotes.js?v=1';
 import {holidayYear,holidayInfo,installHolidayYear} from './holidays.js';
-import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=26';
+import {CommunityController, clearCommunityDrafts, clearCommunityLocalData} from './community.js?v=28';
 import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} from './store.js?v=11';
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=9';
@@ -16,7 +17,7 @@ const defaultTrainingExercise = id => structuredClone(defaultExercises[id]);
 import {knowledgeCards, findKnowledge} from './knowledge.js?v=9';
 import {muscleCatalog, chatVisuals, modelUrl} from './visuals.js?v=11';
 import {ModelViewer} from './model-viewer.js?v=9';
-import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=10';
+import {mountMotionView,validateMotionAssessmentSize} from './motion-view.js?v=13';
 import {providerPresets} from './provider-presets.js?v=9';
 import {enabledModels, taskSelection, reconcileTasks} from './provider-ui.js?v=11';
 import {createProviderSettings} from './provider-settings.js?v=1';
@@ -127,7 +128,13 @@ const isBusyDate = date => computed.busyDates.includes(date);
 const beijingDate = () => computed.beijingDate;
 const foodCategory = (item,description='') => item.category||computed.mealCategories?.[JSON.stringify([item,description])]||'正餐';
 function toast(message,error=false) { const el=document.createElement('div'); el.className='toast'+(error?' error':''); el.textContent=message; $('#toasts').append(el); while($('#toasts').children.length>2)$('#toasts').firstElementChild.remove();setTimeout(()=>el.remove(),5000); }
-function modal(title,html,wide=false,required=false) { const el=$('#modal'); el.className=wide?'modal-wide':''; el.innerHTML=`<div class="modal-head"><h2>${title}</h2>${required?'':`<button class="icon-button" aria-label="关闭" data-action="close-modal">${icon('close')}</button>`}</div><div class="modal-content">${html}</div>`; el.oncancel=required?e=>e.preventDefault():null; if(!el.open)el.showModal(); }
+function modal(title,html,wide=false,required=false) {
+ const el=$('#modal'),changed=el.open&&$('.modal-head h2',el)?.innerHTML!==String(title);
+ el.className=wide?'modal-wide':'';
+ el.innerHTML=`<div class="modal-head"><h2>${title}</h2>${required?'':`<button class="icon-button" aria-label="关闭" data-action="close-modal">${icon('close')}</button>`}</div><div class="modal-content">${html}</div>`;
+ el.oncancel=required?e=>e.preventDefault():null;
+ if(!el.open)el.showModal();else if(changed)animateViewEntry($('.modal-content',el));
+}
 function clearProviderDraft() {if(state.providerDraft)state.providerDraft.apiKey='';state.providerDraft=null;const key=$('#provider-key');if(key)key.value='';}
 function closeModal() {clearProviderDraft();state.busyEditor=null;$('#modal').close(); }
 function formData(form) { return Object.fromEntries(new FormData(form)); }
@@ -236,7 +243,7 @@ function renderAuth() {
   if(panel){
     const email=$('#email')?.value||'';
     const tabFocused=document.activeElement?.matches('.auth-tabs button');
-    panel.innerHTML=authFormMarkup();
+    transitionView(panel,()=>{panel.innerHTML=authFormMarkup();});
     $('#email').value=email;
     if(tabFocused)$(`.auth-tabs [data-mode="${state.authMode}"]`).focus({preventScroll:true});
     return;
@@ -247,14 +254,16 @@ function renderAuth() {
 }
 
 async function render() {
+ const version=navigationVersion;
  if(!communityOnlyPage()&&!await readyComputed())return;
+ if(version!==navigationVersion)return;
   closeMotionView();
   setWorkspaceTheme(true);
   if(landingCleanup){landingCleanup();landingCleanup=null;if(['#auth-entry','#auth-register'].includes(location.hash))history.replaceState(null,'',location.pathname+location.search);window.scrollTo(0,0);}
   captureChatDraft();
   const labels={chat:'AI 对话',nutrition:'今日饮食',training:'训练计划',library:'知识大全',motion:'动作评估',community:'社区',settings:'个人中心'};
   $('#app').innerHTML=`<div class="layout${state.sidebarCollapsed?' sidebar-collapsed':''}${state.page==='community'?' community-active':''}"><aside class="sidebar" id="sidebar"><div class="sidebar-header"><button type="button" class="sidebar-toggle icon-button" data-action="toggle-sidebar" aria-controls="sidebar" aria-expanded="${!state.sidebarCollapsed}" aria-label="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}" title="${state.sidebarCollapsed?'展开侧边栏':'收起侧边栏'}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m6-12-4 4 4 4"/></svg><span class="toggle-brand brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span></button><button class="mobile-close icon-button" data-action="menu" aria-label="关闭导航">${icon('close')}</button><a class="brand" aria-label="循序 · AI 对话" title="循序 · AI 对话" href="#chat" data-action="nav" data-page="chat"><span class="brand-symbol" aria-hidden="true"><img src="/assets/logo.svg" alt="" width="39" height="43"></span><div>循序<small>AI FITNESS COMPANION</small></div></a></div><nav class="nav" aria-label="主导航">${[['chat','chat','AI 对话'],['nutrition','food','今日饮食'],['training','dumbbell','训练计划'],['library','grid','知识大全'],['motion','body','动作评估'],['community','community','社区'],['settings','settings','个人中心']].map(([id,i,label])=>`<button data-action="nav" data-page="${id}" aria-label="${label}" title="${label}" class="${state.page===id?'active':''}" ${state.page===id?'aria-current="page"':''}>${icon(i)}<span>${label}</span>${state.page===id?'<i class="nav-dot"></i>':''}</button>`).join('')}</nav><section class="history"><div class="section-label">最近对话<button class="link-button" data-action="new-chat" aria-label="新建对话">＋</button></div><div id="history-list"></div></section><div class="side-note"><span class="side-note-kicker">今日寄语 ${icon("spark")}</span><strong data-daily-quote-title></strong><span data-daily-quote-line="0"></span><br><span data-daily-quote-line="1"></span><div class="side-note-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="account"><span class="avatar">${esc(state.user.name?.slice(0,1)||'循')}</span><div class="account-info"><strong>${esc(state.user.name||'我的空间')}</strong><small>${profile()?goalLabel(profile().goal)+'进行中':'开启健康生活'}</small></div><button class="icon-button" data-action="logout" aria-label="退出登录">${icon('logout')}</button></div></aside><main class="main"><header class="topbar"><div class="row"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><div class="breadcrumb">我的健康空间<span>/</span><strong>${labels[state.page]}</strong></div></div><div class="top-right"><span class="date-label muted">${dateLabel(today())}</span><button id="sync-status" class="status" data-action="sync">已同步</button></div></header><div id="page" class="content"></div></main></div>`;
-  updateSidebarQuote(); renderSidebarHistory(); updateSync(); renderPage();
+  updateSidebarQuote(); renderSidebarHistory(); updateSync(); await renderPage();
 }
 function updateSidebarQuote() {
   const card=$('.side-note'),now=new Date(),date=today(now);
@@ -274,17 +283,21 @@ function renderSidebarHistory() {
   const html=state.store.conversationHeaders().slice(0,30).map(r=>`<div class="history-item ${r.id===state.conversation?'current':''}"><button data-action="open-chat" data-id="${esc(r.id)}">${esc(r.data.title)}</button><button class="delete" aria-label="删除对话 ${esc(r.data.title)}" data-action="delete-chat" data-id="${esc(r.id)}">×</button></div>`).join('') || '<div style="padding:5px 12px"><small>新的对话，从这里开始</small></div>';
   if(el._renderedMarkup!==html){el.innerHTML=html;el._renderedMarkup=html;}
 }
-async function renderPage() {
+async function renderPage({transition=true}={}) {
+ const version=navigationVersion;
  if(!communityOnlyPage()&&!await readyComputed())return;
+ if(version!==navigationVersion)return;
+ const renderView=()=>{
  if(state.page!=='motion')closeMotionView();
   if(state.page==='community'){
     if(!profile()){$('#page').innerHTML='<div class="empty" role="status">完成基本资料后，即可进入循序社区。</div>';return;}
     communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
-    communityController.mount($('#page')).catch(error=>toast(error.message,true));
-    return;
+    return communityController.mount($('#page')).catch(error=>toast(error.message,true));
   }
  if(!communityOnlyPage())ensureRecurringSchedule().catch(error=>toast(error.message,true));
-  ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,motion:renderMotion,settings:renderSettings}[state.page])();
+  return ({chat:renderChat,nutrition:renderNutrition,training:renderTraining,library:renderLibrary,motion:renderMotion,settings:renderSettings}[state.page])();
+ };
+ return transition&&state.page!=='motion'?transitionView($('#page'),renderView):renderView();
 }
 function renderMotion() {
  const container=$('#page');
@@ -331,9 +344,6 @@ function selectConversation(id) {captureChatDraft();state.conversation=id;state.
 async function openMealChat() {
  selectConversation(null);state.chatScene='meal';
  await navigate('chat');
- if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-   $('#page')?.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],{duration:200,easing:'cubic-bezier(.2,.7,.3,1)'});
- }
  $('#chat-input')?.focus({preventScroll:true});
 }
 function updateChatScene() {
@@ -1320,11 +1330,12 @@ function strengthTool() {modal('最大力量估算',`<p class="description">用�
 
 function sourceLink(name,url) {return url?`<a class="knowledge-source" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name||'查看来源')} ↗</a>`:`<small class="knowledge-source">${esc(name||'')}</small>`;}
 function knowledgeSources() {return `<details class="knowledge-sources"><summary>知识来源与说明</summary><div class="source-grid">${knowledgeCards.map(card=>`<article><strong>${esc(card.title)}</strong><p>${esc(card.summary)}</p>${sourceLink(card.sourceName,card.sourceUrl)}</article>`).join('')}</div></details>`;}
-function renderLibrary() {
+function renderLibrary({transition=false}={}) {
  const tabs=[['nutrition','营养计算','营养公式与工具'],['portions','食物份量','日常份量换算'],['weights','RM 换算','估算单次最大重量'],['exercises','3D 动作','动作示意与要领'],['muscles','肌肉图谱','找到目标肌群']];
  $('#page').innerHTML=title('看懂原理，练得更有把握。','从营养计算到动作与肌肉，把知识用在每一天。',button(icon('body')+' 视频动作评估','motion-open'))+`<nav class="knowledge-tabs" role="tablist" aria-label="知识类别">${tabs.map(([id,label,desc])=>`<button id="knowledge-tab-${id}" type="button" role="tab" tabindex="${state.knowledgeTab===id?0:-1}" aria-selected="${state.knowledgeTab===id}" aria-controls="knowledge-panel" data-action="knowledge-tab" data-tab="${id}" class="${state.knowledgeTab===id?'active':''}"><strong>${label}</strong><small>${desc}</small></button>`).join('')}</nav><section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab-${state.knowledgeTab}"></section>${knowledgeSources()}`;
  const renderPanel={nutrition:renderNutritionTools,portions:renderPortionTools,weights:renderWeightTools,exercises:renderExerciseLibrary,muscles:renderMuscleLibrary};
  (renderPanel[state.knowledgeTab]||renderNutritionTools)();
+ if(transition)animateViewEntry($('#knowledge-panel'));
 }
 function toolField(id,label,name,value,attributes='') {return `<div><label for="${id}">${label}</label><input id="${id}" name="${name}" type="number" value="${esc(value)}" ${attributes} required></div>`;}
 function renderNutritionTools() {
@@ -1437,8 +1448,8 @@ function renderSettings() {
  if(state.setting==='home'){
    $('#settings-content').innerHTML='<div id="personal-community"></div>';
    communityController ||= new CommunityController({getUser:()=>state.user,api,toast,navigate:communityNavigate});
-   communityController.mountPersonal($('#personal-community'),personalRoute().active?location.hash:'#settings').catch(error=>toast(error.message,true));
- }else ({profile:renderProfile,achievements:renderAchievements,ai:renderAISettings,review:renderReview,data:renderData}[state.setting])();
+   return communityController.mountPersonal($('#personal-community'),personalRoute().active?location.hash:'#settings').catch(error=>toast(error.message,true));
+ }else return ({profile:renderProfile,achievements:renderAchievements,ai:renderAISettings,review:renderReview,data:renderData}[state.setting])();
 }
 async function renderAchievements() {
  if(!await readyComputed())return;
@@ -1641,7 +1652,7 @@ async function navigate(page,{fromHash=false}={}) {
   state.page=page;
   if(page==='settings'&&state.setting==='ai')await loadProviders();
   if(version!==navigationVersion)return;
-  render();window.scrollTo(0,0);
+  await render();if(version===navigationVersion)window.scrollTo(0,0);
 }
 window.addEventListener('hashchange',()=>{
   if(!state.user){rememberCommunityReturn();return;}
@@ -1774,7 +1785,7 @@ document.addEventListener('click',async event=>{
  case 'calendar-delete-confirm':{const record=assertTaskCurrent(state.calendarDelete);if(record.id!==id)throw new Error('这项任务不能删除。');target.disabled=true;try{await syncBeforeArchiving();assertTaskCurrent(record);await state.store.remove(record.id);state.calendarDelete=null;closeModal();renderTraining();toast('已从日程中删除');}finally{target.disabled=false;}break;}
  case 'strength':strengthTool();break;
  case 'exercise':showExercise(id);break;
- case 'knowledge-tab':state.knowledgeTab=target.dataset.tab;renderLibrary();break;
+ case 'knowledge-tab':if(state.knowledgeTab!==target.dataset.tab){state.knowledgeTab=target.dataset.tab;renderLibrary({transition:true});}break;
  case 'portion-preset':choosePortion(id);break;
  case 'rm-preset':chooseRMPreset(target.dataset.reps,target.dataset.side);break;
  case 'rm-method':chooseRMMethod(target.dataset.method);break;
@@ -1811,7 +1822,7 @@ document.addEventListener('click',async event=>{
  case 'recipe':recipeTool();break;
  case 'recipe-ai':{if(!state.recipe)return;target.disabled=true;try{const response=await api('/ai',{method:'POST',body:{task:'planning',messages:[{role:'user',content:'请结合我的训练时间、偏好与忌口，对以下食谱草案给出可操作的调整说明和单餐替换，避免忽略任何饮食限制。不要自动记账。'+JSON.stringify({recipe:state.recipe,preferences:state.store.get('preferences')})}],context:aiContext()}});$('#recipe-result').insertAdjacentHTML('beforeend',`<div class="notice" style="margin-top:18px;white-space:pre-wrap">${esc(response.content)}</div>`);}finally{target.disabled=false;}break;}
  case 'food-swap':foodSwap();break;
- case 'sync':if(state.store.status==='expired'){await logout();break;}await state.store.sync();if(state.store.conflicts.length){state.setting='data';await navigate('settings');}else{renderPage();toast('同步完成');}break;
+ case 'sync':if(state.store.status==='expired'){await logout();break;}await state.store.sync();if(state.store.conflicts.length){state.setting='data';await navigate('settings');}else{renderPage({transition:false});toast('同步完成');}break;
  case 'resolve-conflict':await state.store.resolve(id,target.dataset.local==='true');renderData();break;
  case 'export':target.disabled=true;try{await exportData();}finally{target.disabled=false;}break;
  case 'delete-account':modal('删除全部个人数据',`<div class="error-box">此操作会删除账号与全部记录，无法恢复。可先导出个人数据。</div><form id="delete-account-form" style="margin-top:20px"><div class="field"><label for="delete-password">输入当前密码确认</label><input id="delete-password" name="password" type="password" autocomplete="current-password" required></div><div class="form-footer">${button('取消','close-modal')}<button class="button danger">删除账号及全部数据</button></div></form>`);break;
@@ -1914,7 +1925,7 @@ document.addEventListener('keydown',event=>{
  const tab=event.target.closest('.knowledge-tabs [role="tab"]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
  event.preventDefault();const tabs=['nutrition','portions','weights','exercises','muscles'],index=tabs.indexOf(state.knowledgeTab);
  state.knowledgeTab=event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];
- renderLibrary();$('#knowledge-tab-'+state.knowledgeTab)?.focus();
+ renderLibrary({transition:true});$('#knowledge-tab-'+state.knowledgeTab)?.focus();
 });
 
 document.addEventListener('input',event=>{

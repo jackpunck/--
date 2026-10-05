@@ -1,6 +1,7 @@
 import {CommunityApi,communityId,unwrapNote,unwrapUser,communityMediaUrl} from './community-api.js?v=10';
+import {animateViewEntry, cancelViewEntries, transitionView} from './view-transitions.js?v=1';
 import {CommunityDrafts,createCommunityConflictBackup} from './community-drafts.js?v=10';
-import {CommunityGroups} from './community-groups.js?v=5';
+import {CommunityGroups} from './community-groups.js?v=6';
 import {CommunityImageComposer,communityImagesMarkup,openCommunityImageViewer} from './community-images.js?v=2';
 import {COMMUNITY_REPORT_REASONS,COMMUNITY_REPORT_REASON_LABELS} from './community-report-reasons.js?v=1';
 export {clearCommunityDrafts} from './community-drafts.js?v=10';
@@ -54,7 +55,7 @@ export class CommunityController {
     catch{if(this.alive()&&link===this.container?.querySelector('.cm-moderation-link')){link.hidden=true;link.closest('.cm-toolbar')?.classList.remove('cm-has-moderation');}}
   }
   unbind(element) {element?.removeEventListener('click',this.boundClick);element?.removeEventListener('submit',this.boundSubmit);element?.removeEventListener('input',this.boundInput);element?.removeEventListener('change',this.boundChange);element?.removeEventListener('keydown',this.boundKey);element?.removeEventListener('focusin',this.boundFocus);}
-  async unmount(invalidateMount=true) {if(invalidateMount)this.mountRequest=(this.mountRequest||0)+1;this.routeToken++;this.cancelProfileMotion();this.profileTabsResize?.disconnect();this.observedProfileTabs=null;this.captureScroll();this.leaveChat();this.groups?.leave();this.stopSocialPolling();document.removeEventListener('pointerdown',this.boundOutside);document.removeEventListener('visibilitychange',this.boundVisibility);window.removeEventListener('resize',this.boundChatResize);window.visualViewport?.removeEventListener('resize',this.boundChatResize);window.visualViewport?.removeEventListener('scroll',this.boundChatResize);const oldContainer=this.container;this.unbind(oldContainer);this.observer?.disconnect();this.gridResize?.disconnect();this.floatingResize?.disconnect();this.toolbarResize?.disconnect();this.closeDetail(false);this.closeAux();this.floatingPublish?.remove();this.floatingPublish=null;await this.leaveEditor();oldContainer?.classList.remove('community-content','cm-profile-content','cm-personal-embedded','cm-messages-content');oldContainer?.querySelector('.cm-shell')?.classList.remove('cm-profile-page','cm-personal-shell','cm-messages-page');if(this.container===oldContainer)this.container=null;}
+  async unmount(invalidateMount=true) {if(invalidateMount)this.mountRequest=(this.mountRequest||0)+1;this.cancelFeedChange();this.routeToken++;this.cancelProfileMotion();this.profileTabsResize?.disconnect();this.observedProfileTabs=null;this.captureScroll();this.leaveChat();this.groups?.leave();this.stopSocialPolling();document.removeEventListener('pointerdown',this.boundOutside);document.removeEventListener('visibilitychange',this.boundVisibility);window.removeEventListener('resize',this.boundChatResize);window.visualViewport?.removeEventListener('resize',this.boundChatResize);window.visualViewport?.removeEventListener('scroll',this.boundChatResize);const oldContainer=this.container;this.unbind(oldContainer);this.observer?.disconnect();this.gridResize?.disconnect();this.floatingResize?.disconnect();this.toolbarResize?.disconnect();this.closeDetail(false);this.closeAux();this.floatingPublish?.remove();this.floatingPublish=null;await this.leaveEditor();oldContainer?.classList.remove('community-content','cm-profile-content','cm-personal-embedded','cm-messages-content');oldContainer?.querySelector('.cm-shell')?.classList.remove('cm-profile-page','cm-personal-shell','cm-messages-page');if(this.container===oldContainer)this.container=null;}
   async destroy() {this.destroyed=true;this.groups?.destroy();this.generation++;for(const controller of this.controllers)controller.abort();await this.unmount();this.drafts.close();for(const url of this.urls)URL.revokeObjectURL(url);this.urls.clear();this.views.clear();this.noteElements.clear();this.commentDrafts.clear();this.commentImageDrafts.clear();this.chatStates.clear();}
   async clearAccountData() {clearTimeout(this.saveTimer);this.suppressSave=true;this.localDataCleared=true;this.leaveChat();this.groups?.leave();clearCommunityLocalData(this.accountId);for(const controller of this.controllers)controller.abort();this.editor=null;await this.drafts.clear();this.commentDrafts.clear();this.commentImageDrafts.clear();this.chatStates.clear();}
   controller() {const controller=new AbortController();this.controllers.add(controller);return controller;}
@@ -63,26 +64,56 @@ export class CommunityController {
   async handleRoute(hash) {
     if(!this.container||!this.alive())return;const route=this.personalMode?this.routeForView(hash):routeOf(hash);if(route.parts[0]!=='community')return;
     // Repeated tab clicks must keep the render and request already in progress alive.
-    const repeatedBase=this.baseRoute===route.hash&&this.page().children.length&&!this.editor&&!['publish','edit'].includes(route.parts[1])&&!(this.viewKey===route.hash&&this.view?.invalidated);
-    if(repeatedBase&&this.profileContextKey(route)&&!this.detail&&!this.profileRenderInterrupted)return;
-    this.routeToken++;const token=this.routeToken;this.hideSearchHistory();
+    const interruptedFeed=this.canReuseFeed(route)&&!this.view?.loaded&&(!this.view?.loading||this.view.loadingToken!==this.routeToken);
+    const repeatedBase=this.baseRoute===route.hash&&this.page().children.length&&!this.editor&&!['publish','edit'].includes(route.parts[1])&&!(this.viewKey===route.hash&&this.view?.invalidated)&&!interruptedFeed;
+    if(repeatedBase&&(this.profileContextKey(route)||this.canReuseFeed(route))&&!this.detail&&!this.profileRenderInterrupted)return;
+    this.cancelFeedChange();this.routeToken++;const token=this.routeToken;this.hideSearchHistory();
     if(route.parts[1]==='note') {if(this.page().querySelector('.cm-profile-panel[aria-busy="true"],.cm-profile-panel[inert],.cm-profile-panel[data-layout-pending]'))this.profileRenderInterrupted=true;this.cancelProfileMotion();if(this.editor)await this.leaveEditor();if(!this.baseRoute||/\/(publish|edit)/.test(this.baseRoute)){this.baseRoute=this.postPublishBase||'#community';this.postPublishBase=null;this.activeRoute=this.routeForView(this.baseRoute);this.updateTabs(this.activeRoute);this.renderList(this.activeRoute);}await this.openDetail(route.parts[2],route.params.get('comment'));return;}
     this.returnHash=null;this.noteOriginScroll=null;
     const sameBase=repeatedBase&&!this.page().querySelector('.cm-profile-panel[aria-busy="true"],.cm-profile-panel[inert],.cm-profile-panel[data-layout-pending]');
     this.closeDetail(false);this.closeAux();if(sameBase){if(this.chat)this.chat.token=token;if(this.inbox)this.inbox.token=token;if(this.groups?.layout?.isConnected)this.groups.token=token;return;}this.leaveChat();this.groups?.leave();this.inbox=null;
     this.captureScroll();if(this.editor)await this.leaveEditor();if(token!==this.routeToken||!this.alive())return;
-    const reuseProfile=this.canReuseProfile(route);
+    const reuseProfile=this.canReuseProfile(route),reuseFeed=this.canReuseFeed(route);
     this.profileRenderInterrupted=false;
     this.baseRoute=route.hash;this.activeRoute=route;this.updateTabs(route);if(!reuseProfile)window.scrollTo({top:0,behavior:'instant'});if(this.floatingPublish)this.floatingPublish.hidden=this.container.querySelector('.cm-shell').clientWidth>520||['publish','edit','messages','moderation'].includes(route.parts[1]);this.observer?.disconnect();this.gridResize?.disconnect();this.noteElements.clear();
     const page=route.parts[1]||'recommend';
     this.setProfilePage(route);
     this.setMessagesPage?.(route);
-    if(page==='publish'||page==='edit')await this.renderEditor(route,token);
-    else if(page==='notifications')await this.renderNotifications(route,token);
-    else if(page==='moderation')await this.renderModeration(route,token);
-    else if(page==='messages')await this.renderMessages(route,token);
-    else if(page==='search'&&route.params.get('type')==='users')await this.renderUserSearch(route,token);
-    else await this.renderList(route,token);
+    const renderView=()=>{
+      if(page==='publish'||page==='edit')return this.renderEditor(route,token);
+      if(page==='notifications')return this.renderNotifications(route,token);
+      if(page==='moderation')return this.renderModeration(route,token);
+      if(page==='messages')return this.renderMessages(route,token);
+      if(page==='search'&&route.params.get('type')==='users')return this.renderUserSearch(route,token);
+      return this.renderList(route,token,{reuseFeed});
+    };
+    await (reuseProfile||reuseFeed?renderView():transitionView(this.page(),renderView));
+  }
+  canReuseFeed(route) {
+    const section=route.parts[1]||'recommend',previous=this.activeRoute;
+    return !this.personalMode&&!!previous&&['recommend','search'].includes(section)&&section===(previous.parts[1]||'recommend')&&(section!=='search'||route.params.get('type')!=='users'&&previous.params.get('type')!=='users'&&!!route.params.get('q')?.trim())&&!!this.page()?.querySelector('.cm-channels')&&!!this.page()?.querySelector('.cm-list-view');
+  }
+  updateFeedNavigation(route) {
+    const section=route.parts[1]||'recommend',category=route.params.get('category')||'';
+    this.page().querySelectorAll('.cm-channels a').forEach((link,index)=>{
+      const id=categories[index][0],params=new URLSearchParams(route.params);id?params.set('category',id):params.delete('category');
+      link.href=`#community${section==='search'?'/search':''}${params.size?'?'+params:''}`;link.classList.toggle('active',category===id);
+    });
+    if(section==='search'){
+      const markup=document.createElement('template');markup.innerHTML=this.searchHeading(route);
+      for(const selector of ['.cm-result-heading','.cm-search-options'])this.page().querySelector(selector).innerHTML=markup.content.querySelector(selector).innerHTML;
+    }
+    this.revealActiveCategory();
+  }
+  cancelFeedChange() {
+    const change=this.feedChange;this.feedChange=null;
+    const element=change?.element||this.page()?.querySelector('.cm-list-view');
+    if(change)clearTimeout(change.skeletonTimer);
+    if(element){element.inert=false;element.removeAttribute('aria-busy');element.style.removeProperty('min-height');cancelViewEntries(element);}
+  }
+  finishFeedChange(view,token) {
+    const change=this.feedChange;if(!change||change.view!==view||change.token!==token||token!==this.routeToken||!this.alive()||!change.element.isConnected)return;
+    clearTimeout(change.skeletonTimer);this.feedChange=null;change.element.inert=false;change.element.removeAttribute('aria-busy');change.element.style.removeProperty('min-height');animateViewEntry(change.element);
   }
   updateTabs(route) {const selected=route.parts[1]==='following'?'following':this.isOwnProfileRoute(route)?'mine':'recommend';this.container.querySelectorAll('.cm-primary-tabs a').forEach((link,index)=>{const active=['recommend','following','mine'][index]===selected;link.classList.toggle('active',active);active?link.setAttribute('aria-current','page'):link.removeAttribute('aria-current');});const search=this.container.querySelector('#cm-search-input');if(search)search.value=route.parts[1]==='search'?route.params.get('q')||'':'';this.updateSearchClear();this.closeSearch();this.container.querySelector('.cm-messages-link')?.classList.toggle('active',route.parts[1]==='messages');const moderation=this.container.querySelector('.cm-moderation-link');if(moderation){if(route.parts[1]==='moderation')moderation.setAttribute('aria-current','page');else moderation.removeAttribute('aria-current');}}
   isPublicPreview(route=this.activeRoute) {return route?.parts[1]==='user'&&String(route.parts[2])===this.accountId&&route.params.get('preview')==='public';}
@@ -250,7 +281,7 @@ export class CommunityController {
     finally{state.sending=false;if(this.chatAlive(state))this.updateMessageComposer();}
   }
   keydown(event) {if(this.followListKeys(event))return;if(this.groups?.keydown(event))return;if(this.contextMenu){if(event.key==='Escape'||event.key==='Tab'){if(event.key==='Escape'){event.preventDefault();event.stopPropagation();}this.closeContextMenu(true);return;}if(['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();const actions=[...this.contextMenu.menu.querySelectorAll('[role="menuitem"]')],current=actions.indexOf(document.activeElement);if(actions.length&&['ArrowDown','ArrowUp','Home','End'].includes(event.key)){const index=event.key==='Home'?0:event.key==='End'?actions.length-1:event.key==='ArrowDown'?(current+1)%actions.length:(current-1+actions.length)%actions.length;actions[index].focus({preventScroll:true});}return;}}if(event.target.id==='cm-message-input'&&event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();event.stopPropagation();this.sendMessage();return;}if(event.key==='Escape'&&event.target.closest('.cm-search')){event.preventDefault();event.stopPropagation();this.closeSearch(true);return;}if(event.target.id==='cm-search-input'||event.target.closest('.cm-search-history')){const input=this.container?.querySelector('#cm-search-input'),holder=this.container?.querySelector('.cm-search-history');if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();if(holder.hidden)this.showSearchHistory();const buttons=[...holder.querySelectorAll('[data-cm="search-history-item"]')];if(!buttons.length)return;const current=buttons.indexOf(document.activeElement),next=event.key==='ArrowDown'?Math.min(current+1,buttons.length-1):current<=0?-1:current-1;if(next<0)input.focus();else buttons[next].focus();}}}
-  async renderList(route,token=this.routeToken) {
+  async renderList(route,token=this.routeToken,{reuseFeed=false}={}) {
     const section=route.parts[1]||'recommend',tab=this.profileTab(route),category=route.params.get('category')||'',profilePage=['mine','user'].includes(section),reuseProfile=profilePage&&this.canReuseProfile(route),previousPanel=this.page()?.querySelector('.cm-profile-panel'),previousTab=previousPanel?.dataset.profilePanelTab,tabChanged=reuseProfile&&(previousTab!==tab||previousPanel.dataset.layoutPending==='true'),direction=['published','collections','drafts'].indexOf(tab)>=['published','collections','drafts'].indexOf(previousTab)?1:-1;this.setProfilePage(route);if(section==='search'&&!(route.params.get('q')||'').trim()){this.cancelProfileMotion();delete this.page().dataset.profileContext;this.page().innerHTML=this.searchHeading(route)+this.empty('搜一搜，发现更多进步','输入笔记关键词、昵称或循序号，开始搜索。');return;}
     this.viewKey=route.hash;let view=this.views.get(route.hash);if(!view){view={items:[],hasMore:true,nextCursor:null,loaded:false,loading:false,scrollTop:0};this.views.set(route.hash,view);}view.collectionOwnerId=profilePage&&tab==='collections'?String(section==='mine'?this.accountId:route.parts[2]):null;this.view=view;
     let header='';
@@ -260,13 +291,17 @@ export class CommunityController {
     const channels=section==='recommend'||section==='search'?`<nav class="cm-channels" aria-label="笔记分类">${categories.map(([id,label])=>{const params=new URLSearchParams(route.params);id?params.set('category',id):params.delete('category');return `<a href="#community${section==='search'?'/search':''}${params.size?'?'+params:''}" data-cm="nav" class="${category===id?'active':''}">${label}</a>`;}).join('')}</nav>`:'';
     const listMarkup='<div class="cm-grid" aria-label="社区笔记"></div><div class="cm-list-status" aria-live="polite"></div>';
     let panel;
-    if(reuseProfile){
+    if(reuseFeed){
+      this.updateFeedNavigation(route);const element=this.page().querySelector('.cm-list-view');
+      element.style.minHeight=element.getBoundingClientRect().height+'px';element.setAttribute('aria-busy','true');element.inert=true;
+      this.feedChange={element,view,token};
+    }else if(reuseProfile){
       panel=this.page().querySelector('.cm-profile-panel');this.refreshProfileTabs();
       if(tabChanged)await this.exitProfilePanel(panel,direction,token);
       if(token!==this.routeToken||!this.alive()||!panel.isConnected)return;
       this.cancelProfileMotion();panel.inert=false;const body=panel.querySelector('.cm-profile-panel-body');body.innerHTML=listMarkup;body.inert=tabChanged;panel.dataset.profilePanelTab=tab;
     }else{
-      this.cancelProfileMotion();this.page().innerHTML=header+channels+(profilePage?`<section class="cm-profile-panel" data-profile-panel-tab="${tab}"><div class="cm-profile-panel-body">${listMarkup}</div><div class="cm-profile-panel-loading" role="status" hidden><span class="cm-spinner"></span>正在加载…</div></section>`:listMarkup);
+      this.cancelProfileMotion();this.page().innerHTML=header+channels+(profilePage?`<section class="cm-profile-panel" data-profile-panel-tab="${tab}"><div class="cm-profile-panel-body">${listMarkup}</div><div class="cm-profile-panel-loading" role="status" hidden><span class="cm-spinner"></span>正在加载…</div></section>`:`<section class="cm-list-view" aria-label="笔记内容">${listMarkup}</section>`);
       this.revealActiveCategory();if(profilePage){this.page().dataset.profileContext=this.profileContextKey(route);panel=this.page().querySelector('.cm-profile-panel');this.positionProfileIndicator(false);}else delete this.page().dataset.profileContext;
     }
     if(panel){panel.setAttribute('aria-label',({published:'笔记',collections:'收藏',drafts:'草稿'})[tab]);panel.setAttribute('aria-busy','true');panel.querySelector('.cm-list-status').innerHTML='<span class="cm-spinner"></span> 正在加载…';if(tabChanged)this.showProfileLoading(panel,token);}
@@ -280,7 +315,7 @@ export class CommunityController {
       if(tab==='collections'&&!this.isOwnProfileRoute(route)&&this.currentProfile.collectionsVisibility!=='public'){this.showPrivateCollections();revealPanel();return;}
     }
     const scrollTop=view.scrollTop,refreshCount=view.refreshCount||0,restoreOpener=view.restoreOpener;
-    if(view.loaded){for(const note of view.items)this.appendCard(note);this.listStatus(view);}
+    if(view.loaded){if(reuseFeed)this.page().querySelector('.cm-grid').innerHTML='';for(const note of view.items)this.appendCard(note);this.listStatus(view);this.finishFeedChange(view,token);}
     else await this.loadList(true);
     // Refill the already browsed range before restoring a position from a multi-page cache.
     while(token===this.routeToken&&this.alive()&&view.loaded&&!view.error&&view.hasMore&&view.items.length<refreshCount){const before=view.items.length;await this.loadList();if(view.items.length===before)break;}
@@ -295,7 +330,11 @@ export class CommunityController {
   listEndpoint() {const route=this.activeRoute||routeOf('#community'),section=route.parts[1]||'recommend';if(section==='user')return this.profileTab(route)==='collections'?(this.isOwnProfileRoute(route)?'/me/collections':'/users/'+encodeURIComponent(route.parts[2])+'/collections'):'/users/'+encodeURIComponent(route.parts[2])+'/notes';if(section==='mine')return this.profileTab(route)==='collections'?'/me/collections':'/me/notes';return section==='search'?'/search':'/feed';}
   async loadList(first=false) {
     const view=this.view,token=this.routeToken;if(!view||view.loading&&view.loadingToken===token||!view.hasMore&&!first&&!view.invalidated)return;const route=this.activeRoute||routeOf('#community');view.loading=true;view.loadingToken=token;view.error=null;
-    first=first||!!view.invalidated;if(first&&!view.items.length)this.showSkeletons();this.listStatus(view);
+    first=first||!!view.invalidated;if(first&&!view.items.length){
+      const change=this.feedChange;
+      if(change?.view===view&&change.token===token)change.skeletonTimer=setTimeout(()=>{if(this.feedChange===change&&token===this.routeToken&&this.alive()){this.noteElements.clear();this.showSkeletons();}},180);
+      else this.showSkeletons();
+    }this.listStatus(view);
     try {
       let refetched=false;
       for(;;){
@@ -310,7 +349,7 @@ export class CommunityController {
         if(refetched){delete view.refreshCount;const scrollTop=view.scrollTop,opener=view.restoreOpener;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(token===this.routeToken&&this.view===view&&!this.detail&&this.isMounted()&&this.alive()){if(opener){this.noteElements.get(opener.id)?.querySelector(opener.selector)?.focus({preventScroll:true});delete view.restoreOpener;}window.scrollTo({top:scrollTop,behavior:'instant'});}}));}
         break;
       }
-    }catch(error){if(token!==this.routeToken||!this.alive())return;if(error.status===403&&view.collectionOwnerId&&!this.isOwnProfileRoute(route)){if(this.currentProfile)this.currentProfile.collectionsVisibility='private';this.refreshProfileTabs();this.showPrivateCollections();return;}view.error=error;if(!view.items.length)this.page().querySelector('.cm-grid').innerHTML='';this.error(error);}finally{if(view.loadingToken===token){view.loading=false;delete view.loadingToken;}if(token===this.routeToken)this.listStatus(view);}
+    }catch(error){if(token!==this.routeToken||!this.alive())return;if(error.status===403&&view.collectionOwnerId&&!this.isOwnProfileRoute(route)){if(this.currentProfile)this.currentProfile.collectionsVisibility='private';this.refreshProfileTabs();this.showPrivateCollections();return;}view.error=error;if(!view.items.length||this.feedChange?.view===view&&this.feedChange.token===token){this.page().querySelector('.cm-grid').innerHTML='';this.noteElements.clear();}this.error(error);}finally{if(view.loadingToken===token){view.loading=false;delete view.loadingToken;}if(token===this.routeToken){this.listStatus(view);this.finishFeedChange(view,token);}}
   }
   showSkeletons() {this.page().querySelector('.cm-grid').innerHTML=Array.from({length:8},(_,index)=>`<div class="cm-skeleton cm-note" style="grid-row:span ${index%3===0?340:280}" aria-hidden="true"><div style="aspect-ratio:${index%2?'1/1':'3/4'}"></div><i></i><i></i></div>`).join('');}
   listStatus(view) {const el=this.page()?.querySelector('.cm-list-status');if(!el)return;el.innerHTML=view.loading?'<span class="cm-spinner"></span> 正在加载笔记…':view.error?`<p>${escape(view.error.message)}</p><button class="cm-button" data-cm="load-more">${icon('refresh')} 重新加载</button>${(view.error.status===410||view.error.status===409&&/\u5217\u8868\u5df2\u8fc7\u671f/.test(view.error.message))?'<button class="cm-text-button" data-cm="feed-refresh">刷新本轮信息流</button>':''}`:view.items.length?view.hasMore?'<button class="cm-button" data-cm="load-more">加载更多</button>':'<span class="cm-end-line"></span> 已经看完了 <span class="cm-end-line"></span>':'';
@@ -457,7 +496,7 @@ export class CommunityController {
     dialog.setAttribute('aria-label','关注与粉丝');dialog.dataset.userId=targetUserId;const state={dialog,targetUserId,tab,query:'',items:[],nextCursor:null,hasMore:true,loaded:false,loading:false,error:null,revision:0,generation:this.generation};this.followList=state;dialog.addEventListener('close',()=>this.stopFollowList(dialog));this.renderFollowList(state);void this.loadFollowList(true);
   }
   resetFollowList(state=this.followList,{keepItems=false}={}) {if(!this.followListAlive(state))return;clearTimeout(state.searchTimer);state.revision++;state.controller?.abort();state.controller=null;state.loading=false;state.loaded=false;state.error=null;state.nextCursor=null;state.hasMore=true;if(!keepItems)state.items=[];this.renderFollowList(state);}
-  setFollowListTab(tab) {const state=this.followList;if(!this.followListAlive(state)||!['following','followers'].includes(tab)||state.tab===tab)return;state.tab=tab;this.resetFollowList(state);void this.loadFollowList(true);}
+  setFollowListTab(tab) {const state=this.followList;if(!this.followListAlive(state)||!['following','followers'].includes(tab)||state.tab===tab)return;state.tab=tab;this.resetFollowList(state);void this.loadFollowList(true);animateViewEntry(state.dialog.querySelector?.('.cm-follow-panel'));}
   searchFollowList(value,immediate=false) {
     const state=this.followList;if(!this.followListAlive(state))return;const query=String(value||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
     if(state.query!==query){state.query=query;this.resetFollowList(state);}else if(state.loaded&&!state.error)return;

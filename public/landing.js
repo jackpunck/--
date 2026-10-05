@@ -1,3 +1,5 @@
+import {animateViewEntry, cancelViewEntries} from './view-transitions.js?v=1';
+
 const arrow = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14" stroke="currentColor" stroke-width="1.5"/></svg>';
 
 export function landingMarkup(auth, icon) {
@@ -59,6 +61,7 @@ export function mountLanding(root, {onAuthRoute} = {}) {
     motionContext?.revert();motionContext=null;
     root.querySelectorAll('.landing-story-text span').forEach(el=>el.style.removeProperty('opacity'));
     root.classList.toggle('motion-paused',isReduced());
+    if(isReduced())cancelViewEntries(root);
     motionButton.setAttribute('aria-pressed',String(isReduced()));motionButton.setAttribute('aria-label',media.matches?'已跟随系统减少动态效果':paused?'开启动态效果':'暂停动态效果');
     motionButton.title=motionButton.getAttribute('aria-label');motionButton.textContent=isReduced()?'▷':'Ⅱ';motionButton.disabled=media.matches;
     if(!isReduced()&&gsap&&ScrollTrigger){
@@ -118,6 +121,7 @@ export function mountLanding(root, {onAuthRoute} = {}) {
     const target=authPage?root.querySelector('#auth-entry'):[...root.querySelectorAll('[id]')].find(el=>'#'+el.id===location.hash)||root;
     if(authPage||changed||target===root)window.scrollTo({top:0,behavior:'instant'});
     if(target!==root&&(!authPage||matchMedia('(max-width:760px)').matches))target.scrollIntoView({behavior:changed||!focus||isReduced()?'instant':'smooth'});
+    if(changed)animateViewEntry(authPage?root.querySelector('.landing-hero'):root.querySelector('main'));
     if(focus){const heading=authPage?root.querySelector('#landing-auth-heading'):target.querySelector('h1,h2,h3')||target;heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true});}
     paint();
   };

@@ -9,6 +9,7 @@ import { MOTION_VIDEO_ACCEPT, prepareMotionVideo, releasePreparedMotionVideo, va
 import { createMotionFramePlayer } from './motion-frame-player.js';
 import { drawMotionOverlay } from './motion-overlay.js';
 import { buildSmoothedMotionFrames } from './motion-smoothing.js';
+import { animateViewEntry } from './view-transitions.js?v=1';
 
 const exerciseNames = Object.fromEntries(motionExercises.map(item=>[item.id,item.name]));
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -460,8 +461,8 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     else if(action==='pick-target')void beginTargetSelection();
     else if(action==='reset-target')chooseTarget(null);
     else if(action==='exercise')openExercise?.(button.dataset.exercise);
-    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){selectedHistory=report.id;renderResult(report,true);find('[data-motion-results]').scrollIntoView({behavior:'smooth',block:'start'});}}
-    else if(action==='live-result'){selectedHistory=null;if(result)renderResult(result);}
+    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){const changed=selectedHistory!==report.id;selectedHistory=report.id;renderResult(report,true);const section=find('[data-motion-results]');if(changed)animateViewEntry(section);section.scrollIntoView({behavior:'smooth',block:'start'});}}
+    else if(action==='live-result'){const changed=selectedHistory!==null;selectedHistory=null;if(result){renderResult(result);const section=find('[data-motion-results]');if(changed&&!section.hidden)animateViewEntry(section);}}
     else if(action==='delete')void removeReport(Number(button.dataset.history));
     else if(action==='seek'&&pipeline){context?.clearRect(0,0,canvas.width,canvas.height);void seekMedia(Number(button.dataset.time)||0).catch(()=>{});mediaSurface().focus({preventScroll:true});find('[data-motion-player]').scrollIntoView({behavior:'smooth',block:'center'});}
   });
@@ -488,5 +489,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   });
   listen(window,'resize',()=>{if(selectingTarget)positionPicker();});
   controls();void refreshHistory();
+  animateViewEntry(find('.motion-workspace'));
+  animateViewEntry(find('.motion-history'));
   return {refreshHistory,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
 }
