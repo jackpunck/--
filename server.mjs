@@ -24,6 +24,7 @@ import { createCommunity } from './server/community.mjs';
 import { communityTransaction } from './server/community-storage.mjs';
 import { createCommunityMedia } from './server/community-media.mjs';
 import {completeMotionCoach, validateMotionCoachRequest, MOTION_COACH_REQUEST_BYTES} from './server/motion-coach.mjs';
+import {chatMotionVideos,chatMotionTools,chatMotionNotice,createChatMotionRegistry} from './server/chat-motion.mjs';
 
 const scrypt = promisify(scryptCallback);
 const root = dirname(fileURLToPath(import.meta.url));
@@ -131,6 +132,8 @@ export function createServer(options = {}) {
   } = options;
   const store = openStore(resolve(dataDir));
   const { db } = store;
+  const chatMotionWaitMs=options.chatMotionWaitMs??600000;
+  const chatMotion=createChatMotionRegistry({db,waitMs:chatMotionWaitMs});
   const communityMedia = createCommunityMedia({ db, dataDir: resolve(dataDir) });
   const community = createCommunity({ db, media: communityMedia, readBody, send,
     moderatorIds: options.communityModeratorIds ?? (process.env.COMMUNITY_MODERATOR_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean),
@@ -347,6 +350,10 @@ export function createServer(options = {}) {
           await callAi(user.id, provider, [{ role: 'user', content: 'Reply briefly with OK.' }]);
           send(res, 200, { ok: true, message: '连接成功，模型已返回有效回复。' }); return;
         }
+        if (pathname.startsWith('/api/chat/motion/') && method === 'POST') {
+          const body=await readBody(req,MOTION_COACH_REQUEST_BYTES+1024);
+          send(res,202,chatMotion.submit({userId:user.id,jobId:pathname.slice('/api/chat/motion/'.length),body}));return;
+        }
         if (pathname === '/api/motion/coach' && method === 'POST') {
           const body = validateMotionCoachRequest(await readBody(req, MOTION_COACH_REQUEST_BYTES));
           const settings = getProviders(db, user.id);
@@ -391,9 +398,11 @@ export function createServer(options = {}) {
             catch (error) { throw new HttpError(400, error.message); }
             body.context = { ...body.context, localToday };
           }
+          const motionVideos=body.stream?chatMotionVideos(body.messages):[];
           const chatHistory=body.stream?prepareChatHistory({db,userId:user.id,body}):null;
           const messages = buildMessages(db, user.id, chatHistory?.body||body);
           if(chatHistory)messages[0].content+='\n'+chatHistory.notice;
+          if(motionVideos.length)messages[0].content+='\n'+chatMotionNotice(motionVideos);
           const settings = getProviders(db, user.id);
           const id = settings.tasks[body.task];
           if (!id) throw new HttpError(400, '尚未为此任务配置 AI 模型，请前往个人设置添加供应商并选择任务模型。');
@@ -415,9 +424,24 @@ export function createServer(options = {}) {
             });
           };
           try {
-            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools],
-              executeTool: async (name, args) => { const planStart=args?.schedule?.startDate||localToday,planDays=args?.schedule?.days??84;let planEnd;try{if(['create_training_plan','update_training_plan'].includes(name)&&Number.isInteger(planDays)&&planDays>=1&&planDays<=366)planEnd=addDays(planStart,planDays-1);}catch{}const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate,planEnd].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
-              receipt: getAssistantToolReceipts({ db, userId: user.id, requestId: body.requestId }),
+            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools,...chatMotionTools(motionVideos)],
+              executeTool: async (name, args, {signal}) => {
+                if(name==='assess_motion_video') {
+                  try {
+                    // The enclosing chat already owns one AI slot. Reusing it
+                    // avoids a nested concurrency-limit rejection/deadlock.
+                    return await chatMotion.execute({userId:user.id,requestId:body.requestId,videos:motionVideos,args,signal,onEvent:event,
+                      prepare:()=>{
+                        const currentSettings=getProviders(db,user.id),motionId=currentSettings.tasks.motion,motionModel=currentSettings.taskModels.motion;
+                        if(!motionId||!motionModel)throw new HttpError(400,'尚未配置动作评估模型，请在 AI 服务设置中选择动作评估任务模型。');
+                        const motionProvider=selectProviderModel(providerWithKey(user.id,motionId),motionModel);
+                        if(motionProvider.models?.find(item=>item.id===motionProvider.model)?.vision!==true)throw new HttpError(400,'动作评估需要支持图片的 AI 模型。');
+                        return (input,control)=>completeMotionCoach({provider:motionProvider,input,fetchImpl,timeoutMs:motionAiTimeoutMs,allowPrivateProviders,...control});
+                      }});
+                  } catch(error) {if(signal.aborted)throw signal.reason;return {ok:false,name,readOnly:true,code:'MOTION_FAILED',message:error instanceof HttpError?error.message:'动作评价未完成，请稍后重试。'};}
+                }
+                const planStart=args?.schedule?.startDate||localToday,planDays=args?.schedule?.days??84;let planEnd;try{if(['create_training_plan','update_training_plan'].includes(name)&&Number.isInteger(planDays)&&planDays>=1&&planDays<=366)planEnd=addDays(planStart,planDays-1);}catch{}const years=new Set([localToday,args?.startDate,args?.endDate,args?.date,args?.task?.date,args?.schedule?.startDate,planEnd].filter(date=>typeof date==='string'&&/^\d{4}-/.test(date)).map(date=>Number(date.slice(0,4))));await Promise.all([...years].filter(year=>year>=1900&&year<=2199).map(loadHolidayYear));return executeAssistantTool({ db, userId: user.id, name, args, requestId: body.requestId, localToday, localTime }); },
+              receipt: [...getAssistantToolReceipts({ db, userId: user.id, requestId: body.requestId }),...chatMotion.receipts({userId:user.id,requestId:body.requestId,videos:motionVideos})],
               executeHistoryTool:chatHistory.execute,
               fallbackMessages:()=>buildMessages(db,user.id,body).slice(1),
               fallbackContext: () => ({
@@ -425,7 +449,7 @@ export function createServer(options = {}) {
                 plan: executeAssistantTool({ db, userId: user.id, name: 'get_training_plan', localToday }),
                 calendar: executeAssistantTool({ db, userId: user.id, name: 'read_calendar', args: { startDate: localToday, endDate: addDays(localToday, 28) }, localToday }),
               }),
-              fetchImpl, timeoutMs: aiTimeoutMs, allowPrivateProviders, signal: controller.signal, onEvent: event }));
+              fetchImpl, timeoutMs: motionVideos.length?(options.chatMotionTimeoutMs??chatMotionWaitMs+motionAiTimeoutMs+2*aiTimeoutMs):aiTimeoutMs, allowPrivateProviders, signal: controller.signal, onEvent: event }));
             if (!controller.signal.aborted) await event('done', result);
           } catch (error) {
             if (!controller.signal.aborted) {
@@ -501,7 +525,7 @@ export function createServer(options = {}) {
   server.requestTimeout = 90000;
   server.headersTimeout = 15000;
   server.keepAliveTimeout = 5000;
-  server.once('close', () => { clearInterval(communityCleanupTimer); db.close(); });
+  server.once('close', () => { clearInterval(communityCleanupTimer); chatMotion.close(); db.close(); });
   return server;
 }
 

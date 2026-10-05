@@ -17,14 +17,26 @@ const maxSize = 8 * 1024 * 1024;
 const types = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']);
 const extensions = { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', webp:'image/webp', gif:'image/gif', pdf:'application/pdf', txt:'text/plain', md:'text/markdown', markdown:'text/markdown', csv:'text/csv', json:'application/json' };
 const imageExtensions = { 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp', 'image/gif':'gif' };
+const videoExtensions = {mp4:'video/mp4',m4v:'video/x-m4v',mov:'video/quicktime',webm:'video/webm',mkv:'video/x-matroska',avi:'video/x-msvideo',
+  '3gp':'video/3gpp','3g2':'video/3gpp2',mpg:'video/mpeg',mpeg:'video/mpeg',ts:'video/mp2t',m2ts:'video/vnd.dlna.mpeg-tts',mts:'video/vnd.dlna.mpeg-tts',ogv:'video/ogg',wmv:'video/x-ms-wmv',flv:'video/x-flv'};
 
 export function normalizeChatFile(file) {
   if (!file || typeof file.arrayBuffer !== 'function' || !Number.isSafeInteger(file.size)) throw new Error('请粘贴或选择实际文件，文件路径不能直接作为附件。');
-  if (!file.size) throw new Error('不能上传空文件。');
-  if (file.size > maxSize) throw new Error('单个附件不能超过 8 MB。');
+  if (file.size <= 0) throw new Error('不能上传空文件。');
   const originalName = typeof file.name === 'string' ? file.name.replace(/^.*[\\/]/, '').trim() : '';
   const ext = originalName.split('.').at(-1)?.toLowerCase();
   let type = String(file.type || '').toLowerCase().split(';')[0].trim();
+  const isVideo=type.startsWith('video/')||['application/mp4','application/ogg'].includes(type)||(!type||type==='application/octet-stream')&&Boolean(videoExtensions[ext]);
+  if(isVideo){
+    validateVideoFile({name:originalName,type,size:file.size});
+    if(file.size>MOTION_VIDEO_LIMITS.maxBytes)throw new Error('视频不能超过 200 MB。');
+    if(!type.startsWith('video/'))type=videoExtensions[ext];
+    const fallbackExtension=Object.keys(videoExtensions).find(extension=>videoExtensions[extension]===type)||(type==='video/avi'?'avi':'mp4');
+    const name=originalName||`本地视频.${fallbackExtension}`;
+    if(name.length>200||/[\r\n\0]/.test(name))throw new Error('文件名应为 1–200 个字符，不能包含换行。');
+    return {name,type,size:file.size,isVideo:true,localVideo:true};
+  }
+  if (file.size > maxSize) throw new Error('单个附件不能超过 8 MB。');
   if (!type || type === 'application/octet-stream') type = extensions[ext] || '';
   if (type === 'image/pjpeg') type = 'image/jpeg';
   if (!types.has(type)) throw new Error('支持 JPG、PNG、WebP、GIF、PDF、TXT、Markdown、CSV 和 JSON 文件。');
@@ -36,8 +48,8 @@ export function normalizeChatFile(file) {
 function fileKey(file, metadata) { return JSON.stringify([metadata.name, metadata.type, metadata.size, file.lastModified ?? 0]); }
 let nextEntry = 0;
 
-/** Per-account, per-draft uploads. File bytes and object URLs stay in memory;
- * only successful server attachment references may enter a conversation. */
+/** Per-account, per-draft attachment preparation. File bytes and object URLs
+ * stay in memory; only successful server or local-video references are sent. */
 export class AttachmentManager {
   constructor({ upload, removeRemote = async () => {}, onChange = () => {} }) {
     if (typeof upload !== 'function') throw new TypeError('An upload callback is required');
@@ -45,8 +57,8 @@ export class AttachmentManager {
     this.owners = new Map(); this.jobs = new Set();
   }
   list(ownerKey) { return (this.owners.get(ownerKey) || []).map(entry => this.publicEntry(entry)); }
-  publicEntry({ id, name, type, size, status, attachment, previewUrl, error }) {
-    return { id, name, type, size, status, ...(attachment ? {attachment:{...attachment}} : {}), ...(previewUrl ? {previewUrl} : {}), ...(error ? {error} : {}) };
+  publicEntry({ id, name, type, size, status, isVideo, localVideo, attachment, previewUrl, error }) {
+    return { id, name, type, size, status, ...(isVideo?{isVideo:true}:{}), ...(localVideo?{localVideo:true}:{}), ...(attachment ? {attachment:{...attachment}} : {}), ...(previewUrl ? {previewUrl} : {}), ...(error ? {error} : {}) };
   }
   notify(ownerKey) { this.onChange(ownerKey); }
   add(ownerKey, files) {
@@ -74,7 +86,8 @@ export class AttachmentManager {
     for (const attachment of attachments || []) {
       if (!attachment?.id || entries.some(entry => entry.attachment?.id === attachment.id)) continue;
       if (entries.length >= 6) break;
-      entries.push({ id:`attachment-${++nextEntry}`, name:attachment.name, type:attachment.type, size:attachment.size || 0, status:'ready', attachment:{...attachment}, removed:false, attempt:0, restored:true });
+      entries.push({ id:`attachment-${++nextEntry}`, name:attachment.name, type:attachment.type, size:attachment.size || 0,
+        ...(attachment.localVideo?{isVideo:true,localVideo:true}:{}),status:'ready', attachment:{...attachment}, removed:false, attempt:0, restored:true });
     }
     this.notify(ownerKey);
   }
@@ -84,7 +97,7 @@ export class AttachmentManager {
     entry.controller = controller; entry.status = 'uploading'; entry.error = '';
     const job = Promise.resolve().then(() => {
       controller.signal.throwIfAborted();
-      return this.upload(entry.file, {signal:controller.signal, ownerKey, metadata:{name:entry.name,type:entry.type,size:entry.size}});
+      return this.upload(entry.file, {signal:controller.signal, ownerKey, metadata:{name:entry.name,type:entry.type,size:entry.size,...(entry.isVideo?{isVideo:true,localVideo:true}:{})}});
     }).then(async attachment => {
       if (!attachment || typeof attachment.id !== 'string' || !attachment.id) throw new Error('上传未返回有效的附件，请重试。');
       if (entry.removed || entry.attempt !== attempt || controller.signal.aborted) {
@@ -136,3 +149,4 @@ export class AttachmentManager {
   clearAll(options) { return Promise.all([...this.owners.keys()].map(ownerKey => this.clear(ownerKey, options))); }
   async whenIdle() { while (this.jobs.size) await Promise.all([...this.jobs]); }
 }
+import {MOTION_VIDEO_LIMITS, validateVideoFile} from './motion-media.js';

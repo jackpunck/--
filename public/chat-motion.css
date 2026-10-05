@@ -1,0 +1,13 @@
+.chat-motion-result{padding:17px;border:1px solid var(--line,#d6e3ca);border-radius:12px;background:var(--mint-soft,#f0f5e9);font-size:13px;line-height:1.75;overflow-wrap:anywhere}
+.chat-motion-result>header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.chat-motion-result>header strong{font-size:15px}
+.chat-motion-verdict{padding:2px 9px;border-radius:20px;background:#e2edda;color:#3e6532;font-size:11px}
+.chat-motion-verdict.is-needs-improvement{background:#fff0d6;color:#835915}
+.chat-motion-verdict.is-uncertain{background:#eceef2;color:#505b68}
+.chat-motion-result>p{margin:10px 0}
+.chat-motion-result ul{margin:12px 0;padding-left:19px}
+.chat-motion-result li+li{margin-top:12px}
+.chat-motion-result li p{margin:3px 0;font-size:12px}
+.chat-motion-result .chat-motion-correction{color:var(--muted,#53634c)}
+.chat-motion-result>.button{margin-top:4px;min-height:36px}
+.chat-motion-result.failed{background:#fff5ea;border-color:#eadbc8}

@@ -1,10 +1,14 @@
 import {compute} from '../server/compute.mjs';
 import {validTrainingCompletion} from '../public/achievements.js';
-import test from 'node:test';
+import test, {beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {exercises,exerciseUsesSeconds,defaultTrainingExercise,MAX_TRAINING_EXERCISES} from '../public/domain.js';
+
+// The browser stubs below and the server compute helper must share the fixture
+// date; otherwise these tests change their meaning when the real week advances.
+beforeEach(context=>context.mock.timers.enable({apis:['Date'],now:new Date('2026-09-30T04:00:00Z')}));
 
 const source=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const content=source.slice(source.indexOf('function trainingExerciseSummary('),source.indexOf('function exerciseLine('));
