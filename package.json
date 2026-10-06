@@ -20,6 +20,7 @@
     "qa:community:groups": "node scripts/qa-community-groups.mjs",
     "qa:community:messages": "node scripts/qa-community-message-avatars.mjs",
     "qa:community:followers": "node scripts/qa-community-follower-invites.mjs",
+    "qa:community:follows": "node scripts/qa-community-follow-lists.mjs",
     "qa:community:members": "node scripts/qa-community-member-search.mjs",
     "qa:community:notification-badge": "node scripts/qa-community-notification-badge.mjs",
     "qa:account-delete-race": "node scripts/qa-account-delete-race.mjs",

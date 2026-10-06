@@ -1,5 +1,6 @@
 import {communityId} from './community-api.js?v=10';
 import {CommunityImageComposer,communityImagesMarkup} from './community-images.js?v=2';
+import {animateViewEntry} from './view-transitions.js?v=1';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const name=user=>user?.nickname||user?.name||'社区用户';
@@ -204,7 +205,7 @@ export class CommunityGroups {
       if(action==='group-nav')this.owner.navigate(element.getAttribute('href'));
       else if(action==='group-create')this.showCreate();else if(action==='group-join')this.showJoin();else if(action==='group-invitations')await this.showInvitations();
       else if(action==='group-list-more')await this.loadList();else if(action==='group-list-retry')await this.loadList(true);else if(action==='group-info')await this.showInfo(id);
-      else if(action==='group-info-tab'){if(context?.kind==='info'){context.tab=element.dataset.tab;this.renderInfo(context);}}
+      else if(action==='group-info-tab'){if(context?.kind==='info'){const changed=context.tab!==element.dataset.tab;context.tab=element.dataset.tab;this.renderInfo(context);if(changed&&context.dialog.animate)animateViewEntry(context.dialog.querySelector?.('.cm-group-info-content'));}}
       else if(action==='group-member-search-clear'){if(this.contextAlive(context)&&context.kind==='info'&&context.dialog.contains(element)){const input=context.dialog.querySelector('.cm-group-member-search-input');if(input){input.value='';this.updateMemberSearch(context,'');input.focus();input.setSelectionRange(0,0);}}}
       else if(action==='group-member-profile'){if(this.contextAlive(context)&&context.kind==='info'&&context.dialog.contains(element)&&context.members.some(member=>String(member.id)===id)){this.owner.closeAux();this.owner.navigate('#community/user/'+encodeURIComponent(id));}}
       else if(action==='group-history')await this.loadHistory(!this.current?.initialLoaded);else if(action==='group-message-retry')await this.send(element.dataset.mutation);
@@ -212,7 +213,7 @@ export class CommunityGroups {
       else if(action==='group-mentions')await this.showMentions();else if(action==='group-mention-pick')this.addMention(id);else if(action==='group-mention-all')this.addMention('all');
       else if(action==='group-mention-remove'){const state=this.current;if(state){if(id==='all')state.mentionAll=false;else state.mentions=state.mentions.filter(user=>user.id!==id);state.composerRevision++;this.persist(state);this.updateComposer();}}
       else if(action==='group-invite')await this.showInvite(id||context?.id);
-      else if(action==='group-invite-source'){if(this.contextAlive(context)&&context.kind==='invite'&&!context.sending&&['search','fans'].includes(element.dataset.source)){context.source=element.dataset.source;this.renderInvite(context);if(context.source==='fans'&&!context.fans.loaded)await this.loadInviteFans(context);}}
+      else if(action==='group-invite-source'){if(this.contextAlive(context)&&context.kind==='invite'&&!context.sending&&['search','fans'].includes(element.dataset.source)){const changed=context.source!==element.dataset.source;context.source=element.dataset.source;this.renderInvite(context);if(changed&&context.dialog.animate)animateViewEntry(context.dialog.querySelector?.('.cm-aux-content'));if(context.source==='fans'&&!context.fans.loaded)await this.loadInviteFans(context);}}
       else if(action==='group-invite-fans-more')await this.loadInviteFans(context);
       else if(action==='group-invite-fans-retry')await this.loadInviteFans(context,context?.fans?.restart||!context?.fans?.loaded);
       else if(action==='group-invite-members-retry')await this.loadInviteMembers(context);

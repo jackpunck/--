@@ -10,6 +10,7 @@ import { MOTION_VIDEO_ACCEPT, prepareMotionVideo, releasePreparedMotionVideo, va
 import { createMotionFramePlayer } from './motion-frame-player.js';
 import { drawMotionOverlay } from './motion-overlay.js';
 import { buildSmoothedMotionFrames } from './motion-smoothing.js';
+import { animateViewEntry } from './view-transitions.js?v=1';
 import { buildMotionAssessmentReport } from './motion-report.js';
 export { buildMotionAssessmentReport, validateMotionAssessmentSize, MAX_MOTION_ASSESSMENT_BYTES } from './motion-report.js';
 
@@ -149,8 +150,13 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   }
   function resume(){
     if(destroyed)return;
+    const wasSuspended=suspended;
     suspended=false;refreshConfiguration();drawOverlay();
     if(selectingTarget)positionPicker();
+    if(wasSuspended){
+      animateViewEntry(find('.motion-workspace'));
+      animateViewEntry(find('.motion-history'));
+    }
   }
   function seekMedia(time){pauseMedia();if(mediaMode==='software')return framePlayer.seek(time);video.currentTime=Math.max(0,Math.min(metadata?.duration||0,time));return Promise.resolve();}
   function releaseMedia() {
@@ -473,7 +479,9 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       const message=values?'这份动作评估报告已删除或不存在。':'读取动作评估报告失败，请重试。';
       error(message);announce(message,true);return false;
     }
+    const changed=selectedHistory!==report.id;
     error('');selectedHistory=report.id;renderResult(report,true);
+    if(changed)animateViewEntry(find('[data-motion-results]'));
     scrollTo('[data-motion-results]',{behavior:'smooth',block:'start'});
     return true;
   }
@@ -516,8 +524,8 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     else if(action==='pick-target')void beginTargetSelection();
     else if(action==='reset-target')chooseTarget(null);
     else if(action==='exercise')openExercise?.(button.dataset.exercise);
-    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){reportOpenRevision++;selectedHistory=report.id;renderResult(report,true);scrollTo('[data-motion-results]',{behavior:'smooth',block:'start'});}}
-    else if(action==='live-result'){reportOpenRevision++;selectedHistory=null;if(result)renderResult(result);}
+    else if(action==='history'){const report=history[Number(button.dataset.history)];if(report){const changed=selectedHistory!==report.id;reportOpenRevision++;selectedHistory=report.id;renderResult(report,true);if(changed)animateViewEntry(find('[data-motion-results]'));scrollTo('[data-motion-results]',{behavior:'smooth',block:'start'});}}
+    else if(action==='live-result'){const changed=selectedHistory!==null;reportOpenRevision++;selectedHistory=null;if(result){renderResult(result);const section=find('[data-motion-results]');if(changed&&!section.hidden)animateViewEntry(section);}}
     else if(action==='delete')void removeReport(Number(button.dataset.history));
     else if(action==='seek'&&pipeline){context?.clearRect(0,0,canvas.width,canvas.height);void seekMedia(Number(button.dataset.time)||0).catch(()=>{});if(!suspended)mediaSurface().focus({preventScroll:true});scrollTo('[data-motion-player]',{behavior:'smooth',block:'center'});}
   });
@@ -550,5 +558,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   });
   listen(window,'resize',()=>{if(selectingTarget)positionPicker();});
   controls();void refreshHistory();
+  animateViewEntry(find('.motion-workspace'));
+  animateViewEntry(find('.motion-history'));
   return {refreshHistory,openReport,suspend,resume,refreshConfiguration,hasUnsavedWork:()=>!destroyed&&!!file&&!saved,destroy(){if(destroyed)return;destroyed=true;cancel();listeners.abort();cancelAnimationFrame(animationId);releaseMedia();framePlayer.destroy();file=null;result=null;history=[];}};
 }

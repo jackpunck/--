@@ -98,6 +98,39 @@ function loadingFeedFixture() {
   value.listStatus=()=>{};value.showSkeletons=()=>{};value.appendCard=()=>{};return {value,view};
 }
 
+test('clicking the same category while its first request is pending keeps the route token and accepts that response',async()=>{
+  const {value,view}=loadingFeedFixture(),pending=deferred(),hash='#community?category=training',grid=value.page().querySelector('.cm-grid');let requests=0;
+  value.container.isConnected=true;value.baseRoute=value.viewKey=hash;value.activeRoute={hash,parts:['community'],params:new URLSearchParams('category=training')};
+  value.page=()=>({children:[{}],querySelector:()=>grid});value.api.get=()=>{requests++;return pending.promise;};
+  const loading=value.loadList(true),token=value.routeToken;await value.handleRoute(hash);await value.handleRoute(hash);
+  assert.equal(value.routeToken,token);assert.equal(requests,1);assert.equal(view.loading,true);
+  pending.resolve({items:[{id:'first-category-result'}],hasMore:false});await loading;
+  assert.equal(view.loaded,true);assert.equal(view.loading,false);assert.deepEqual(view.items.map(note=>note.id),['first-category-result']);
+});
+
+test('returning to a category after its pending request was interrupted refetches and rejects the retired response',async t=>{
+  globals(t,{window:{scrollTo(){}}});
+  const {value,view}=loadingFeedFixture(),pending=deferred(),hash='#community?category=training',grid=value.page().querySelector('.cm-grid');let requests=0,renders=0;
+  value.container={isConnected:true,querySelector:()=>null};value.baseRoute=value.viewKey=hash;value.activeRoute={hash,parts:['community'],params:new URLSearchParams('category=training')};
+  value.page=()=>({children:[{}],querySelector:()=>grid});value.canReuseFeed=()=>true;value.canReuseProfile=()=>false;
+  for(const method of ['cancelFeedChange','closeDetail','closeAux','leaveChat','captureScroll','updateTabs','setProfilePage','setMessagesPage'])value[method]=()=>{};
+  value.api.get=()=>++requests===1?pending.promise:Promise.resolve({items:[{id:'returned-category-result'}],hasMore:false});
+  value.renderList=async()=>{renders++;await value.loadList(true);};
+  const retired=value.loadList(true);value.routeToken++;await value.handleRoute(hash);
+  assert.equal(renders,1);assert.equal(requests,2);assert.equal(view.loaded,true);
+  pending.resolve({items:[{id:'retired-category-result'}],hasMore:false});await retired;
+  assert.deepEqual(view.items.map(note=>note.id),['returned-category-result']);assert.equal(view.loading,false);
+});
+
+test('a failed category refresh with retained target cache clears the previous category cards before releasing the view',async()=>{
+  const {value,view}=loadingFeedFixture(),grid=value.page().querySelector('.cm-grid');
+  view.items=[{id:'target-category-cache'}];view.invalidated=true;grid.innerHTML='previous-category-cards';value.noteElements.set('previous-category-note',{});
+  value.feedChange={view,token:value.routeToken};value.finishFeedChange=()=>{};value.api.get=async()=>{throw new Error('category request failed');};
+  await value.loadList(true);
+  assert.equal(grid.innerHTML,'');assert.equal(value.noteElements.size,0);assert.equal(view.error.message,'category request failed');assert.equal(view.loading,false);
+  assert.deepEqual(view.items.map(note=>note.id),['target-category-cache']);
+});
+
 test('a list response from before a follow acknowledgement is rejected even when the route token is unchanged',async t=>{
   globals(t,{requestAnimationFrame:callback=>callback()});const {value,view}=loadingFeedFixture(),old=deferred(),queries=[];
   value.api.get=async(path,params)=>{queries.push(params);return queries.length===1?old.promise:{items:[{id:'fresh'}],hasMore:false};};

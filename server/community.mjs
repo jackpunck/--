@@ -257,6 +257,38 @@ export function createCommunity({ db, media, readBody, send, moderatorIds = [], 
     });
   }
   const normalizeSearch = value => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  function relationshipList(viewer, userId, direction, params) {
+    const query = normalizeSearch(text(params.get('q') ?? '', 100, '搜索词'));
+    const following = direction === 'following';
+    const ownerColumn = following ? 'user_id' : 'target_user_id';
+    const memberColumn = following ? 'target_user_id' : 'user_id';
+    // Keep existing self-follower cursors usable by the group invitation picker.
+    const scope = !following && userId === viewer.id && !query
+      ? JSON.stringify(['my-followers', userId])
+      : JSON.stringify(['user-relationships', userId, direction, query]);
+    let eligible;
+    const currentIds = () => {
+      const rows = db.prepare(`SELECT f.${memberColumn} AS id FROM community_follows f
+        JOIN users u ON u.id=f.${memberColumn} WHERE f.${ownerColumn}=?
+        ORDER BY f.created_at DESC,f.${memberColumn} DESC`).all(userId);
+      return rows.filter(row => {
+        if (!query) return true;
+        const member = ensureProfile(row.id);
+        const account = db.prepare('SELECT account_number FROM community_accounts WHERE user_id=?').get(row.id);
+        return normalizeSearch(member.nickname).includes(query) || account.account_number === query;
+      }).map(row => row.id);
+    };
+    return paginate(viewer, params, scope, () => {
+      eligible = new Set(currentIds());
+      return [...eligible];
+    }, id => {
+      // Freeze ordering, but recheck relationships, search matches and deletion.
+      eligible ??= new Set(currentIds());
+      if (!eligible.has(id)) return null;
+      return { ...profile(id, viewer),
+        followedBy: Boolean(db.prepare('SELECT 1 FROM community_follows WHERE user_id=? AND target_user_id=?').get(id, viewer.id)) };
+    });
+  }
   function searchUsers(user, params, query) {
     const rank = row => {
       const nickname = normalizeSearch(row.nickname);
@@ -543,11 +575,12 @@ export function createCommunity({ db, media, readBody, send, moderatorIds = [], 
       await media.cleanupExpired();
       return writeResult(result);
     }
-    if ((match = path.match(/^\/users\/([^/]+)(?:\/(notes|follow|collections))?$/))) {
+    if ((match = path.match(/^\/users\/([^/]+)(?:\/(notes|follow|collections|following|followers))?$/))) {
       const id = match[1];
       const userProfile = ensureProfile(id);
       if (!userProfile) throw new HttpError(404, '社区用户不存在。');
       if (!match[2] && method === 'GET') return reply(200, { profile: profile(id, user) });
+      if (['following', 'followers'].includes(match[2]) && method === 'GET') return reply(200, relationshipList(user, id, match[2], params));
       if (match[2] === 'notes' && method === 'GET') return reply(200, noteList(user, params, JSON.stringify(['author', id]), "SELECT * FROM community_notes WHERE user_id=? AND status='published' ORDER BY created_at DESC,id DESC", [id]));
       if (match[2] === 'collections' && method === 'GET') {
         // Check current ownership/visibility before consuming any saved cursor.
@@ -567,14 +600,15 @@ export function createCommunity({ db, media, readBody, send, moderatorIds = [], 
               notify({ recipient: id, actorId: user.id, type: 'follow', key: `follow:${user.id}:${id}` });
             } else db.prepare('DELETE FROM community_follows WHERE user_id=? AND target_user_id=?').run(user.id, id);
           }
-          const result = profile(id, user); return { active, followed: active, followerCount: result.followerCount, followingCount: result.followingCount };
+          const result = profile(id, user); return { active, followed: active,
+            followedBy: Boolean(db.prepare('SELECT 1 FROM community_follows WHERE user_id=? AND target_user_id=?').get(id, user.id)),
+            viewerFollowingCount: db.prepare('SELECT COUNT(*) AS count FROM community_follows WHERE user_id=?').get(user.id).count,
+            followerCount: result.followerCount, followingCount: result.followingCount };
         }));
       }
     }
     if (path === '/me/followers' && method === 'GET') {
-      return reply(200, paginate(user, params, JSON.stringify(['my-followers', user.id]),
-        () => db.prepare('SELECT user_id FROM community_follows WHERE target_user_id=? ORDER BY created_at DESC,user_id DESC').all(user.id).map(row => row.user_id),
-        id => db.prepare('SELECT 1 FROM community_follows f JOIN users u ON u.id=f.user_id WHERE f.user_id=? AND f.target_user_id=?').get(id, user.id) ? author(id, user.id) : null));
+      return reply(200, relationshipList(user, user.id, 'followers', params));
     }
     if (path === '/me/profile') {
       if (method === 'GET') return reply(200, { profile: profile(user.id, user) });
