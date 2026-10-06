@@ -20,7 +20,7 @@ test('direct AI evaluation receives pictures, complete observations and a concis
  assert.match(system.content,/客观/);assert.match(system.content,/直接给出最终动作结论/);
  assert.match(system.content,/rtmw-tables-f32-v2/);assert.doesNotMatch(system.content,/pose-tables-f32-v1|ST-GCN|MediaPipe/);
  assert.match(system.content,/目录外/);assert.match(system.content,/旁人和镜像/);
- assert.match(system.content,/至少一项good反馈有证据/);assert.match(system.content,/动作相对标准/);
+ assert.match(system.content,/至少一项good反馈有证据/);assert.match(system.content,/暂时找不出问题/);
  assert.match(system.content,/找不出错误不等于已有标准证据/);
  assert.match(system.content,/至少两个有效时刻/);assert.match(system.content,/全片含动作切换/);
  assert.match(system.content,/深蹲看/);assert.match(system.content,/引体向上先确认/);

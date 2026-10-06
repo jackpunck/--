@@ -19,7 +19,7 @@ const calls=[];
 const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(url,options)=>{
  const request=JSON.parse(options.body),content=request.messages.find(item=>item.role==='user').content;
  const input=JSON.parse(content[0].text);calls.push(input);
- const output={selectionCheck:{status:'consistent',imageIndices:[0],evidence:'QA 模拟：图片与选择一致。'},verdict:{status:'needs-improvement',summary:'QA 模拟动作评价'},feedback:[{title:'控制动作',status:'improve',source:'visual',imageIndices:[0],evidenceTimes:[input.frames[0].time],evidence:'QA 模拟画面观察。',correction:'QA 模拟建议。'}],limitations:['仅测试流程，不评价真实动作。']};
+ const output=input.stage==='recognize-action'?{action:{exerciseId:'squat',name:'徒手深蹲',status:'identified',confidence:'high',imageIndices:[0],evidence:'QA 模拟：双脚支撑，屈髋屈膝后起身。'}}:{selectionCheck:{status:'consistent',imageIndices:[0],evidence:'QA 模拟：图片与选择一致。'},verdict:{status:'needs-improvement',summary:'QA 模拟动作评价'},feedback:[{title:'控制动作',status:'improve',source:'visual',imageIndices:[0],evidenceTimes:[input.frames[0].time],evidence:'QA 模拟画面观察。',correction:'QA 模拟建议。'}],limitations:['仅测试流程，不评价真实动作。']};
  return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(output)}}]}),{headers:{'Content-Type':'application/json'}});
 }});
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -90,16 +90,21 @@ try{
    });
    assert.equal(await page.locator('[data-motion-pose-model]').inputValue(),'mediapipe-full');
    await page.locator('[data-motion-pose-model]').selectOption('yolo26');
-   await page.locator('[data-motion-exercise]').selectOption('squat');await page.locator('[data-motion-file]').setInputFiles(clip);
+   await page.locator('[data-motion-file]').setInputFiles(clip);
    await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]').disabled);
-   await page.locator('[data-motion-action="analyze"]').click();await page.locator('.motion-coach-evaluation').waitFor({timeout:120000});
+   await page.locator('[data-motion-action="analyze"]').click();await page.locator('[data-motion-confirmation]').waitFor({timeout:120000});
+   assert.equal(await page.locator('[data-motion-exercise]').inputValue(),'squat');
+   assert.equal(await page.evaluate(()=>window.qaReviews.length),1);assert.equal(await page.evaluate(()=>window.qaReviews[0].reviewMode),'recognize');
+   assert.equal(await page.locator('[data-motion-action="save"]').count(),0);
+   await page.locator('[data-motion-action="confirm-exercise"]').click();await page.locator('.motion-coach-evaluation').waitFor({timeout:120000});
+   assert.equal(await page.evaluate(()=>window.qaReviews.length),2);assert.equal(await page.evaluate(()=>window.qaReviews[1].reviewMode),'guided');
    assert.equal(await page.evaluate(()=>window.qaReviews[0].poseData.format),'yolo26-body13-full');
    assert.equal(await page.evaluate(()=>window.qaReviews[0].poseData.schemaVersion),5);
    await page.locator('[data-motion-action="save"]').click();await page.waitForFunction(()=>window.qaSaved.length===1);
    assert.match(await page.evaluate(()=>window.qaSaved[0].analysis.modelVersion),/YOLO26s-Pose/);
    await page.addStyleTag({url:origin+'/motion.css'});await page.screenshot({path:join(dataDir,'yolo26-desktop.png'),fullPage:true});
    await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(dataDir,'yolo26-mobile.png'),fullPage:true});
-   await page.locator('[data-motion-pose-model]').selectOption('rtmw');assert(await page.locator('[data-motion-results]').isHidden());assert.equal(await page.locator('[data-motion-action="analyze"]').textContent(),'开始评估');
+   await page.locator('[data-motion-pose-model]').selectOption('rtmw');assert(await page.locator('[data-motion-results]').isHidden());assert.equal(await page.locator('[data-motion-action="analyze"]').textContent(),'分析视频并识别动作');
    const callCount=calls.length;
    const cancellation=await page.evaluate(async()=>{
     const {analyzeVideo}=await import('/motion-video.js'),NativeWorker=window.Worker,active=new Set();
@@ -124,6 +129,6 @@ try{
   results.push({scenario,decoder,delegate:output.delegate,frames:output.frames,observed:output.observed,format:output.body.poseData.format,timing:output.timing,cancellation:output.cancellation});console.log(results.at(-1));
   await context.close();
  }
- assert.equal(calls.length,5);
+ assert.equal(calls.length,6);
  await writeFile(join(dataDir,'results.json'),JSON.stringify({passed:true,scope:'Real YOLO26s-Pose graph, video pixels, decoder paths, UI selection/save and cancellation. Vision AI is a local fixture; this does not measure form-assessment accuracy.',results,calls:calls.length},null,2));console.log(dataDir);
 }finally{await browser.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}

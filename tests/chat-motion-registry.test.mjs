@@ -26,7 +26,7 @@ function motionInput(poseModel='mediapipe-full',exerciseId='squat') {
     frame.landmarks=frame.landmarks.map((point,index)=>[0,11,12,13,14,15,16,23,24,25,26,27,28].includes(index)?point:null);
     delete frame.wholebodyLandmarks;
   }
-  return {reviewMode:'guided',selectedExerciseId:exerciseId,duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png},{time:.4,mimeType:'image/png',data:png}],
+  return {reviewMode:'guided',actionConfirmed:true,selectedExerciseId:exerciseId,duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png},{time:.4,mimeType:'image/png',data:png}],
     poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
 function coach(input) {
@@ -47,7 +47,7 @@ test('local video directories include upload context and bound recent history wi
   const videos=Array.from({length:25},video),messages=videos.map((value,index)=>({role:'user',content:`这是第${index}段动作`,motionVideos:[value]}));
   const actual=chatMotionVideos(messages);
   assert.equal(actual.length,20);assert.equal(actual[0].messageIndex,5);assert.equal(actual.at(-1).userText,'这是第24段动作');
-  assert.match(chatMotionNotice(actual),/最近20个/);assert.match(chatMotionNotice(actual),/杠铃硬拉/);
+  assert.match(chatMotionNotice(actual),/最近20个/);assert.match(chatMotionNotice(actual),/用户会在界面中确认或修改/);
   assert.equal(chatMotionTools(actual)[0].function.name,'assess_motion_video');assert.deepEqual(chatMotionTools([]),[]);
   assert.equal(chatMotionVideos(messages.slice(0,7)).length,7);
   for(const message of [
@@ -66,7 +66,7 @@ test('registry verifies ownership and selection, ACKs once, persists only report
   const job=await announced.promise;
   assert.equal(calls,0);assert.equal(f.registry.size,1);
   assert.throws(()=>f.registry.submit({userId:'bob',jobId:job.jobId,body:{input:motionInput()}}),error=>error.status===404);
-  assert.throws(()=>f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:{...motionInput(),selectedExerciseId:'curl'}}}),error=>error.status===400);
+  assert.throws(()=>f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:{...motionInput(),actionConfirmed:false}}}),error=>error.status===400);
   const ack=f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:motionInput()}});
   assert.equal(ack.accepted,true);
   assert.throws(()=>f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:motionInput()}}),error=>error.status===409);
@@ -122,7 +122,7 @@ test('registry concurrency limits and server instances cannot consume each other
 
 test('tool exposes action and pose model choices and rejects unsupported models before dispatch',async t=>{
   const f=fixture(t),schema=chatMotionTools(f.base.videos)[0].function.parameters;
-  assert(schema.required.includes('poseModel'));assert(schema.required.includes('exerciseId'));
+  assert(schema.required.includes('poseModel'));assert(!schema.required.includes('exerciseId'));
   assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full','yolo26']);
   for(const id of ['squat','pushup','curl'])assert(schema.properties.exerciseId.enum.includes(id));
   assert.match(chatMotionNotice(f.base.videos),/标准\/MediaPipe Full=mediapipe-full/);
@@ -133,9 +133,38 @@ test('tool exposes action and pose model choices and rejects unsupported models 
   }
 });
 
-test('model and exercise selections reach the client, reject mismatched evidence, and own distinct retry receipts',async t=>{
+test('automatic recognition jobs require a confirmed catalog action and accept the user correction',async t=>{
+  const f=fixture(t),seen=deferred();let calls=0;
+  const args={videoId:f.base.videos[0].id,poseModel:'mediapipe-full'};
+  const pending=f.registry.execute({...f.base,args,onEvent:(name,data)=>{if(name==='motion_request')seen.resolve(data);},assess:async input=>{
+    calls++;assert.equal(input.selectedExerciseId,'pushup');return coach(input);
+  }});
+  const job=await seen.promise;
+  assert.equal(calls,0);
+  const input=motionInput('mediapipe-full','pushup');
+  assert.throws(()=>f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:{...input,actionConfirmed:undefined}}}),/尚未确认/);
+  assert.equal(calls,0);
+  assert.throws(()=>f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:{...input,actionConfirmed:true,selectedExerciseId:'not-in-catalog'}}}),/有效的动作类型/);
+  f.registry.submit({userId:'alice',jobId:job.jobId,body:{input:{...input,actionConfirmed:true}}});
+  const result=await pending;
+  assert.equal(calls,1);assert.equal(result.ok,true);assert.equal(result.record.data.exerciseId,'pushup');
+  assert.equal(result.verdict.summary,'暂时找不出问题。');assert.deepEqual(result.feedback,[]);assert.equal(result.selectionCheck,undefined);
+  const replay=await f.registry.execute({...f.base,args,onEvent:()=>assert.fail('no repeat confirmation'),assess:()=>assert.fail('no repeat model')});
+  assert.equal(replay.reportId,result.reportId);
+  const changedHint=await f.registry.execute({...f.base,args:{...args,exerciseId:'squat'},onEvent:()=>assert.fail('changed model hint cannot repeat confirmation'),assess:()=>assert.fail('changed hint cannot repeat model')});
+  assert.equal(changedHint.reportId,result.reportId);assert.equal(calls,1);
+});
+
+test('user confirmation can correct a chat-supplied action before assessment',async t=>{
+  const f=fixture(t);
+  const result=await f.registry.execute({...f.base,assess:async input=>{assert.equal(input.selectedExerciseId,'pushup');return coach(input);},
+    onEvent:(name,data)=>{if(name==='motion_request')f.registry.submit({userId:'alice',jobId:data.jobId,body:{input:{...motionInput('mediapipe-full','pushup'),actionConfirmed:true}}});}});
+  assert.equal(result.ok,true);assert.equal(result.record.data.coach.action.exerciseId,'pushup');
+});
+
+test('pose model selections reach the client, reject mismatched evidence, and own distinct retry receipts',async t=>{
   const f=fixture(t),reports=[];let calls=0;
-  for(const [poseModel,exerciseId] of [['rtmw','squat'],['mediapipe-full','squat'],['mediapipe-full','pushup'],['yolo26','squat']]){
+  for(const [poseModel,exerciseId] of [['rtmw','squat'],['mediapipe-full','squat'],['yolo26','squat']]){
     const args={...f.base.args,poseModel,exerciseId};
     const result=await f.registry.execute({...f.base,args,assess:async input=>{calls++;assert.equal(input.selectedExerciseId,exerciseId);assert.equal(input.poseData.modelVersion,getMotionPoseModel(poseModel).version);return coach(input);},onEvent:(name,data)=>{
       if(name!=='motion_request')return;
@@ -143,7 +172,7 @@ test('model and exercise selections reach the client, reject mismatched evidence
       const submit=input=>f.registry.submit({userId:'alice',jobId:data.jobId,body:{input}});
       for(const otherModel of ['rtmw','mediapipe-full','yolo26'].filter(id=>id!==poseModel))
         assert.throws(()=>submit(motionInput(otherModel,exerciseId)),/骨架模型不一致/);
-      assert.throws(()=>submit(motionInput(poseModel,exerciseId==='squat'?'pushup':'squat')),/动作类型不一致/);
+      assert.throws(()=>submit({...motionInput(poseModel,exerciseId),actionConfirmed:false}),/尚未确认/);
       submit(motionInput(poseModel,exerciseId));
     }});
     assert.equal(result.ok,true);assert.equal(result.poseModel,poseModel);
@@ -155,8 +184,8 @@ test('model and exercise selections reach the client, reject mismatched evidence
     const replay=await f.registry.execute({...f.base,args,onEvent:()=>assert.fail('replay must not re-analyze')});
     assert.equal(replay.reportId,result.reportId);assert.equal(replay.poseModel,poseModel);
   }
-  assert.equal(calls,4);assert.equal(new Set(reports).size,4);
-  assert.equal(f.registry.receipts({userId:'alice',requestId:f.base.requestId,videos:f.base.videos}).length,4);
+  assert.equal(calls,3);assert.equal(new Set(reports).size,3);
+  assert.equal(f.registry.receipts({userId:'alice',requestId:f.base.requestId,videos:f.base.videos}).length,3);
 });
 
 test('legacy ledger migration preserves old attempts as high precision and does not replay AI',async()=>{

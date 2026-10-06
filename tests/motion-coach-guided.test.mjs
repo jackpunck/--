@@ -87,6 +87,7 @@ test('selection mismatch and unavailable confirmation keep the entire verdict un
     assert.equal(coach.action.status,'selected');
     assert.equal(coach.action.exerciseId,'barbell-deadlift');
     assert.equal(coach.verdict.status,'uncertain');
+    assert.equal(coach.verdict.summary,'暂时找不出问题。');
     assert.deepEqual(coach.feedback,[]);
   }
 });
@@ -129,7 +130,9 @@ test('guided feedback permits only actually sent pose and measurement references
     finding({status:'improve',source:'combined',frameIndices:[0],imageIndices:[99]}),
     finding({status:'improve',source:'analysis',analysisPaths:[['measurements',9999,'left','kneeAngle']]}),
   ]) {
-    await assert.rejects(completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({verdict:{status:'needs-improvement'},feedback:[bad]}))}),error=>error.status===502);
+    const rejected = await completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({verdict:{status:'needs-improvement'},feedback:[bad]}))});
+    assert.deepEqual(rejected.verdict,{status:'uncertain',summary:'暂时找不出问题。'});
+    assert.deepEqual(rejected.feedback,[]);
   }
   const path = allowedAnalysisPaths.find(path=>path[3]==='kneeAngle');
   const coach = await completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({feedback:[finding({source:'analysis',analysisPaths:[path],evidence:'引用时刻膝部屈伸角度存在实际测量。'})]}))});
@@ -149,9 +152,12 @@ test('each guided problem needs valid visual corroboration even alongside anothe
     {...valid,source:'combined',frameIndices:[0,1],imageIndices:[99]},
     {...valid,source:'combined',frameIndices:[999]},
   ]) {
-    await assert.rejects(completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({
+    const coach = await completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({
       verdict:{status:'needs-improvement'},feedback:[valid,{...invalid,title:'另一条问题'}],
-    }))}),error=>error.status===502&&/画面依据/.test(error.message));
+    }))});
+    assert.equal(coach.verdict.status,'needs-improvement');
+    assert.equal(coach.feedback.length,1);
+    assert.equal(coach.feedback[0].title,valid.title);
   }
   for (const supported of [valid,{...valid,source:'combined',frameIndices:[0,1]}]) {
     const coach = await completeMotionCoach({provider,input,fetchImpl:async()=>respond(output({
@@ -174,6 +180,7 @@ test('guided pose and analysis can still supply supported positive or uncertain 
     }))});
     assert.equal(coach.feedback.length,2);
     assert.equal(coach.verdict.status,status==='good'?'standard':'uncertain');
+    assert.equal(coach.verdict.summary,'暂时找不出问题。');
   }
 });
 

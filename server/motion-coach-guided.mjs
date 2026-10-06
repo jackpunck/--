@@ -47,6 +47,7 @@ sourceFrameIndices是本次实际提供的全局骨架下标，未提供的原�
 按所选动作与时间先区分起始支撑、主要运动、返回和停顿阶段；变化、同步、往返或摆动结论须至少两个不同有效时刻，且必须能确认属于同一次动作的连续片段；不能用远隔极值、跨次重复或缺帧间隔冒充一次起身或下放，无法确认时只描述静态可见姿态，不比较运动阶段。每个improve先指出截图中实际可见的具体偏差与阶段，再结合骨架定位或补充时序；只看到角度大小、正常屈髋或左右透视差异不能生成缺点。图片不能佐证的数值变化仅作good或uncertain观察，不能拿通用建议冒充视频错误。
 feedback最多3项，字段title,status(good/improve/uncertain),source,frameIndices,imageIndices,可选analysisPaths,evidence,correction,priority(1至3)。improve仅允许source=visual或combined，必须引用真实图片；pose/analysis只允许good或uncertain。source=pose用sourceFrameIndices中的全局整数；visual用图片整数imageIndices；combined同时用实际骨架和图片索引；analysis用实际显示的测量标量路径数组。只有source=analysis才填写analysisPaths，其余source省略该字段。每条路径四项依次为"measurements"、真实全局帧号整数、"left"或"right"、角度字段名，外层为路径数组；只引用对应行或窗口首尾/极值的非null角度，不得统一填0。无需抄写浮点时间，不得猜索引或数值。pose/analysis不能证明器械或背部外轮廓；此类评价引用图片。evidence和correction各用一句中文部位与阶段描述，不写内部帧号、frameIndex、imageIndex或字段名，引用仅放结构字段；建议须与所述偏差同方向，不给无依据的目标角度。
 standard需selectionCheck=consistent且至少一条有证据的good，不能因没发现错误就判标准；needs-improvement需具体有证据的improve及可执行纠正。否则uncertain。没有速度或肌肉发力信息本身不阻止评价可见姿态。无分数，无长报告，无必须凑出的缺点。
+有具体且可纠正的问题就说明问题；没有可指出的具体问题时，无论是未发现偏差、看不清、骨架不足、动作核对不确定还是其他识别限制，summary统一为“暂时找不出问题。”，不要写无法评估、无法确认或要求重新拍摄作为结论。内部status仍按证据保留standard或uncertain，找不出问题不等于证明动作标准；不要编造问题或把不确定写成动作正确。
 只输出JSON：{"selectionCheck":{"status":"consistent或mismatch或uncertain","imageIndices":[],"evidence":"核对依据"},"verdict":{"status":"standard或needs-improvement或uncertain","summary":"一句结论"},"feedback":[],"limitations":[]}。limitations最多一句。`;
 
 export function buildGuidedMotionContext(input) {
@@ -87,13 +88,10 @@ export async function completeGuidedMotionCoach({provider, input, signal, onProg
   if (result.selectionCheck.status === 'consistent') {
     const feedbackContext = {poseData: input.poseData, keyframes: images, imageKeyframes: images,
       allowedFrameIndices: context.evidence.sourceFrameIndices, fullAnalysis: input.fullAnalysis, allowedAnalysisPaths};
-    // Reject every unsupported problem, including when another problem is valid.
-    // Removing it could turn a failed assessment into a misleading success.
-    if (parsed.feedback.some(item => item?.status === 'improve' && (!['visual', 'combined'].includes(item.source)
-        || !sanitizeMotionFeedback([item], feedbackContext).length))) throw new HttpError(502, 'AI 提出的问题缺少有效的画面依据或纠正建议，请重试评价。');
-    result.feedback = sanitizeMotionFeedback(parsed.feedback, feedbackContext);
-    if (parsed.feedback.some(item => item?.status === 'improve') && !result.feedback.some(item => item.status === 'improve')) throw new HttpError(502, 'AI 提出的问题缺少有效证据或纠正建议，请重试评价。');
-    if (parsed.verdict.status === 'needs-improvement' && !result.feedback.some(item => item.status === 'improve')) throw new HttpError(502, 'AI 表示动作需要调整，但没有给出具体问题和纠正建议，请重试评价。');
+    // Unsupported suggestions are not findings. Retain independently supported
+    // issues; if none survives, the verdict records uncertainty and no finding.
+    result.feedback = sanitizeMotionFeedback(parsed.feedback.filter(item => item?.status !== 'improve'
+      || ['visual', 'combined'].includes(item.source)), feedbackContext);
   }
   const reviewed = context.evidence.sourceFrameIndices.length;
   const coverage = {complete: true, strategy: 'guided-evidence', sourceFrameCount: input.poseData.frames.length,

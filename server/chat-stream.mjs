@@ -1,5 +1,6 @@
 import { HttpError, validateProviderTarget, pinnedRequest, requestHeaders, connectionError, apiBase, nativeParts } from './providers.mjs';
 import {initialChatTools,expandChatTools,toolStatus} from './chat-tool-policy.mjs';
+import {compactChatMotionResult} from '../public/chat-motion-result.js';
 
 const MAX_RESPONSE = 2 * 1024 * 1024;
 const MAX_TEXT = 32000;
@@ -246,6 +247,9 @@ export async function streamCompletion({ provider, messages, tools = [], fetchIm
 }
 
 function resultMessages(completion, results) {
+  // Keep stored report details available to the UI, but let the chat model
+  // summarize only the bounded, user-facing motion receipt.
+  results = results.map(({call,result}) => ({call,result:compactChatMotionResult(result)}));
   if (completion.protocol === 'anthropic') return [{ role: 'user', native: { role: 'user', content: results.map(({ call, result }) => ({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result), is_error: !result.ok })) } }];
   if (completion.protocol === 'gemini') return [{ role: 'user', native: { role: 'user', parts: results.map(({ call, result }, index) => ({ functionResponse: { name: call.name, response: result, ...(completion.assistant.native.parts.filter(part => part.functionCall)[index].functionCall.id ? { id: call.id } : {}) } })) } }];
   return results.map(({ call, result }) => ({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) }));
@@ -263,7 +267,7 @@ export async function streamChat({ provider, messages, tools = [], executeTool, 
   if (receipt && (!Array.isArray(receipt) || receipt.length)) {
     receipt = redactObject(receipt, provider.apiKey);
     for (const item of Array.isArray(receipt) ? receipt : [receipt]) { toolResults.push(item); await onEvent('tool_result', item); }
-    history[0] = { ...history[0], content: `${history[0].content}\n当前请求已经完成的真实操作回执（无需再次变更）：${JSON.stringify(receipt)}。根据此回执回复用户，说明实际结果。` };
+    history[0] = { ...history[0], content: `${history[0].content}\n当前请求已经完成的真实操作回执（无需再次变更）：${JSON.stringify(Array.isArray(receipt)?receipt.map(compactChatMotionResult):compactChatMotionResult(receipt))}。根据此回执回复用户，说明实际结果。` };
     const hasMotionReceipt=(Array.isArray(receipt)?receipt:[receipt]).some(item=>item?.name==='assess_motion_video');
     enabledTools = tools.filter(tool => ['get_training_plan', 'read_calendar', 'get_today_meals', 'read_chat_context','read_conversation_history','read_chat_attachment','set_chat_visuals','web_search','read_web_page'].includes(tool.function.name)
       || tool.function.name==='assess_motion_video'&&!hasMotionReceipt);

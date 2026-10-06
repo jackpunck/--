@@ -9,6 +9,7 @@ import {api, streamChat, streamMotionCoach, RecordStore, setApiUser, createId} f
 import {renderMarkdown,renderMarkdownInto} from './chat-markdown.js?v=10';
 import {AttachmentManager, filesFromTransfer} from './chat-attachments.js?v=10';
 import {ChatMotionVideos} from './chat-motion.js';
+import {confirmChatMotionAction} from './chat-motion-confirm.js';
 import {compactChatMotionResult, renderChatMotionResult} from './chat-motion-result.js';
 import {MOTION_VIDEO_ACCEPT} from './motion-media.js';
 import {patchHTML, copyMessageText, copyImage} from './chat-view.js?v=9';
@@ -355,7 +356,7 @@ async function openMealChat() {
 function updateChatScene() {
  const input=$('#chat-input');if(!input)return;
  const meal=state.chatScene==='meal';
- input.placeholder=meal?'描述这一餐吃了什么、吃了多少，或上传餐食照片，我会分析营养和热量并记录…':'发送训练视频和动作名称，让 AI 帮你检查动作…';
+ input.placeholder=meal?'描述这一餐吃了什么、吃了多少，或上传餐食照片，我会分析营养和热量并记录…':'发送训练视频，AI 识别动作后由你确认并评价…';
  const scene=$('#chat-scene');
  if(scene){scene.hidden=!meal;scene.innerHTML=meal?`${icon('food')}<span>记录餐食 · 支持照片或文字</span><button type="button" class="icon-button" data-action="exit-meal-scene" aria-label="退出餐食记录模式">×</button>`:'';}
 }
@@ -444,7 +445,7 @@ function renderChat() {
    renderChatBody();renderChatFiles();updateChatScene();const aside=$('.chat-aside');if(aside)aside.outerHTML=contextCards();return;
  }
  captureChatDraft();
- $('#page').innerHTML=`<div class="chat-layout"><section class="chat-main"><div class="chat-body" tabindex="0" aria-label="对话记录"></div><button type="button" class="chat-latest" data-action="chat-latest" hidden>↓ 回到最新</button><div class="chat-drop-overlay" aria-hidden="true">${icon('clip')}松开以添加图片、视频或文件</div><form id="chat-form" class="composer"><div class="composer-box"><div id="chat-scene" class="chat-scene" hidden></div><div class="attachments" id="chat-files"></div><label class="sr-only" for="chat-input">给健身助手发送消息</label><textarea id="chat-input" data-conversation="${esc(key)}" name="message" placeholder="发送训练视频和动作名称，让 AI 帮你检查动作…" rows="2" maxlength="16000"></textarea><div class="composer-tools"><div class="row"><button class="icon-button" type="button" data-action="attach" aria-label="上传图片、视频或文件">${icon('clip')}</button><button class="icon-button" type="button" data-action="camera" aria-label="拍照上传">${icon('image')}</button><span class="composer-model">${esc(currentModel('chat')||'在设置中连接 AI 模型')}</span></div><div id="chat-send-actions" class="row"></div></div><div id="chat-upload-status" class="chat-upload-status" role="status"></div></div><p class="composer-note">支持图片、训练视频和文件 · 最多 6 个；视频 200 MB / 2 分钟，其他附件 8 MB。发送视频时请写明动作名称。</p></form></section>${contextCards()}</div>`;
+ $('#page').innerHTML=`<div class="chat-layout"><section class="chat-main"><div class="chat-body" tabindex="0" aria-label="对话记录"></div><button type="button" class="chat-latest" data-action="chat-latest" hidden>↓ 回到最新</button><div class="chat-drop-overlay" aria-hidden="true">${icon('clip')}松开以添加图片、视频或文件</div><form id="chat-form" class="composer"><div class="composer-box"><div id="chat-scene" class="chat-scene" hidden></div><div class="attachments" id="chat-files"></div><label class="sr-only" for="chat-input">给健身助手发送消息</label><textarea id="chat-input" data-conversation="${esc(key)}" name="message" placeholder="发送训练视频，AI 识别动作后由你确认并评价…" rows="2" maxlength="16000"></textarea><div class="composer-tools"><div class="row"><button class="icon-button" type="button" data-action="attach" aria-label="上传图片、视频或文件">${icon('clip')}</button><button class="icon-button" type="button" data-action="camera" aria-label="拍照上传">${icon('image')}</button><span class="composer-model">${esc(currentModel('chat')||'在设置中连接 AI 模型')}</span></div><div id="chat-send-actions" class="row"></div></div><div id="chat-upload-status" class="chat-upload-status" role="status"></div></div><p class="composer-note">支持图片、训练视频和文件 · 最多 6 个；视频 200 MB / 2 分钟，其他附件 8 MB。AI 先识别动作，由你确认后再评价。</p></form></section>${contextCards()}</div>`;
  const input=$('#chat-input'),draft=chatDrafts.get(key);input.value=draft?.text||'';resizeComposer(input);
  if(draft){input.setSelectionRange(draft.start,draft.end,draft.direction);input.scrollTop=draft.scrollTop;if(draft.focused&&!$('#modal').open)input.focus({preventScroll:true});}
  let composing=false;
@@ -515,9 +516,22 @@ async function prepareChatMotion(run, data) {
  let input;
  try {
    if(!run.motionVideoIds.has(data.videoId))throw new Error('这段视频不在当前对话中，请重新添加视频。');
-   input=await chatMotionVideos.prepare(data.videoId,data.exerciseId,{signal,poseModel:data.poseModel,onProgress:progress=>{
+   input=await chatMotionVideos.prepare(data.videoId,null,{signal,poseModel:data.poseModel,onProgress:progress=>{
      if(current()){run.progress=progress.message||'正在分析训练视频…';scheduleChatPaint(run);}
    }});
+   if(!current())return;
+   run.progress='AI 正在识别视频中的动作…';scheduleChatPaint(run);
+   let recognition;
+   try {
+     recognition=await streamMotionCoach(input,{userId:run.userId,signal,onProgress:progress=>{
+       if(current()){run.progress=progress.message||'AI 正在识别动作…';scheduleChatPaint(run);}
+     }});
+   } catch(error) { if(signal.aborted)throw error; recognition=null; }
+   if(!current())return;
+   run.progress='请确认视频中的动作，确认后开始评价。';scheduleChatPaint(run);
+   const selectedExerciseId=await confirmChatMotionAction(recognition,{signal,videoName:chatMotionVideos.get(data.videoId)?.name||'',
+     canShow:()=>current()&&state.page==='chat'&&state.conversation===run.id});
+   input={...input,reviewMode:'guided',selectedExerciseId,actionConfirmed:true};
  } catch(error) {
    if(!current())return;
    await submit({error:String(error.message||'无法读取训练视频，请重新添加。').replace(/[\x00-\x1f\x7f]/g,' ').slice(0,500)});

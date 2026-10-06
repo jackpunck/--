@@ -44,7 +44,7 @@ test('a wrong or unresolved selection prevents good or bad form conclusions for 
     for (const item of [feedback[0], {...feedback[0], status: 'improve', correction: '肩髋同步起身。'}]) {
       const result = sanitizeMotionVerdict({status: 'standard'}, {...coach, quality, feedback: [item]});
       assert.equal(result.status, 'uncertain');
-      assert.match(result.summary, /核对动作/);
+      assert.equal(result.summary, '暂时找不出问题。');
     }
   }
 });

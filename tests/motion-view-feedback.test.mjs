@@ -17,20 +17,20 @@ test('corrective UI prioritizes actual problems and excludes distracting praise'
   assert.deepEqual(motionFeedback({coach}).map(item=>item.title),['肩髋同步']);
 });
 
-test('standard verdict displays only maintenance suggestions',()=>{
+test('standard verdict displays the common no-finding message without praise',()=>{
   const coach={action:{status:'identified',name:'俯卧撑'},coverage:{complete:true},verdict:{status:'standard',summary:'已看到的动作基本标准。'},feedback:[finding('good',{evidence:'肩髋保持同步，动作节奏稳定。'})]};
   assert.equal(motionVerdict({coach}).status,'standard');
-  assert.equal(motionFeedback({coach})[0].status,'good');
+  assert.equal(motionVerdict({coach}).label,'暂时找不出问题');assert.equal(motionVerdict({coach}).summary,'暂时找不出问题。');assert.deepEqual(motionFeedback({coach}),[]);
 });
 
-test('uncertain identity retains visible corrections without claiming standard',()=>{
+test('uncertain identity displays the common no-finding message without contradictory feedback',()=>{
   const report={recognitionConflict:true,coach:{coverage:{complete:true},verdict:{status:'standard'},feedback:[finding('improve'),finding('uncertain',{title:'器械不清楚'})]}};
   assert.equal(motionVerdict(report).status,'uncertain');
-  assert.deepEqual(motionFeedback(report).map(item=>item.status),['improve','uncertain']);
+  assert.equal(motionVerdict(report).label,'暂时找不出问题');assert.deepEqual(motionFeedback(report),[]);
 });
 
 test('long feedback reports show at most three corrections ahead of uncertain details',()=>{
-  const report={recognitionConflict:true,coach:{feedback:[
+  const report={coach:{feedback:[
     finding('uncertain',{title:'器械不清楚'}),
     finding('improve',{title:'保持肩髋同步'}),
     finding('good',{title:'手肘位置保持稳定'}),
@@ -39,7 +39,7 @@ test('long feedback reports show at most three corrections ahead of uncertain de
     finding('improve',{title:'控制下降节奏'}),
     finding('improve',{title:'保持动作幅度'}),
   ]}};
-  assert.equal(motionVerdict(report).status,'uncertain');
+  assert.equal(motionVerdict(report).status,'needs-improvement');
   assert.deepEqual(motionFeedback(report).map(item=>item.title),['保持肩髋同步','减少躯干摆动','控制下降节奏']);
   assert.equal(report.coach.feedback.length,7,'The saved evidence remains intact');
 });

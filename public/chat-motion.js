@@ -69,7 +69,8 @@ export class ChatMotionVideos {
     checkAbort(signal);
     const entry = this.#entries.get(id);
     if (!entry) throw missingVideo();
-    if (!getMotionExercise(exerciseId)) throw new Error('请选择有效的动作类型后再评价。');
+    if (exerciseId != null && !getMotionExercise(exerciseId)) throw new Error('请选择有效的动作类型后再评价。');
+    const phase = exerciseId == null ? {reviewMode:'recognize'} : {reviewMode:'guided',selectedExerciseId:exerciseId};
     const model = getMotionPoseModel(poseModel);
     let cache = entry.models.get(model.id);
     if (!cache) { cache={local:null,payload:null,job:null}; entry.models.set(model.id,cache); }
@@ -77,7 +78,7 @@ export class ChatMotionVideos {
       progress(onProgress, {stage:'ready', progress:1, cached:true, message:'已复用这段视频的骨架与关键画面。'});
       checkAbort(signal);
       if (this.#entries.get(id) !== entry) throw missingVideo();
-      return {...structuredClone(cache.payload), selectedExerciseId:exerciseId};
+      return {...structuredClone(cache.payload), ...phase};
     }
     let job = cache.job;
     if (!job || job.controller.signal.aborted) {
@@ -122,7 +123,7 @@ export class ChatMotionVideos {
         try {
           checkAbort(signal); checkAbort(job.controller.signal);
           if (this.#entries.get(id) !== entry) throw missingVideo();
-          resolve({...structuredClone(value), selectedExerciseId:exerciseId});
+          resolve({...structuredClone(value), ...phase});
         }
         catch (error) { reject(error); }
       }, error => { if (active) { cleanup(); reject(error); } });

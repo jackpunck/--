@@ -144,3 +144,6 @@ button.motion-time:hover{border-color:#aebdf2;background:#e7edff;color:var(--mot
 .motion-history-verdict.is-pending{color:#8b92a7}
 .motion-coach-mode>small{display:block;font-size:10px;line-height:1.9;color:#8a93aa;margin:8px 0}
 @media(max-width:560px){.motion-verdict{padding:18px}.motion-verdict h3{font-size:22px}.motion-verdict p{font-size:13px}.motion-feedback-list{grid-template-columns:1fr}.motion-feedback-item{padding:17px}.motion-history-item{flex-wrap:wrap}.motion-history-item>div{flex:1;min-width:140px}.motion-history-verdict{font-size:10px}.motion-coach-actions>.button{width:100%}}
+
+.motion-confirmation h2{font-size:18px;margin:9px 0 12px}.motion-confirmation .motion-exercise-field{margin:16px 0}.motion-confirmation>p{font-size:13px;color:var(--motion-ink)}
+@media(max-width:560px){.motion-confirmation>.button{width:100%}}

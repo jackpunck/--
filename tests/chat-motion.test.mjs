@@ -147,6 +147,18 @@ test('prepare reuses real transport across actions and retries without sharing m
   assert.equal(h.videos.get(descriptor.id),file,'A successful analysis does not consume the local file');
 });
 
+test('recognition prepares pose and images before an action is selected, then confirmation reuses them',async t=>{
+  const h=setup(t),descriptor=h.videos.add(h.file());
+  const recognition=await h.videos.prepare(descriptor.id,null);
+  assert.equal(recognition.reviewMode,'recognize');assert.equal(recognition.selectedExerciseId,undefined);
+  assert.equal(recognition.poseData.format,'mediapipe-world17-full');
+  assert(recognition.poseData.frames.some(frame=>frame.worldLandmarks.some(point=>point&&point[2]!==0)));
+  const assessment=await h.videos.prepare(descriptor.id,'pushup');
+  assert.equal(assessment.reviewMode,'guided');assert.equal(assessment.selectedExerciseId,'pushup');
+  assert.deepEqual(assessment.poseData,recognition.poseData);assert.deepEqual(assessment.keyframes,recognition.keyframes);
+  assert.equal(h.poseCalls.length,1);assert.equal(h.imageCalls.length,1);
+});
+
 test('concurrent same-video callers share inference but retain distinct action and cancellation',async t=>{
   const h=setup(t),descriptor=h.videos.add(h.file()),pose=deferred(),abort=new AbortController();h.poseQueue.push(pose);
   const first=h.videos.prepare(descriptor.id,'squat',{signal:abort.signal,onProgress:()=>{throw new Error('detached UI');}});
