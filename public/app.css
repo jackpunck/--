@@ -651,3 +651,12 @@
 .nutrition-feedback-form input[type=number]{display:block;max-width:200px;margin-top:6px}
 .nutrition-feedback-form small{flex-basis:100%;font-size:11px}
 .nutrition-feedback-history{max-height:150px;overflow:auto;padding-left:20px;font-size:11px;line-height:1.9}
+.web-search-settings{margin-top:22px}
+.web-search-options{display:flex;flex-wrap:wrap;gap:12px 24px;margin:18px 0}
+.web-search-options label{display:flex;align-items:center;gap:8px;margin:0;font-size:12px}
+.web-search-options [hidden]{display:none}
+.web-search-options input{width:16px;height:16px;margin:0}
+.web-search-result{display:block!important;overflow-wrap:anywhere}
+.web-search-result>strong,.web-search-result>span,.web-search-result>small{display:block;margin:4px 0}
+.web-search-result ul{padding-left:20px;margin:8px 0;line-height:1.8}
+.web-search-result a{color:#274c77;text-decoration:underline}

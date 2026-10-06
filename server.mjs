@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import {createGzip} from 'node:zlib';
 import { openStore, getRecords, getRecordChanges, recordFromRow, getProviders, providerFromRow } from './server/storage.mjs';
 import { HttpError, validateProvider, selectProviderModel, discoverModels, buildMessages, complete } from './server/providers.mjs';
+import {initializeWebSearch,webSearchSettings,saveWebSearchSettings,createWebSession} from './server/web-search.mjs';
 import { streamChat } from './server/chat-stream.mjs';
 import { assistantTools, executeAssistantTool, getAssistantToolReceipts } from './server/assistant-tools.mjs';
 import { resolveLocalToday, resolveLocalTime } from './server/calendar-data.mjs';
@@ -132,6 +133,7 @@ export function createServer(options = {}) {
   } = options;
   const store = openStore(resolve(dataDir));
   const { db } = store;
+  initializeWebSearch(db);
   const chatMotionWaitMs=options.chatMotionWaitMs??600000;
   const chatMotion=createChatMotionRegistry({db,waitMs:chatMotionWaitMs});
   const communityMedia = createCommunityMedia({ db, dataDir: resolve(dataDir) });
@@ -302,6 +304,13 @@ export function createServer(options = {}) {
           } catch (error) { db.exec('ROLLBACK'); throw error; }
           send(res, 200, { userId: user.id, ...getRecordChanges(db,user.id,cursor), conflicts }); return;
         }
+        if(pathname==='/api/web-search'&&method==='GET'){send(res,200,webSearchSettings(store,user.id));return;}
+        if(pathname==='/api/web-search'&&method==='PUT'){send(res,200,saveWebSearchSettings(store,user.id,await readBody(req,8192)));return;}
+        if(pathname==='/api/web-search/test'&&method==='POST'){
+          const session=createWebSession({settings:webSearchSettings(store,user.id,true),fetchImpl:options.webFetchImpl});
+          const result=await withAiLimit(user.id,()=>session.execute('web_search',{query:'World Health Organization physical activity'}));
+          send(res,200,result);return;
+        }
         if (pathname === '/api/providers' && method === 'GET') { send(res, 200, getProviders(db, user.id)); return; }
         if (pathname === '/api/providers' && method === 'PUT') {
           const body = await readBody(req);
@@ -408,7 +417,15 @@ export function createServer(options = {}) {
           if (!id) throw new HttpError(400, '尚未为此任务配置 AI 模型，请前往个人设置添加供应商并选择任务模型。');
           if (!settings.taskModels[body.task]) throw new HttpError(400, '尚未为此任务选择模型，请在 AI 服务设置中选择任务模型。');
           const provider = selectProviderModel(providerWithKey(user.id, id), settings.taskModels[body.task]);
-          if (!body.stream) { send(res, 200, await callAi(user.id, provider, messages, body.task === 'planning' ? body.context?.purpose : undefined, body.context?.mealTiming)); return; }
+          const web=createWebSession({settings:{...webSearchSettings(store,user.id,true),...(body.context?.webSearch===false?{enabled:false}:{})},fetchImpl:options.webFetchImpl,pageFetch:options.webPageFetchImpl});
+          messages[0].content+='\n'+web.guide;
+          if (!body.stream) {
+            if(!web.tools.length){send(res,200,await callAi(user.id,provider,messages,body.task==='planning'?body.context?.purpose:undefined,body.context?.mealTiming));return;}
+            const completeWithWeb=async input=>streamChat({...input,tools:web.tools,executeTool:(name,args,control)=>web.execute(name,args,control),onEvent:async()=>{},finalContentOnly:true});
+            const input={provider,messages,fetchImpl,timeoutMs:aiTimeoutMs,allowPrivateProviders};
+            const result=await withAiLimit(user.id,()=>body.task==='planning'&&body.context?.purpose==='nutrition-advice'?completeNutritionAdvice({...input,mealTiming:body.context.mealTiming,completeImpl:completeWithWeb}):completeWithWeb(input));
+            send(res,200,result);return;
+          }
           const controller = new AbortController();
           const disconnect = () => { if (!res.writableEnded) controller.abort(new DOMException('客户端已停止接收回复。', 'AbortError')); };
           res.once('close', disconnect);
@@ -424,8 +441,9 @@ export function createServer(options = {}) {
             });
           };
           try {
-            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools,...chatMotionTools(motionVideos)],
+            const result = await withAiLimit(user.id, () => streamChat({ provider, messages, tools: [...assistantTools,...historyTools,...chatMotionTools(motionVideos),...web.tools],
               executeTool: async (name, args, {signal}) => {
+                if(web.tools.some(tool=>tool.function.name===name))return web.execute(name,args,{signal});
                 if(name==='assess_motion_video') {
                   try {
                     // The enclosing chat already owns one AI slot. Reusing it
