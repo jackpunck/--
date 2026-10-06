@@ -54,12 +54,13 @@ test('invalid sampling rates reject before browser resources are opened', async 
   }
 });
 
-function browserHarness(t, { decoder = 'webcodecs', failGpu = false, failParser = false, failDecode = false } = {}) {
+function browserHarness(t, { decoder = 'webcodecs', failGpu = false, failParser = false, failDecode = false, includeWorld = false } = {}) {
   const workers = [], requests = [], bitmaps = [], urls = new Set();
   const metadata = { duration: .2, width: 320, height: 240, sourceFps: 30 };
   const wholebodyLandmarks = Array.from({ length: 133 }, (_, i) => ({ x: i / 200, y: i / 300, score: .7 }));
   const landmarks = mapWholebodyLandmarks(wholebodyLandmarks);
-  const frame = time => ({ time, landmarks, wholebodyLandmarks, personCount: 1, multiPersonCheck: true,
+  const worldLandmarks = landmarks.map((point,index) => point && ({x:point.x-.5,y:point.y-.5,z:index*.02-.3,visibility:point.visibility}));
+  const frame = time => ({ time, landmarks, wholebodyLandmarks, ...(includeWorld?{worldLandmarks}:{}), personCount: 1, multiPersonCheck: true,
     subjectTracking: { status: 'locked', confidence: .9 }, inferenceMs: 3 });
   const replace = (object, key, value) => {
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
@@ -104,7 +105,7 @@ function browserHarness(t, { decoder = 'webcodecs', failGpu = false, failParser 
   replace(globalThis, 'createImageBitmap', async () => { const bitmap = { closed: false, close() { this.closed = true; } }; bitmaps.push(bitmap); return bitmap; });
   replace(URL, 'createObjectURL', () => { const url = `blob:test-${urls.size}`; urls.add(url); return url; });
   replace(URL, 'revokeObjectURL', url => urls.delete(url));
-  return { workers, requests, bitmaps, urls, wholebodyLandmarks, landmarks };
+  return { workers, requests, bitmaps, urls, wholebodyLandmarks, landmarks, worldLandmarks };
 }
 
 for (const options of [
@@ -134,11 +135,12 @@ for (const options of [
 
 for (const decoder of ['webcodecs', 'html-video', 'ffmpeg-direct']) {
   test(`standard default survives CPU and decoder fallback: ${decoder}`, async t => {
-    const state=browserHarness(t,{decoder,failGpu:true});
+    const state=browserHarness(t,{decoder,failGpu:true,includeWorld:true});
     const output=await analyzeVideo({name:'clip.mp4',size:20});
     assert.equal(output.modelVersion,getMotionPoseModel('mediapipe-full').version);
     assert.equal(output.decoder,decoder);
     assert.equal(output.delegate,'CPU');
+    for (const frame of output.frames) assert.deepEqual(frame.worldLandmarks,state.worldLandmarks);
     assert(state.requests.filter(item=>item.type==='init').every(item=>item.model==='mediapipe-full'));
   });
   test(`7.5 Hz reaches the ${decoder} decoder and preserves the full timeline`, async t => {

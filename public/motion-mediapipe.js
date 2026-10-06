@@ -1,7 +1,11 @@
-// The same planar landmark contract as RTMW; depth is deliberately not used
-// by the existing angle measurements or sent as measured 3D evidence.
+// Keep image coordinates for tracking/overlays, separate from the model's
+// estimated world coordinates (metres, hip-centred) used for 3D measurements.
 export function mediaPipeLandmarks(result) {
   return (result.landmarks || []).map(points => points.map(({ x, y, visibility }) => ({ x, y, visibility })));
+}
+
+export function mediaPipeWorldLandmarks(result) {
+  return (result.worldLandmarks || []).map(points => points.map(({ x, y, z, visibility }) => ({ x, y, z, visibility })));
 }
 
 export async function createMediaPipe({ delegate = 'GPU' } = {}) {
@@ -20,7 +24,8 @@ export async function createMediaPipe({ delegate = 'GPU' } = {}) {
   return {
     delegate,
     detect(image, timestampMs) {
-      return { landmarks: mediaPipeLandmarks(pose.detectForVideo(image, timestampMs)) };
+      const result = pose.detectForVideo(image, timestampMs);
+      return { landmarks: mediaPipeLandmarks(result), worldLandmarks: mediaPipeWorldLandmarks(result) };
     },
     close() { pose.close(); },
   };

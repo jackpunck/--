@@ -54,16 +54,39 @@ test('YOLO initialization failure is reported without loading a different skelet
   assert(!h.imports.includes('./motion-rtmw.js'));
   assert(!h.imports.includes('./motion-mediapipe.js'));
 });
-function worker() {
+function worker({result,selection} = {}) {
   const inferences = [], trackingTimes = [];
   const context = vm.createContext({self: {}, performance, runtime: {
-    pose: {async detect(image) { inferences.push(image); return {landmarks: [[{x: image.x}]], wholebodyLandmarks: [[{x: image.x, score: 2}]]}; }},
-    tracker: {update(_poses, time) { trackingTimes.push(time); return {index: 0, subjectTracking: {status: 'locked'}}; }},
+    pose: {async detect(image) { inferences.push(image); return result ?? {landmarks: [[{x: image.x}]], wholebodyLandmarks: [[{x: image.x, score: 2}]]}; }},
+    tracker: {update(_poses, time) { trackingTimes.push(time); return selection ?? {index: 0, subjectTracking: {status: 'locked'}}; }},
   }});
   vm.runInContext(workerSource, context);
   vm.runInContext('pose = runtime.pose; tracker = runtime.tracker;', context);
   return {context, analyze: vm.runInContext('analyzeFrame', context), inferences, trackingTimes};
 }
+
+test('selected person image and world coordinates retain the same index and reused inference', async () => {
+  const result = {landmarks: [[{x:.1,y:.2,visibility:.9}],[{x:.8,y:.2,visibility:.9}]],
+    worldLandmarks: [[{x:-.1,y:.2,z:.3,visibility:.9}],[{x:.8,y:-.2,z:-.3,visibility:.9}]]};
+  const {analyze,inferences} = worker({result,selection:{index:1,subjectTracking:{status:'locked'}}}), image={};
+  const first = await analyze(image,0,0), repeated = await analyze(image,100,0);
+  assert.deepEqual(first.landmarks,result.landmarks[1]);
+  assert.deepEqual(first.worldLandmarks,result.worldLandmarks[1]);
+  assert.deepEqual(repeated.worldLandmarks,first.worldLandmarks);
+  assert.equal(first.personCount,2);
+  assert.equal(inferences.length,1);
+});
+
+test('missing target or missing matching world pose stays empty and cannot use another person depth',async()=>{
+  const result={landmarks:[[{x:.1}],[{x:.8}]],worldLandmarks:[[{x:-.1,y:.2,z:.3,visibility:1}]]};
+  for(const index of [null,1]) {
+    const {analyze}=worker({result,selection:{index,subjectTracking:{status:index===null?'lost':'locked'}}});
+    const frame=await analyze({},0);
+    assert.equal(frame.worldLandmarks.length,0);
+    assert.equal(frame.landmarks.length,index===null?0:1);
+  }
+  assert.equal(Object.hasOwn(await worker().analyze({x:.4},0),'worldLandmarks'),false);
+});
 
 test('low-FPS repeated decoded pixels need one inference and retain every sampling timestamp', async () => {
   const {analyze, inferences, trackingTimes} = worker(), image = {x: .4};

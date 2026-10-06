@@ -1,4 +1,4 @@
-// Real MediaPipe Full pixels and all three decoder paths; local mock visual AI.
+// Real MediaPipe Full 3D pixels and all three decoder paths; local mock visual AI.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
@@ -14,9 +14,30 @@ const clip=join(dataDir,'squat.mp4');
 await promisify(execFile)(process.env.QA_FFMPEG||join(root,'.qa/motion-fixtures/qa-codecs/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'),['-hide_banner','-loglevel','error','-nostdin','-i',join(root,'.qa/motion-fixtures/squat.mp4'),'-t','1','-an','-vf','scale=480:-2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',clip],{windowsHide:true});
 const {chromium}=await import(pathToFileURL(process.env.QA_PLAYWRIGHT||join(root,'.qa/browser-tools/node_modules/playwright/index.mjs')));
 const calls=[];
+const worldFields=['x','y','z','visibility'];
+function assertWorldContext(input){
+ assert.deepEqual(input.evidence.poseSchema.worldPointFields,worldFields);
+ const points=input.evidence.frames.flatMap(frame=>frame.worldLandmarks||[]).filter(Boolean);
+ assert(points.length>0);assert(points.every(point=>point.length===4));assert(points.some(point=>Math.abs(point[2])>.001));
+ return {worldPointFields:input.evidence.poseSchema.worldPointFields,measurementCoordinateSpace:input.evidence.poseSchema.measurementCoordinateSpace,
+  worldPointCount:points.length,firstWorldTuple:points[0],zRange:[Math.min(...points.map(point=>point[2])),Math.max(...points.map(point=>point[2]))]};
+}
+function assertWorldAngle(body){
+ for(const row of body.fullAnalysis.measurements){
+  for(const [side,indices] of [['left',[23,25,27]],['right',[24,26,28]]]){
+   if(!Number.isFinite(row[side].kneeAngle))continue;
+   const [a,b,c]=indices.map(index=>body.poseData.frames[row.frameIndex].worldLandmarks[index]);
+   assert(a&&b&&c);const ab=a.slice(0,3).map((value,index)=>value-b[index]),cb=c.slice(0,3).map((value,index)=>value-b[index]);
+   const angle=Math.acos(Math.max(-1,Math.min(1,ab.reduce((sum,value,index)=>sum+value*cb[index],0)/(Math.hypot(...ab)*Math.hypot(...cb)))))*180/Math.PI;
+   assert(Math.abs(row[side].kneeAngle-angle)<1e-8,'Measured knee angle must use all three world-coordinate dimensions');
+   return {frameIndex:row.frameIndex,side,measured:row[side].kneeAngle,recomputed:angle,error:Math.abs(row[side].kneeAngle-angle)};
+  }
+ }
+ assert.fail('Real clip must yield at least one usable three-dimensional knee measurement');
+}
 const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(url,options)=>{
  const request=JSON.parse(options.body),content=request.messages.find(item=>item.role==='user').content;
- const input=JSON.parse(content[0].text);calls.push(input);
+ const input=JSON.parse(content[0].text);calls.push(assertWorldContext(input));
  const output={selectionCheck:{status:'consistent',imageIndices:[0],evidence:'QA 模拟：图片与选择一致。'},verdict:{status:'needs-improvement',summary:'QA 模拟动作评价'},feedback:[{title:'控制动作',status:'improve',source:'visual',imageIndices:[0],evidenceTimes:[input.frames[0].time],evidence:'QA 模拟画面观察。',correction:'QA 模拟建议。'}],limitations:['仅测试流程，不评价真实动作。']};
  return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(output)}}]}),{headers:{'Content-Type':'application/json'}});
 }});
@@ -53,7 +74,10 @@ try{
    return {decoder:pipeline.decoder,delegate:pipeline.delegate,frames:pipeline.frames.length,observed:pipeline.frames.filter(frame=>frame.landmarks.length===33).length,body,coach:await response.json()};
   });
   assert.equal(output.decoder,decoder);if(!automatic)assert.equal(output.delegate,'CPU');assert.equal(output.frames,8);assert(output.observed>0);
-  assert.equal(output.body.poseData.format,'mediapipe-body17-full');validateMotionCoachRequest(output.body);assert.equal(output.coach.mode,'guided');
+  assert.equal(output.body.poseData.format,'mediapipe-world17-full');assert.equal(output.body.poseData.schemaVersion,6);
+  assert.equal(output.body.fullAnalysis.version,'motion-observations-3d-v1');assert.equal(output.body.fullAnalysis.coordinateSpace,'mediapipe-world-3d');
+  assert(output.body.poseData.frames.some(frame=>frame.worldLandmarks.some(point=>point&&Math.abs(point[2])>.001)));
+  const kneeAngle=assertWorldAngle(output.body);validateMotionCoachRequest(output.body);assert.equal(output.coach.mode,'guided');
   assert(!requests.some(url=>/\.onnx(?:\?|$)/.test(url)));assert(requests.some(url=>url.endsWith('/pose_landmarker_full.task')));assert(requests.every(url=>new URL(url).origin===origin));assert.deepEqual(errors,[]);
   if(scenario==='webcodecs'){
    await page.evaluate(async()=>{
@@ -65,16 +89,37 @@ try{
    await page.locator('[data-motion-exercise]').selectOption('squat');await page.locator('[data-motion-file]').setInputFiles(clip);
    await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]').disabled);
    await page.locator('[data-motion-action="analyze"]').click();await page.locator('.motion-coach-evaluation').waitFor({timeout:120000});
-   assert.equal(await page.evaluate(()=>window.qaReviews[0].poseData.format),'mediapipe-body17-full');
+   assert.equal(await page.evaluate(()=>window.qaReviews[0].poseData.format),'mediapipe-world17-full');
    await page.locator('[data-motion-action="save"]').click();await page.waitForFunction(()=>window.qaSaved.length===1);
    assert.match(await page.evaluate(()=>window.qaSaved[0].analysis.modelVersion),/MediaPipe/);
+   assert.equal(await page.evaluate(()=>window.qaSaved[0].analysis.coordinateSpace),'mediapipe-world-3d');
    await page.addStyleTag({url:origin+'/motion.css'});await page.screenshot({path:join(dataDir,'standard-desktop.png'),fullPage:true});
    await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(dataDir,'standard-mobile.png'),fullPage:true});
    await page.locator('[data-motion-pose-model]').selectOption('rtmw');assert(await page.locator('[data-motion-results]').isHidden());assert.equal(await page.locator('[data-motion-action="analyze"]').textContent(),'开始评估');
+   const callCount=calls.length;
+   const cancellation=await page.evaluate(async()=>{
+    const {analyzeVideo}=await import('/motion-video.js'),NativeWorker=window.Worker,active=new Set();
+    let processed=0,terminated=0;
+    window.Worker=class extends NativeWorker{
+     constructor(url,options){super(url,options);if(String(url).endsWith('/motion-worker.js'))active.add(this);}
+     terminate(){if(active.delete(this))terminated++;return super.terminate();}
+    };
+    const abort=new AbortController();
+    try{
+     await analyzeVideo(document.querySelector('#fixture').files[0],{model:'mediapipe-full',sampleFps:3,signal:abort.signal,
+      onProgress:progress=>{if(progress.stage==='analyzing'){processed++;abort.abort();}}});
+     throw Error('Cancelled inference unexpectedly completed');
+    }catch(error){return {name:error.name,processed,terminated,activeWorkers:active.size};}
+    finally{window.Worker=NativeWorker;}
+   });
+   assert.equal(cancellation.name,'AbortError');assert.equal(cancellation.processed,1);
+   assert(cancellation.terminated>=1);assert.equal(cancellation.activeWorkers,0);assert.equal(calls.length,callCount);
+   output.cancellation=cancellation;
   }
   assert.deepEqual(errors,[]);
-  results.push({scenario,decoder,delegate:output.delegate,frames:output.frames,observed:output.observed,format:output.body.poseData.format});console.log(results.at(-1));
+  results.push({scenario,decoder,delegate:output.delegate,frames:output.frames,observed:output.observed,format:output.body.poseData.format,
+   coordinateSpace:output.body.fullAnalysis.coordinateSpace,worldObserved:output.body.poseData.frames.filter(frame=>frame.worldLandmarks.some(Boolean)).length,kneeAngle,cancellation:output.cancellation});console.log(results.at(-1));
   await context.close();
  }
- await writeFile(join(dataDir,'results.json'),JSON.stringify({results,calls:calls.length},null,2));console.log(dataDir);
+ await writeFile(join(dataDir,'results.json'),JSON.stringify({passed:true,scope:'Real MediaPipe Full world coordinates, 3D knee measurements, all decoders, AI context, UI save/switch and cancellation. AI is a local fixture; this does not assess model accuracy.',results,calls:calls.length,coachEvidence:calls},null,2));console.log(dataDir);
 }finally{await browser.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}

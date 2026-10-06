@@ -99,8 +99,8 @@ export function createChatMotionRegistry({db,waitMs=600000,maxJobs=16,maxUserJob
     } else {
       if (body.input?.reviewMode !== 'guided' || body.input.selectedExerciseId !== job.exerciseId) throw new HttpError(400,'动作分析数据与本次选择的动作类型不一致。');
       const input = validateMotionCoachRequest(body.input);
-      const expectedFormat = {rtmw:'rtmw-body17-full','mediapipe-full':'mediapipe-body17-full',yolo26:'yolo26-body13-full'}[job.poseModel];
-      if (input.poseData?.format !== expectedFormat) throw new HttpError(400,'动作分析数据与本次选择的骨架模型不一致。');
+      const expectedFormats = {rtmw:['rtmw-body17-full'],'mediapipe-full':['mediapipe-world17-full','mediapipe-body17-full'],yolo26:['yolo26-body13-full']}[job.poseModel];
+      if (!expectedFormats.includes(input.poseData?.format)) throw new HttpError(400,'动作分析数据与本次选择的骨架模型不一致。');
       job.state='submitted';job.resolve({input});
     }
     return {ok:true,jobId,accepted:true};

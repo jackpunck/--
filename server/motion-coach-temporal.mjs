@@ -11,6 +11,8 @@ const angleNames = ['elbowAngle', 'shoulderAngle', 'hipAngle', 'kneeAngle', 'bod
 const channels = ['left', 'right'].flatMap(side => angleNames.map(angle => [side, angle]));
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const coordinateValue = value => finite(value) ? value < 0 || value > 1 ? value : Number(value.toFixed(5)) : null;
+// Metric world coordinates are signed and are never clamped to image bounds.
+const worldCoordinateValue = value => finite(value) ? Number(value.toFixed(5)) : null;
 // Downward precision never promotes a response below a reliability threshold.
 // Values outside the declared range retain their original invalidity.
 const compactResponse = value => finite(value) && value >= 0 && value <= 1 ? Math.floor(value * 1000) / 1000 : value;
@@ -27,7 +29,7 @@ function compactTracking(value) {
 
 function selectFrames(input, limit, overview) {
   const count = input.poseData.frames.length;
-  if (count <= limit || input.duration < 2) return Array.from({length: count}, (_, index) => index);
+  if (count <= limit || (input.duration < 2 && input.poseData.format !== 'mediapipe-world17-full')) return Array.from({length: count}, (_, index) => index);
   const selected = new Set();
   // Reserve half the budget for uniform full-video coverage, even when the
   // largest movement occurs only at the start or in one limb.
@@ -99,6 +101,7 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
   if (!Number.isSafeInteger(maxChars) || maxChars < 16000) throw new Error('时序证据预算至少为 16000 个字符。');
   if (typeof compactNumbers !== 'boolean' || !Number.isInteger(minFrames) || minFrames < 12 || minFrames > 24) throw new Error('时序证据精度或最少帧数无效。');
   const overview = buildMotionSequenceContext(input);
+  const world3d = input.poseData.format === 'mediapipe-world17-full';
   const displayAngle = compactNumbers ? compactAngle : value => value;
   let frameLimit = MOTION_TEMPORAL_LIMITS.maxFrames, windowCount = Math.min(MOTION_TEMPORAL_LIMITS.maxWindows, Math.max(1, Math.ceil(input.duration / 2)));
   for (;;) {
@@ -111,7 +114,11 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
         return Array.isArray(point) ? point.slice(0, 3).map((value, field) => point[3] & (1 << field) ? null : field === 2 ? compactNumbers ? compactResponse(value) : value : coordinateValue(value)) : null;
       });
       return {frameIndex, time: frame.time, ...(finite(frame.sourceTime) ? {sourceTime: frame.sourceTime} : {}),
-        ...(frame.subjectTracking ? {subjectTracking: compactNumbers ? compactTracking(frame.subjectTracking) : frame.subjectTracking} : {}), landmarks};
+        ...(frame.subjectTracking ? {subjectTracking: compactNumbers ? compactTracking(frame.subjectTracking) : frame.subjectTracking} : {}), landmarks,
+        ...(world3d ? {worldLandmarks: frame.worldLandmarks === null ? null : frame.worldLandmarks?.length ? jointIndices.map(index => {
+          const point = frame.worldLandmarks[index];
+          return Array.isArray(point) ? point.slice(0, 4).map((value, field) => point[4] & (1 << field) ? null : field === 3 ? compactNumbers ? compactResponse(value) : value : worldCoordinateValue(value)) : null;
+        }) : []} : {})};
     });
     const measurements = sourceFrameIndices.map(index => {
       const row = input.fullAnalysis.measurements[index];
@@ -132,6 +139,10 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
           unsupportedLandmarkNames: jointIndices.filter(index => !input.poseData.retainedLandmarkIndices.includes(index)).map(index => input.poseData.landmarkNames[index])} : {}),
         landmarkIndices: jointIndices, landmarkNames: jointIndices.map(index => input.poseData.landmarkNames[index]),
         pointFields: ['x', 'y', 'visibility'], coordinateDecimals: 5, outOfBoundsCoordinates: 'original', visibilityPrecision: compactNumbers ? 'floor-3-decimals-in-range' : 'original',
+        ...(world3d ? {sourceFormat: input.poseData.format, worldPointFields: input.poseData.worldPointFields,
+          worldCoordinateSpace: 'mediapipe-world-3d', worldCoordinateUnits: 'meters', worldCoordinateOrigin: 'hip-midpoint', worldCoordinateDecimals: 5,
+          worldCoordinateKind: 'model-estimated', measurementCoordinateSpace: input.fullAnalysis.coordinateSpace,
+          torsoLeanReference: 'model-camera-y-axis-not-measured-gravity'} : {measurementCoordinateSpace: 'image-2d'}),
         ...(compactNumbers ? {measurementDecimals: 2, measurementPrecision: 'approximate-rounded', trackingConfidencePrecision: 'floor-3-decimals-in-range', trackingBoxDecimals: 5} : {}),
         coordinates: input.poseData.coordinates, ...(input.poseData.targetTracking ? {targetTracking: input.poseData.targetTracking} : {})},
       frames, measurementColumns: ['frameIndex', 'time', ...channels.map(path => path.join('.'))], measurements,
@@ -140,17 +151,17 @@ export function buildMotionTemporalEvidence(input, {maxChars = MOTION_TEMPORAL_L
     if (JSON.stringify(evidence).length <= maxChars) return {evidence, allowedAnalysisPaths: [...allowed.values()]};
     // Budget changes choose a smaller distributed sample; they never slice a
     // JSON string, lose a measurement window or misstate what was reviewed.
-    if (frameLimit > 24 && input.duration >= 2) frameLimit -= 8;
+    if (frameLimit > 24 && (input.duration >= 2 || world3d)) frameLimit -= 8;
     else if (windowCount > 1) windowCount--;
-    else if (frameLimit > minFrames && input.duration >= 2) frameLimit = Math.max(minFrames, frameLimit - 8);
+    else if (frameLimit > minFrames && (input.duration >= 2 || world3d)) frameLimit = Math.max(minFrames, frameLimit - 8);
     else throw new HttpError(413, '时序证据过大，请缩短视频后重新评估。');
   }
 }
 
-const TEMPORAL_PROMPT=`这是一次完整的时序证据评估，不是完整原始逐帧审阅。evidence.sourceFrameCount是原始骨架帧数，sourceFrameIndices是本次实际提供的全局骨架下标；evidence.frames只含主要身体点，点顺序由poseSchema.landmarkIndices定义，不含本次未列出的原始节点。17个槽位不代表17个点都有观测；YOLO26-Pose仅保留鼻及12个四肢节点，没有脚跟和前脚掌节点，这些槽位为null，不能用脚踝代替或推断足部朝向、脚跟升降。frameIndices引用frameIndex，绝不能引用本次数组位置。坐标为原图归一化坐标，0至1范围内保留5位小数；越界坐标和visibility响应保持原值，不能把越界点当作可见点。未见的点和过程不能补猜。缺失值null不是0。
-measurements是按measurementColumns排列的选中帧二维角度表。windows按时间覆盖全部原始测量，每个statistics的path为[left或right,角度字段]，values按windowStatisticColumns读取；statisticSourceTimes给出统计引用的全局帧号与原始时间。统计的首尾、极小、极大均为实际观测。analysisPaths只能引用本次表格或统计实际显示的标量，如["measurements",全局帧号,"left","kneeAngle"]。没有提供完整窗口轨迹，不能由极值或均匀抽帧推断次数、连续速度、每次动作或跨缺失片段的控制情况。
-窗口用于理解全片变化、寻找与图片一致的动作阶段，不能把窗口边界当动作边界，也不能把二维角度极值直接当技术错误。请结合全片图片、身体支撑、主关节变化区分动作；动作已识别且可评估的阶段有正向证据才给standard。mixed动作或问题只在部分时间出现时在结论和证据中说明。仅本次证据不足以判定时用uncertain，不能因没有提出缺点而自动判标准。
-left/right是训练者自身左右；elbowAngle为肩-肘-腕，shoulderAngle为髋-肩-肘，hipAngle为肩-髋-膝，kneeAngle为髋-膝-踝，bodyAlignmentAngle为肩-髋-踝，均为按原图宽高换算的二维投影角（度）。torsoLean为肩髋连线与画面竖直轴的无向夹角（0至90度），相机倾斜会影响结果。`;
+const TEMPORAL_PROMPT=`这是一次完整的时序证据评估，不是完整原始逐帧审阅。evidence.sourceFrameCount是原始骨架帧数，sourceFrameIndices是本次实际提供的全局骨架下标；evidence.frames只含主要身体点，点顺序由poseSchema.landmarkIndices定义，不含本次未列出的原始节点。17个槽位不代表17个点都有观测；YOLO26-Pose仅保留鼻及12个四肢节点，没有脚跟和前脚掌节点，这些槽位为null，不能用脚踝代替或推断足部朝向、脚跟升降。frameIndices引用frameIndex，绝不能引用本次数组位置。landmarks为原图二维归一化坐标，0至1范围内保留5位小数；越界图像坐标不能当作可见点。若poseSchema.worldCoordinateSpace为mediapipe-world-3d，worldLandmarks另含[x,y,z,visibility]，与landmarks顺序相同；以髋中点为原点、米为单位，负数和超出0至1的值正常有效，不能按图像越界过滤。三维坐标是模型估计，不是实测深度、全局位移轨迹或重力方向；缺失worldLandmarks不能用二维数据冒充。坐标和响应精度按poseSchema声明读取。未见的点和过程不能补猜。缺失值null不是0。
+measurements是按measurementColumns排列的选中帧角度表，维度由poseSchema.measurementCoordinateSpace声明。windows按时间覆盖全部原始测量，每个statistics的path为[left或right,角度字段]，values按windowStatisticColumns读取；statisticSourceTimes给出统计引用的全局帧号与原始时间。统计的首尾、极小、极大均为实际观测。analysisPaths只能引用本次表格或统计实际显示的标量，如["measurements",全局帧号,"left","kneeAngle"]。没有提供完整窗口轨迹，不能由极值或均匀抽帧推断次数、连续速度、每次动作或跨缺失片段的控制情况。
+窗口用于理解全片变化、寻找与图片一致的动作阶段，不能把窗口边界当动作边界，也不能把角度极值直接当技术错误。请结合全片图片、身体支撑、主关节变化区分动作；动作已识别且可评估的阶段有正向证据才给standard。mixed动作或问题只在部分时间出现时在结论和证据中说明。仅本次证据不足以判定时用uncertain，不能因没有提出缺点而自动判标准。
+left/right是训练者自身左右；elbowAngle为肩-肘-腕，shoulderAngle为髋-肩-肘，hipAngle为肩-髋-膝，kneeAngle为髋-膝-踝，bodyAlignmentAngle为肩-髋-踝，在measurementCoordinateSpace为image-2d时是按原图宽高换算的二维投影角（度），torsoLean为肩髋连线与画面竖直轴的无向夹角；为mediapipe-world-3d时五种关节角均由世界坐标计算三维夹角，torsoLean为三维肩髋连线与模型相机Y轴的无向夹角（0至90度），不是重力垂线夹角。相机倾斜和深度估计误差会影响结果；不得由三维角度推断脊柱曲度、关节受力或伤病。`;
 
 export async function completeTemporalMotionCoach({provider, input, signal, onProgress = () => {}, timeoutMs = 180000, ...options}) {
   if (provider.models?.find(item => item.id === provider.model)?.vision !== true) throw new HttpError(400, '动作评估需要支持图片的 AI 模型，请在 AI 服务设置中更换动作点评模型。');

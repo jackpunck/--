@@ -14,7 +14,7 @@ export const MOTION_POSE_MODELS = Object.freeze([
     id: 'mediapipe-full',
     tier: '标准',
     label: 'MediaPipe Full',
-    version: 'MediaPipe Pose Landmarker Full float16 v1 / tasks-vision 0.10.32',
+    version: 'MediaPipe Pose Landmarker Full float16 v1 / tasks-vision 0.10.32 / world3d-v1',
     loadingMessage: '正在加载标准骨架模型 MediaPipe Full…',
     initTimeoutMs: 180000,
     analysisTimeoutMs: 3600000,

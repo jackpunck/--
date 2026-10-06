@@ -184,11 +184,10 @@ test('source frame rate remains factual metadata and exercise hints cannot chang
   for (const sourceFps of [0, -1, NaN, Infinity, undefined, null]) assert.equal(analyzeMotion([frame], {...options, sourceFps}).quality.sourceFps, null);
 });
 
-test('inferred depth cannot override image measurements and input poses remain unmodified', () => {
+test('normalized image depth cannot override 2D measurements and input poses remain unmodified', () => {
   const frame = pose();
   const original = analyzeMotion([frame], options);
   frame.landmarks.forEach(point => {if (point) {point.z = -999; Object.freeze(point);}});
-  frame.worldLandmarks = frame.landmarks.map(point => point && {x: -999, y: 999, z: 999, visibility: 1});
   Object.freeze(frame.landmarks);
   Object.freeze(frame);
   assert.deepEqual(analyzeMotion(Object.freeze([frame]), options), original);

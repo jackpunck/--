@@ -66,6 +66,7 @@ export function validateMotionCoachRequest(body) {
     poseData=validateMotionPoseData(body.poseData,{duration:body.duration});
     fullAnalysis=validateFullMotionAnalysis(body.fullAnalysis,{duration:body.duration});
   } catch(error){throw new HttpError(/超过.*MiB/.test(error.message)?413:400,error.message);}
+  if ((poseData.format==='mediapipe-world17-full') !== (fullAnalysis.coordinateSpace==='mediapipe-world-3d')) throw new HttpError(400,'客观测量与骨架坐标维度不一致，请重新分析当前视频。');
   if(fullAnalysis.quality.totalFrames!==poseData.frameCount||fullAnalysis.measurements.length!==poseData.frames.length)throw new HttpError(400,'客观测量与骨架帧数不一致，请重新分析当前视频。');
   if(fullAnalysis.measurements.some((row,index)=>row.frameIndex!==index||Math.abs(row.time-poseData.frames[index].time)>0.000001))throw new HttpError(400,'客观测量与骨架时间不一致，请重新分析当前视频。');
   const analysis=compactMotionAnalysis({...body.analysis,quality:fullAnalysis.quality});

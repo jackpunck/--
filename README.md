@@ -46,7 +46,9 @@ AI 对话、图片餐食识别、AI 规划和动作点评需要先进入「个�
 
 YOLO26 接入、约 40 MiB 模型资产与验证记录见 [YOLO26 接入说明](docs/YOLO26接入.md)，真实视频流程验证：`npm run qa:motion:yolo26`。
 
-标准档流程验证：`npm run qa:motion:mediapipe` 使用真实 Full 权重，验证三种解码路径、GPU/CPU、AI 请求与页面切换模型、保存报告。视觉 AI 为本地受控响应，不代表动作评价准确率。
+标准档使用 MediaPipe 的 `worldLandmarks` 三维坐标（米，以髋中点为原点）计算角度并交给 AI，同时保留二维坐标用于画面定位。深度是模型估计值；RTMW-L 和 YOLO26 仍使用二维投影角度。详情见 [MediaPipe 三维接入](docs/MediaPipe三维接入.md)。
+
+标准档流程验证：`npm run qa:motion:mediapipe` 使用真实 Full 权重，验证三种解码路径、GPU/CPU、实际 AI 请求中的三维坐标、三维角度与页面切换模型、保存报告。视觉 AI 为本地受控响应，不代表动作评价准确率。
 
 流程验证：`npm run qa:motion` 使用真实 RTMW-L 权重、三条解码路径及受控视觉 AI，检查完整数据发送、结果显示、保存和取消；不读取用户密钥或调用收费 AI。
 

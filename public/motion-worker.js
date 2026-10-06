@@ -20,6 +20,7 @@ async function analyzeFrame(image, timestampMs, sourceTime) {
   return {
     personCount: result.landmarks.length, multiPersonCheck: true, subjectTracking: selected.subjectTracking,
     landmarks: index === null ? [] : result.landmarks[index],
+    ...(result.worldLandmarks ? { worldLandmarks: index === null ? [] : result.worldLandmarks[index] ?? [] } : {}),
     ...(result.wholebodyLandmarks ? { wholebodyLandmarks: index === null ? [] : result.wholebodyLandmarks[index] } : {}),
     inferenceMs: performance.now() - started,
   };

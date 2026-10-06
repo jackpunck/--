@@ -24,7 +24,9 @@ await promisify(execFile)(ffmpeg,['-hide_banner','-loglevel','error','-nostdin',
   '-t','1','-an','-vf','scale=480:-2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',clip],{windowsHide:true});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const codeFiles=['public/app.js','public/chat-attachments.js','public/chat-motion.js','public/chat-motion-result.js','public/chat-stream.js','public/motion-view.js',
-  'public/motion-video.js','public/motion-worker.js','public/motion-rtmw.js','public/motion-yolo26.js','public/motion-models.js','public/motion-pose-data.js','server.mjs'];
+  'public/motion-video.js','public/motion-worker.js','public/motion-rtmw.js','public/motion-mediapipe.js','public/motion-yolo26.js','public/motion-models.js',
+  'public/motion-analysis.js','public/motion-pose-data.js','public/motion-tracking.js','public/motion-smoothing.js','public/motion-report.js',
+  'server/motion-coach-guided.mjs','server/motion-coach-temporal.mjs','server/chat-motion.mjs','server.mjs'];
 const codeHashes=Object.fromEntries(await Promise.all(codeFiles.map(async file=>[file,sha(await readFile(join(root,file)))])));
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'.qa/browser-tools/node_modules/playwright/index.mjs'))).href);
 const videoSource=await readFile(join(root,'public/motion-video.js'),'utf8');
@@ -48,7 +50,13 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
     const images=parts.filter(part=>part.type==='image_url');
     assert.equal(motionContext.selectedExercise.id,exercise.id);assert(images.length>0&&images.length<=6);
     assert(motionContext.evidence.frames.length>0);assert.equal(motionContext.evidence.poseSchema.landmarkIndices.length,17);
+    if(poseModel.id==='mediapipe-full'){
+      assert.deepEqual(motionContext.evidence.poseSchema.worldPointFields,['x','y','z','visibility']);
+      const world=motionContext.evidence.frames.flatMap(frame=>frame.worldLandmarks||[]).filter(Boolean);
+      assert(world.length>0);assert(world.every(point=>point.length===4));assert(world.some(point=>Math.abs(point[2])>.001));
+    }
     coachCalls.push({model:request.model,sourceFrames:motionContext.evidence.sourceFrameCount,sentFrames:motionContext.evidence.frames.length,
+      worldPointFields:motionContext.evidence.poseSchema.worldPointFields,worldFrames:motionContext.evidence.frames.filter(frame=>frame.worldLandmarks?.some(Boolean)).length,
       images:images.map(image=>({sha256:sha(Buffer.from(image.image_url.url.split(',')[1],'base64')),bytes:Buffer.from(image.image_url.url.split(',')[1],'base64').length})),stage:motionContext.stage});
     const result={selectionCheck:{status:'consistent',imageIndices:[0],evidence:`QA 模拟：图片与所选${exercise.name}相符。`},
       verdict:{status:'needs-improvement',summary:'QA 模拟：建议调整，动作报告已保存。'},
@@ -141,14 +149,22 @@ try{
   assert.equal(await page.locator('.chat-motion-result [data-action="chat-motion-detail"]').count(),1,'A replayed receipt must not duplicate the report card');
   const submission=motionInputs.find(body=>body.input);assert(submission,'Client must submit the real extracted motion input');
   const input=validateMotionCoachRequest(submission.input);assert.equal(input.reviewMode,'guided');assert.equal(input.selectedExerciseId,exercise.id);
-  assert.equal(input.poseData.schemaVersion,{rtmw:3,'mediapipe-full':4,yolo26:5}[poseModel.id]);assert.equal(input.poseData.retainedLandmarkIndices.length,poseModel.id==='yolo26'?13:17);assert(input.poseData.frameCount>=7);
+  assert.equal(input.poseData.schemaVersion,{rtmw:3,'mediapipe-full':6,yolo26:5}[poseModel.id]);assert.equal(input.poseData.retainedLandmarkIndices.length,poseModel.id==='yolo26'?13:17);assert(input.poseData.frameCount>=7);
   assert.equal(input.fullAnalysis.measurements.length,input.poseData.frameCount);
+  if(poseModel.id==='mediapipe-full'){
+    assert.equal(input.poseData.format,'mediapipe-world17-full');assert.equal(input.fullAnalysis.version,'motion-observations-3d-v1');
+    assert.equal(input.fullAnalysis.coordinateSpace,'mediapipe-world-3d');
+    assert(input.poseData.frames.some(frame=>frame.worldLandmarks?.some(point=>point&&Math.abs(point[2])>.001)));
+  }
   const pipeline=await page.evaluate(()=>({frames:window.__qaChatMotionPipeline.frames.length,sampleFps:window.__qaChatMotionPipeline.sampleFps,delegate:window.__qaChatMotionPipeline.delegate,
     decoder:window.__qaChatMotionPipeline.decoder,modelVersion:window.__qaChatMotionPipeline.modelVersion,timing:window.__qaChatMotionPipeline.timing}));
   assert.equal(pipeline.modelVersion,poseModel.version);assert.equal(pipeline.frames,input.poseData.frameCount);assert.equal(pipeline.sampleFps,7.5);
   const assessments=await records('motion-assessment');assert.equal(assessments.length,1);const assessment=assessments[0];
   const button=page.locator('.chat-motion-result [data-action="chat-motion-detail"]').first();assert.equal(await button.getAttribute('data-report-id'),assessment.id);
   const savedCoach=assessment.data.coach||assessment.data.report?.coach;assert.equal(savedCoach.mode,'guided');assert.equal(savedCoach.action.exerciseId,exercise.id);
+  if(poseModel.id==='mediapipe-full'){
+    assert.equal(assessment.data.analysis.coordinateSpace,'mediapipe-world-3d');
+  }
   const conversations=await records('conversation'),conversation=conversations.find(record=>record.data.messages.some(message=>message.motionVideos?.length));assert(conversation);
   const receipt=conversation.data.messages.flatMap(message=>message.toolResults||[]).find(result=>result.name==='assess_motion_video');assert.equal(receipt.reportId,assessment.id);assert.equal(receipt.poseModel,poseModel.id);assert.equal(assessment.data.analysis.modelVersion,poseModel.version);assert.match(await page.locator('.chat-motion-model').textContent(),new RegExp(poseModel.label));assert.equal(receipt.record,undefined);
   assert.equal(conversation.data.messages.flatMap(message=>message.motionVideos||[])[0].id,firstVideoId);
@@ -178,7 +194,7 @@ try{
     sourceVideoSha256:sha(await readFile(clip)),pipeline,videoId:firstVideoId,reportId:assessment.id,chatRequests:chatBodies.length,nativeToolCalls:toolCalls.length,
     mockCoachCalls:coachCalls.length,simulatedFinalSummaryFailures:1,retryKeptRequestId:true,originalVideoUploads:attachmentUploads.length,sseEvents,
     instrumentation:'Read-only wrappers capture the real analyzeVideo return and real consumeChatEvents callback; original algorithms and callbacks are invoked unchanged.',motionInput:{frames:input.poseData.frameCount,sampleFps:input.poseData.sampleFps,images:input.keyframes.length,
-      schemaVersion:input.poseData.schemaVersion,measurements:input.fullAnalysis.measurements.length},checks:['Video upload retained as local metadata; no image preview or attachment POST',
+      schemaVersion:input.poseData.schemaVersion,coordinateSpace:input.fullAnalysis.coordinateSpace,measurements:input.fullAnalysis.measurements.length},checks:['Video upload retained as local metadata; no image preview or attachment POST',
       'Missing action asked once, follow-up reused identical video reference','Native tool emitted SSE motion_request and motion_progress','Real selected pose model and exercise sent to existing guided coach',
       'Report stored once; compact chat receipt opens matching motion detail','Final-summary 500 then retry reuses the saved result without extra extraction/coaching',
       'Reload retains report while local video is absent','Missing local video gives actionable failure without extra model coaching','390px layout and no external browser requests'],errors};

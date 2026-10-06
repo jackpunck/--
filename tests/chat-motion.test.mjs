@@ -22,16 +22,24 @@ hooks.deregister();
 const flush = () => new Promise(resolve=>setImmediate(resolve));
 async function until(predicate){for(let i=0;i<40;i++){if(predicate())return;await flush();}assert.fail('Local analysis did not settle');}
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function pipeline(){
+function pipeline(model='mediapipe-full'){
   const value=makeRtmwPipeline(4);value.sampleFps=7.5;value.duration=4/7.5;
   value.frames.forEach((frame,index)=>{frame.time=index/7.5;frame.sourceTime=index/7.5+.001;});
+  value.modelVersion=getMotionPoseModel(model).version;
+  if(model==='mediapipe-full'){
+    value.coordinateSpace='mediapipe-world-3d';
+    for(const frame of value.frames){
+      frame.worldLandmarks=frame.landmarks.map((point,index)=>point?{x:point.x-.5,y:point.y-.5,z:Math.sin(index)*.12,visibility:point.visibility}:null);
+      delete frame.wholebodyLandmarks;
+    }
+  }
   value.previewFrames=[{data:new Uint8Array(100)}];value.previewFps=5;
   return value;
 }
 const evidence = () => ({summary:{version:'motion-observations-v1',duration:4/7.5},images:[{time:.001,imageTime:.001,mimeType:'image/jpeg',dataUrl:'data:image/jpeg;base64,AAAA'}]});
 function setup(t){
   const h={poseCalls:[],imageCalls:[],poseQueue:[],imageQueue:[],released:[]};
-  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});const value=pipeline();value.modelVersion=getMotionPoseModel(options.model).version;
+  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});const value=pipeline(options.model);
     if(options.model==='yolo26')for(const frame of value.frames){frame.landmarks=frame.landmarks.map((point,index)=>[0,11,12,13,14,15,16,23,24,25,26,27,28].includes(index)?point:null);delete frame.wholebodyLandmarks;}
     return h.poseQueue.shift()?.promise??value;};
   h.evidence=async(file,pipeline,observations,options)=>{h.imageCalls.push({file,pipeline,observations,options});return h.imageQueue.shift()?.promise??evidence();};
@@ -77,7 +85,10 @@ test('each pose model owns its cache while different exercise choices reuse that
   const accurate=await h.videos.prepare(descriptor.id,'pushup',{poseModel:'rtmw'});
   const yolo=await h.videos.prepare(descriptor.id,'squat',{poseModel:'yolo26'});
   const standardAgain=await h.videos.prepare(descriptor.id,'curl',{poseModel:'mediapipe-full'});
-  assert.equal(standard.poseData.format,'mediapipe-body17-full');
+  assert.equal(standard.poseData.format,'mediapipe-world17-full');
+  assert.equal(standard.poseData.schemaVersion,6);assert.equal(standard.fullAnalysis.coordinateSpace,'mediapipe-world-3d');
+  assert.equal(standard.fullAnalysis.version,'motion-observations-3d-v1');
+  assert(standard.poseData.frames.some(frame=>frame.worldLandmarks.some(point=>point&&Math.abs(point[2])>.001)));
   assert.equal(accurate.poseData.format,'rtmw-body17-full');
   assert.equal(yolo.poseData.format,'yolo26-body13-full');
   assert.equal(yolo.poseData.retainedLandmarkIndices.length,13);
@@ -104,7 +115,7 @@ test('simultaneous different-model callers infer independently and receive their
     h.videos.prepare(descriptor.id,'pushup',{poseModel:'rtmw'}),
     h.videos.prepare(descriptor.id,'squat',{poseModel:'mediapipe-full'}),
   ]);
-  assert.equal(accurate.poseData.format,'rtmw-body17-full');assert.equal(standard.poseData.format,'mediapipe-body17-full');
+  assert.equal(accurate.poseData.format,'rtmw-body17-full');assert.equal(standard.poseData.format,'mediapipe-world17-full');
   assert.equal(h.poseCalls.length,2);assert.equal(h.imageCalls.length,2);
 });
 
@@ -122,7 +133,7 @@ test('prepare reuses real transport across actions and retries without sharing m
   const h=setup(t),file=h.file(),descriptor=h.videos.add(file),updates=[];
   const first=await h.videos.prepare(descriptor.id,'squat',{onProgress:value=>updates.push(value)});
   assert.equal(first.reviewMode,'guided');assert.equal(first.selectedExerciseId,'squat');
-  assert.equal(first.poseData.format,'mediapipe-body17-full');assert.equal(h.poseCalls[0].options.model,'mediapipe-full');
+  assert.equal(first.poseData.format,'mediapipe-world17-full');assert.equal(h.poseCalls[0].options.model,'mediapipe-full');
   validateMotionPoseData(first.poseData);validateFullMotionAnalysis(first.fullAnalysis);
   assert.equal(h.poseCalls[0].options.sampleFps,7.5);assert.equal(h.poseCalls[0].file,file);
   assert(!('previewFrames' in h.imageCalls[0].pipeline));assert(!('wholebodyLandmarks' in h.imageCalls[0].pipeline.frames[0]));

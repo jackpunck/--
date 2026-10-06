@@ -17,6 +17,10 @@ const localVideo=()=>({id:'local-video:'+randomUUID(),name:'训练.mp4',type:'vi
 function input() {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
   pipeline.modelVersion=MOTION_POSE_MODEL.version;
+  for(const frame of pipeline.frames){
+    frame.worldLandmarks=frame.landmarks.map((point,index)=>point?{x:point.x-.5,y:point.y-.5,z:Math.sin(index)*.12,visibility:point.visibility}:null);
+    delete frame.wholebodyLandmarks;
+  }
   return {reviewMode:'guided',selectedExerciseId:'squat',duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png}],poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
 const guidedReply=()=>({selectionCheck:{status:'consistent',imageIndices:[0],evidence:'目标训练者徒手屈髋屈膝。'},verdict:{status:'standard'},feedback:[{title:'足部支撑',status:'good',source:'visual',imageIndices:[0],evidence:'可见双脚接地支撑。',correction:'继续保持全脚掌支撑。'}]});
@@ -74,6 +78,12 @@ test('HTTP chat motion uses metadata-only tools, isolated ACK, one AI call and a
   const tool=events.find(e=>e.name==='tool_result'&&e.data.name==='assess_motion_video').data;
   assert.equal(tool.ok,true);assert.match(tool.reportId,/^motion:/);assert.equal(tool.record.id,tool.reportId);assert.equal(tool.record.kind,'motion-assessment');
   assert.equal(tool.verdict.status,'standard');assert(tool.feedback.length);assert.equal(events.at(-1).name,'done');
+  assert.equal(tool.record.data.analysis.coordinateSpace,'mediapipe-world-3d');
+  const motionRequest=f.requests.find(request=>request.model==='motion-model');
+  const motionContext=JSON.parse(motionRequest.messages.find(message=>message.role==='user').content[0].text);
+  assert.equal(motionContext.evidence.poseSchema.measurementCoordinateSpace,'mediapipe-world-3d');
+  assert.deepEqual(motionContext.evidence.poseSchema.worldPointFields,['x','y','z','visibility']);
+  assert(motionContext.evidence.frames.some(frame=>frame.worldLandmarks.some(point=>point&&Math.abs(point[2])>.001)));
   const exported=(await f.api('/api/export',{cookie:f.alice.cookie})).body;
   assert.equal(exported.records.filter(r=>r.kind==='motion-assessment').length,1);assert.deepEqual(exported.attachments,[]);
   assert(!JSON.stringify(exported.records).includes(png));assert(!JSON.stringify(exported.records).includes('landmarks'));

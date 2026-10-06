@@ -15,6 +15,13 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{p
 function motionInput(poseModel='mediapipe-full',exerciseId='squat') {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
   pipeline.modelVersion=getMotionPoseModel(poseModel).version;
+  if(poseModel==='mediapipe-full'){
+    pipeline.coordinateSpace='mediapipe-world-3d';
+    for(const frame of pipeline.frames){
+      frame.worldLandmarks=frame.landmarks.map((point,index)=>point?{x:point.x-.5,y:point.y-.5,z:Math.sin(index)*.12,visibility:point.visibility}:null);
+      delete frame.wholebodyLandmarks;
+    }
+  }
   if(poseModel==='yolo26')for(const frame of pipeline.frames){
     frame.landmarks=frame.landmarks.map((point,index)=>[0,11,12,13,14,15,16,23,24,25,26,27,28].includes(index)?point:null);
     delete frame.wholebodyLandmarks;
@@ -141,6 +148,9 @@ test('model and exercise selections reach the client, reject mismatched evidence
     }});
     assert.equal(result.ok,true);assert.equal(result.poseModel,poseModel);
     assert.equal(result.record.data.analysis.modelVersion,getMotionPoseModel(poseModel).version);
+    if(poseModel==='mediapipe-full'){
+      assert.equal(result.record.data.analysis.coordinateSpace,'mediapipe-world-3d');
+    }
     assert.equal(result.record.data.coach.action.exerciseId,exerciseId);reports.push(result.reportId);
     const replay=await f.registry.execute({...f.base,args,onEvent:()=>assert.fail('replay must not re-analyze')});
     assert.equal(replay.reportId,result.reportId);assert.equal(replay.poseModel,poseModel);
