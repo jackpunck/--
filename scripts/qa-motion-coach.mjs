@@ -11,7 +11,7 @@ import {mergeCoachAssessment} from '../public/motion-contract.js';
 import {analyzeMotion} from '../public/motion-analysis.js';
 import {buildMotionPoseData,buildFullMotionAnalysis} from '../public/motion-pose-data.js';
 import {mapWholebodyLandmarks,RTMW_TO_BODY_LANDMARKS} from '../public/motion-rtmw.js';
-import {MOTION_POSE_MODEL} from '../public/motion-models.js';
+import {getMotionPoseModel} from '../public/motion-models.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const reportsOnly=process.argv.includes('--reports-only');
@@ -21,7 +21,7 @@ const dataDir=await mkdtemp(join(root,'.qa','motion-coach-ui-'));
 const fixture=JSON.parse(await readFile(join(root,'tests/fixtures/motion-squat-real.json'),'utf8'));
 // Body positions derive from an old numerical fixture; remaining points are
 // synthetic placeholders. This does not assert RTMW inference or accuracy.
-const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:MOTION_POSE_MODEL.version,elapsedMs:1,decoder:'QA synthetic RTMW-format observations',frames:fixture.frames.map(([time,points])=>{
+const pipeline={...fixture.options,sourceFps:30,sampleFps:15,modelVersion:getMotionPoseModel('rtmw').version,elapsedMs:1,decoder:'QA synthetic RTMW-format observations',frames:fixture.frames.map(([time,points])=>{
  const wholebodyLandmarks=Array.from({length:133},()=>({x:0,y:0,score:0}));
  fixture.landmarkIndices.forEach((index,i)=>{const target=RTMW_TO_BODY_LANDMARKS[index];if(Number.isInteger(target)){const [x,y,score]=points[i];wholebodyLandmarks[target]={x,y,score};}});
  return {time,wholebodyLandmarks,landmarks:mapWholebodyLandmarks(wholebodyLandmarks),personCount:1};

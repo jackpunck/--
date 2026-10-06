@@ -513,7 +513,7 @@ async function prepareChatMotion(run, data) {
  let input;
  try {
    if(!run.motionVideoIds.has(data.videoId))throw new Error('这段视频不在当前对话中，请重新添加视频。');
-   input=await chatMotionVideos.prepare(data.videoId,data.exerciseId,{signal,onProgress:progress=>{
+   input=await chatMotionVideos.prepare(data.videoId,data.exerciseId,{signal,poseModel:data.poseModel,onProgress:progress=>{
      if(current()){run.progress=progress.message||'正在分析训练视频…';scheduleChatPaint(run);}
    }});
  } catch(error) {

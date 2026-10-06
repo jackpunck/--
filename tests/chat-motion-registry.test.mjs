@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {getMotionPoseModel} from '../public/motion-models.js';
 import {chatMotionVideos,chatMotionTools,chatMotionNotice,createChatMotionRegistry} from '../server/chat-motion.mjs';
 import {toRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import {analyzeMotion} from '../public/motion-analysis.js';
@@ -11,13 +12,14 @@ import {sanitizeMotionCoachResponse} from '../public/motion-contract.js';
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=';
 const video=()=>({id:'local-video:'+randomUUID(),name:'squat.mp4',type:'video/mp4',size:1024});
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
-function motionInput() {
+function motionInput(poseModel='mediapipe-full',exerciseId='squat') {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
-  return {reviewMode:'guided',selectedExerciseId:'squat',duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png},{time:.4,mimeType:'image/png',data:png}],
+  pipeline.modelVersion=getMotionPoseModel(poseModel).version;
+  return {reviewMode:'guided',selectedExerciseId:exerciseId,duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png},{time:.4,mimeType:'image/png',data:png}],
     poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
 function coach(input) {
-  return {...sanitizeMotionCoachResponse({selectionCheck:{status:'consistent',imageIndices:[0],evidence:'目标训练者徒手屈髋屈膝。'}},{mode:'guided',selectedExerciseId:'squat',keyframes:input.keyframes}),
+  return {...sanitizeMotionCoachResponse({selectionCheck:{status:'consistent',imageIndices:[0],evidence:'测试训练者动作。'}},{mode:'guided',selectedExerciseId:input.selectedExerciseId,keyframes:input.keyframes}),
     feedback:[{title:'足部支撑',status:'good',source:'visual',evidenceTimes:[.2,.4],evidence:'可见双脚保持接地支撑。',correction:'保持全脚掌支撑。'}],verdict:{status:'standard'},
     coverage:{complete:true,strategy:'guided-evidence',sourceFrameCount:8,frameCount:8,reviewedFrameCount:8,imageCount:2,reviewedImageCount:2}};
 }
@@ -105,4 +107,54 @@ test('registry concurrency limits and server instances cannot consume each other
   assert.equal(crowded.code,'MOTION_BUSY');
   assert.throws(()=>b.registry.submit({userId:'alice',jobId:job.jobId,body:{input:motionInput()}}),error=>error.status===404);
   a.registry.submit({userId:'alice',jobId:job.jobId,body:{error:'取消本地分析'}});await pending;
+});
+
+test('tool exposes action and pose model choices and rejects unsupported models before dispatch',async t=>{
+  const f=fixture(t),schema=chatMotionTools(f.base.videos)[0].function.parameters;
+  assert(schema.required.includes('poseModel'));assert(schema.required.includes('exerciseId'));
+  assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full']);
+  for(const id of ['squat','pushup','curl'])assert(schema.properties.exerciseId.enum.includes(id));
+  assert.match(chatMotionNotice(f.base.videos),/标准\/MediaPipe Full=mediapipe-full/);
+  for(const poseModel of ['full',null,42]){
+    const result=await f.registry.execute({...f.base,args:{...f.base.args,poseModel},onEvent:()=>assert.fail('invalid selection must not start a job')});
+    assert.equal(result.code,'INVALID_ARGUMENTS');
+  }
+});
+
+test('model and exercise selections reach the client, reject mismatched evidence, and own distinct retry receipts',async t=>{
+  const f=fixture(t),reports=[];let calls=0;
+  for(const [poseModel,exerciseId] of [['rtmw','squat'],['mediapipe-full','squat'],['mediapipe-full','pushup']]){
+    const args={...f.base.args,poseModel,exerciseId};
+    const result=await f.registry.execute({...f.base,args,assess:async input=>{calls++;assert.equal(input.selectedExerciseId,exerciseId);assert.equal(input.poseData.modelVersion,getMotionPoseModel(poseModel).version);return coach(input);},onEvent:(name,data)=>{
+      if(name!=='motion_request')return;
+      assert.equal(data.poseModel,poseModel);assert.equal(data.exerciseId,exerciseId);
+      const submit=input=>f.registry.submit({userId:'alice',jobId:data.jobId,body:{input}});
+      assert.throws(()=>submit(motionInput(poseModel==='rtmw'?'mediapipe-full':'rtmw',exerciseId)),/骨架模型不一致/);
+      assert.throws(()=>submit(motionInput(poseModel,exerciseId==='squat'?'pushup':'squat')),/动作类型不一致/);
+      submit(motionInput(poseModel,exerciseId));
+    }});
+    assert.equal(result.ok,true);assert.equal(result.poseModel,poseModel);
+    assert.equal(result.record.data.analysis.modelVersion,getMotionPoseModel(poseModel).version);
+    assert.equal(result.record.data.coach.action.exerciseId,exerciseId);reports.push(result.reportId);
+    const replay=await f.registry.execute({...f.base,args,onEvent:()=>assert.fail('replay must not re-analyze')});
+    assert.equal(replay.reportId,result.reportId);assert.equal(replay.poseModel,poseModel);
+  }
+  assert.equal(calls,3);assert.equal(new Set(reports).size,3);
+  assert.equal(f.registry.receipts({userId:'alice',requestId:f.base.requestId,videos:f.base.videos}).length,3);
+});
+
+test('legacy ledger migration preserves old attempts as high precision and does not replay AI',async()=>{
+  const db=new DatabaseSync(':memory:'),videos=[video()],requestId=randomUUID();
+  db.exec(`PRAGMA foreign_keys=ON; CREATE TABLE users(id TEXT PRIMARY KEY); INSERT INTO users VALUES('alice');
+    CREATE TABLE ai_chat_motion_operations(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,request_id TEXT NOT NULL,video_id TEXT NOT NULL,exercise_id TEXT NOT NULL,video_hash TEXT NOT NULL,status TEXT NOT NULL,result TEXT,report_id TEXT,updated_at TEXT NOT NULL,PRIMARY KEY(user_id,request_id,video_id,exercise_id));`);
+  const hash=createHash('sha256').update(JSON.stringify(videos[0])).digest('hex');
+  const failure={ok:false,name:'assess_motion_video',code:'MOTION_FAILED',message:'existing attempt'};
+  db.prepare('INSERT INTO ai_chat_motion_operations VALUES(?,?,?,?,?,?,?,?,?)').run('alice',requestId,videos[0].id,'squat',hash,'failed',JSON.stringify(failure),null,new Date().toISOString());
+  const registry=createChatMotionRegistry({db});
+  try{
+    const result=await registry.execute({userId:'alice',requestId,videos,args:{videoId:videos[0].id,exerciseId:'squat',poseModel:'rtmw'},signal:new AbortController().signal,onEvent:()=>assert.fail('must preserve previous attempt')});
+    assert.equal(result.replayed,true);assert.equal(result.code,'MOTION_FAILED');assert.equal(result.poseModel,'rtmw');
+    assert.deepEqual(db.prepare('PRAGMA table_info(ai_chat_motion_operations)').all().filter(c=>c.pk).map(c=>c.name),['user_id','request_id','video_id','exercise_id','pose_model']);
+    db.prepare('DELETE FROM users WHERE id=?').run('alice');assert.equal(db.prepare('SELECT COUNT(*) n FROM ai_chat_motion_operations').get().n,0);
+  }finally{registry.close();db.close();}
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 import {makeRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import {validateMotionPoseData, validateFullMotionAnalysis} from '../public/motion-pose-data.js';
+import {getMotionPoseModel} from '../public/motion-models.js';
 
 // Only media/model operations are doubled. Objective observations and transport
 // validation use the actual production modules; no model or network is started.
@@ -30,7 +31,7 @@ function pipeline(){
 const evidence = () => ({summary:{version:'motion-observations-v1',duration:4/7.5},images:[{time:.001,imageTime:.001,mimeType:'image/jpeg',dataUrl:'data:image/jpeg;base64,AAAA'}]});
 function setup(t){
   const h={poseCalls:[],imageCalls:[],poseQueue:[],imageQueue:[],released:[]};
-  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});return h.poseQueue.shift()?.promise??pipeline();};
+  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});const value=pipeline();value.modelVersion=getMotionPoseModel(options.model).version;return h.poseQueue.shift()?.promise??value;};
   h.evidence=async(file,pipeline,observations,options)=>{h.imageCalls.push({file,pipeline,observations,options});return h.imageQueue.shift()?.promise??evidence();};
   globalThis.__chatMotion=h;h.videos=new ChatMotionVideos();
   h.file=(name='clip.mp4')=>new File(['synthetic fixture'],name,{type:'video/mp4'});
@@ -68,6 +69,40 @@ test('file and metadata limits match motion analysis; persisted descriptors cann
   assert.throws(()=>h.videos.add(h.file(),{duration:2,width:0,height:480}),/无法读取/);
 });
 
+test('each pose model owns its cache while different exercise choices reuse that model',async t=>{
+  const h=setup(t),descriptor=h.videos.add(h.file());
+  const standard=await h.videos.prepare(descriptor.id,'squat',{poseModel:'mediapipe-full'});
+  const accurate=await h.videos.prepare(descriptor.id,'pushup',{poseModel:'rtmw'});
+  const standardAgain=await h.videos.prepare(descriptor.id,'curl',{poseModel:'mediapipe-full'});
+  assert.equal(standard.poseData.format,'mediapipe-body17-full');
+  assert.equal(accurate.poseData.format,'rtmw-body17-full');
+  assert.equal(accurate.selectedExerciseId,'pushup');assert.equal(standardAgain.selectedExerciseId,'curl');
+  assert.deepEqual(standardAgain.poseData,standard.poseData);
+  assert.deepEqual(h.poseCalls.map(call=>call.options.model),['mediapipe-full','rtmw']);
+  assert.equal(h.imageCalls.length,2);
+  await assert.rejects(h.videos.prepare(descriptor.id,'squat',{poseModel:'unknown'}),/骨架分析模型/);
+});
+
+test('concurrent selections for different models stay isolated and queued work is cancelled on removal',async t=>{
+  const h=setup(t),descriptor=h.videos.add(h.file()),pose=deferred();h.poseQueue.push(pose);
+  const first=h.videos.prepare(descriptor.id,'squat',{poseModel:'rtmw'});
+  const second=h.videos.prepare(descriptor.id,'pushup',{poseModel:'mediapipe-full'});
+  const rejectFirst=assert.rejects(first,{name:'AbortError'}),rejectSecond=assert.rejects(second,{name:'AbortError'});
+  await until(()=>h.poseCalls.length===1);h.videos.remove(descriptor.id);
+  await Promise.all([rejectFirst,rejectSecond]);pose.resolve(pipeline());await flush();
+  assert.equal(h.poseCalls.length,1);assert.equal(h.imageCalls.length,0);
+});
+
+test('simultaneous different-model callers infer independently and receive their chosen format',async t=>{
+  const h=setup(t),descriptor=h.videos.add(h.file());
+  const [accurate,standard]=await Promise.all([
+    h.videos.prepare(descriptor.id,'pushup',{poseModel:'rtmw'}),
+    h.videos.prepare(descriptor.id,'squat',{poseModel:'mediapipe-full'}),
+  ]);
+  assert.equal(accurate.poseData.format,'rtmw-body17-full');assert.equal(standard.poseData.format,'mediapipe-body17-full');
+  assert.equal(h.poseCalls.length,2);assert.equal(h.imageCalls.length,2);
+});
+
 test('missing local files and invalid action types fail before any model starts',async t=>{
   const h=setup(t);
   await assert.rejects(h.videos.prepare('local-video:missing','squat'),error=>error.code==='CHAT_MOTION_VIDEO_MISSING'&&/重新添加视频/.test(error.message));
@@ -82,7 +117,7 @@ test('prepare reuses real transport across actions and retries without sharing m
   const h=setup(t),file=h.file(),descriptor=h.videos.add(file),updates=[];
   const first=await h.videos.prepare(descriptor.id,'squat',{onProgress:value=>updates.push(value)});
   assert.equal(first.reviewMode,'guided');assert.equal(first.selectedExerciseId,'squat');
-  assert.equal(first.poseData.format,'rtmw-body17-full');
+  assert.equal(first.poseData.format,'mediapipe-body17-full');assert.equal(h.poseCalls[0].options.model,'mediapipe-full');
   validateMotionPoseData(first.poseData);validateFullMotionAnalysis(first.fullAnalysis);
   assert.equal(h.poseCalls[0].options.sampleFps,7.5);assert.equal(h.poseCalls[0].file,file);
   assert(!('previewFrames' in h.imageCalls[0].pipeline));assert(!('wholebodyLandmarks' in h.imageCalls[0].pipeline.frames[0]));

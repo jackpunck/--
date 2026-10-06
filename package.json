@@ -38,9 +38,10 @@
     "qa:motion:onnx": "node scripts/qa-motion-onnx.mjs",
     "qa:motion:rtmw": "node scripts/qa-motion-rtmw.mjs",
     "qa:motion:dataset": "node scripts/qa-motion-dataset.mjs",
-    "check:motion:onnx": "node --check public/motion-rtmw.js && node --check scripts/setup-motion-onnx.mjs && node --check scripts/qa-motion-onnx.mjs && node --check scripts/qa-motion-rtmw.mjs",
+    "check:motion:onnx": "node --check public/motion-rtmw.js && node --check scripts/setup-motion-onnx.mjs && node --check scripts/qa-motion-onnx.mjs && node --check scripts/qa-motion-rtmw.mjs && node --check public/motion-mediapipe.js && node --check scripts/qa-motion-mediapipe.mjs",
     "check:motion:assessment": "node --check server/motion-coach-context.mjs && node --check server/motion-coach-temporal.mjs && node --check server/motion-coach-visual.mjs && node --check server/motion-coach-guided.mjs && node --check scripts/motion-dataset-benchmark.mjs && node --check scripts/motion-dataset-provider.mjs && node --check scripts/motion-dataset-report.mjs && node --check scripts/qa-motion-dataset.mjs && node --check scripts/motion-dataset-reference.mjs && node --check scripts/motion-dataset-guided.mjs && node --check scripts/motion-dataset-guided-prepare.mjs && node --check scripts/motion-dataset-guided-report.mjs && node --check scripts/motion-dataset-guided-audit.mjs",
     "qa:chat:motion": "node scripts/qa-chat-motion.mjs",
-    "check:chat:motion": "node --check public/chat-motion.js && node --check public/chat-motion-result.js && node --check public/motion-report.js && node --check server/chat-motion.mjs && node --check scripts/qa-chat-motion.mjs && node --check scripts/qa-motion-navigation.mjs"
+    "check:chat:motion": "node --check public/chat-motion.js && node --check public/chat-motion-result.js && node --check public/motion-report.js && node --check server/chat-motion.mjs && node --check scripts/qa-chat-motion.mjs && node --check scripts/qa-motion-navigation.mjs",
+    "qa:motion:mediapipe": "node scripts/qa-motion-mediapipe.mjs"
   }
 }

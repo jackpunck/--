@@ -97,7 +97,7 @@ try{
    };
    const response=await page.goto(origin),csp=response.headers()['content-security-policy'];assert(csp?.includes("default-src 'self'"));assert(csp.includes("worker-src 'self'"));
    if(config.ui){
-    await openMotion();await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
+    await openMotion();await page.locator('[data-motion-pose-model]').selectOption('rtmw');await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'Unconfigured visual AI blocks analysis');
     await configure('qa-text');await page.reload();await openMotion();
     await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
@@ -145,7 +145,7 @@ try{
     const {analyzeVideo}=await import('/motion-video.js');const {analyzeMotion}=await import('/motion-analysis.js');
     const {buildMotionPoseData,buildFullMotionAnalysis}=await import('/motion-pose-data.js');const {buildMotionEvidence}=await import('/motion-evidence.js');
     const {buildMotionAssessmentReport,validateMotionAssessmentSize}=await import('/motion-view.js');const {mergeCoachAssessment}=await import('/motion-contract.js');
-    const file=document.querySelector('#qa-rtmw-file').files[0],pipeline=reuseUI?window.__qaMotionOutput:await analyzeVideo(file);
+    const file=document.querySelector('#qa-rtmw-file').files[0],pipeline=reuseUI?window.__qaMotionOutput:await analyzeVideo(file,{model:'rtmw'});
     const observations=analyzeMotion(pipeline.frames,pipeline);
     let body,report;
     if(!reuseUI){
@@ -194,7 +194,7 @@ try{
    assert(!requests.some(request=>/mediapipe|stgcn|\.task(?:\?|$)/i.test(request.url)),'Only required RTMW assets are requested');
    assert(!workers.some(worker=>worker.messages.some(message=>message.type==='classify')));
    if(config.name==='webcodecs-cpu-fallback'){
-    const cancelled=await page.evaluate(async()=>{const {analyzeVideo}=await import('/motion-video.js');const controller=new AbortController(),before=window.__qaWorkers.length;let status='resolved',frames=0;try{await analyzeVideo(document.querySelector('#qa-rtmw-file').files[0],{signal:controller.signal,onProgress(event){if(event.stage==='analyzing'){frames++;controller.abort();}}});}catch(error){status=error.name;}return{status,frames,workers:window.__qaWorkers.slice(before)};});
+    const cancelled=await page.evaluate(async()=>{const {analyzeVideo}=await import('/motion-video.js');const controller=new AbortController(),before=window.__qaWorkers.length;let status='resolved',frames=0;try{await analyzeVideo(document.querySelector('#qa-rtmw-file').files[0],{model:'rtmw',signal:controller.signal,onProgress(event){if(event.stage==='analyzing'){frames++;controller.abort();}}});}catch(error){status=error.name;}return{status,frames,workers:window.__qaWorkers.slice(before)};});
     assert.equal(cancelled.status,'AbortError');assert.equal(cancelled.frames,1);assert(cancelled.workers.every(worker=>worker.terminated>=1));output.stats.cancelled=cancelled;
    }
    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert(!requests.some(request=>request.method==='POST'&&/\/api\/attachments/.test(request.url)));

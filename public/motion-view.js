@@ -1,4 +1,5 @@
 import { analyzeVideo, validateVideoFile, scaledVideoSize, MOTION_VIDEO_LIMITS } from './motion-video.js';
+import { MOTION_POSE_MODEL, MOTION_POSE_MODELS, getMotionPoseModel } from './motion-models.js';
 import { analyzeMotion } from './motion-analysis.js';
 import { motionExercises, motionFamilies, getMotionExercise } from './motion-catalog.js';
 import { buildMotionEvidence } from './motion-evidence.js';
@@ -78,6 +79,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   let metadata=null, lastAnnouncement=0, deletionId=null, historyRead=null;
   let coachController=null, coachRunning=false, awaitingCoach=false, coachMessage='', coachError='', coachRevision=0;
   let selectedExerciseId='', reviewCache=null;
+  let selectedPoseModel=MOTION_POSE_MODEL.id;
   let targetPoint=null, selectingTarget=false, selectionCursor={x:.5,y:.4};
   let preparing=false, preparationController=null, selectionRevision=0;
   let mediaMode='native', preparedPoster=null, framePlayerDisabled=null;
@@ -91,6 +93,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
       <section class="motion-input card" aria-labelledby="motion-upload-title">
         <div class="motion-section-head"><div><span class="motion-step">01 / 选择动作与视频</span><h2 id="motion-upload-title">从一组动作开始</h2></div><span class="badge neutral">按所选动作评价</span></div>
         <div class="motion-exercise-field"><label for="motion-exercise">这段视频练什么？<span>必选</span></label><select id="motion-exercise" data-motion-exercise required aria-describedby="motion-exercise-help">${exerciseOptions()}</select><p id="motion-exercise-help">按器械和动作变式选择。更换动作后，可复用当前视频的分析数据重新评价。</p></div>
+        <div class="motion-exercise-field"><label for="motion-pose-model">骨架分析模型</label><select id="motion-pose-model" data-motion-pose-model aria-describedby="motion-pose-model-help">${MOTION_POSE_MODELS.map(model=>`<option value="${model.id}"${model.id===selectedPoseModel?' selected':''}>${model.tier} · ${model.label}</option>`).join('')}</select><p id="motion-pose-model-help">默认使用标准 MediaPipe Full，也可选择高精度 RTMW-L。更换模型后需重新分析视频。</p></div>
         <input type="file" data-motion-file accept="${MOTION_VIDEO_ACCEPT}" hidden aria-label="选择训练视频">
         <button type="button" class="motion-dropzone" data-motion-action="choose"><span class="motion-upload-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><rect x="6" y="10" width="36" height="28" rx="8" stroke="currentColor" stroke-width="1.8"/><path d="m21 18 10 6-10 6V18Z" fill="currentColor"/><path d="M12 5v5m24-5v5M12 38v5m24-5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><strong>选择或拖入训练视频</strong><span>支持手机视频 · MP4、MOV、WebM 等格式</span><small>最长 ${MOTION_VIDEO_LIMITS.maxDuration/60} 分钟 · 最大 ${MOTION_VIDEO_LIMITS.maxBytes/1024/1024} MB</small><span class="motion-choose-label">选择视频 <span aria-hidden="true">↗</span></span></button>
         <div class="motion-file-details" data-motion-metadata hidden></div>
@@ -113,6 +116,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   const root=container.querySelector('.motion-page');
   const find=selector=>root.querySelector(selector);
   const video=find('[data-motion-video]'), canvas=find('[data-motion-canvas]'), fileInput=find('[data-motion-file]'),exerciseSelect=find('[data-motion-exercise]');
+  const poseModelSelect=find('[data-motion-pose-model]');
   const frameSurface=find('[data-motion-frame-surface]');
   const context=canvas.getContext('2d');
   const listen=(target,type,handler,options={})=>target.addEventListener(type,handler,{...options,signal:listeners.signal});
@@ -180,6 +184,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     start.disabled=!selectedExerciseId||!metadata||!mediaReady()||running||preparing||coachRunning||selectingTarget||saving||!coachReady;
     start.textContent=result?.coach?'重新评价':pipeline?'评价所选动作':'开始评估';
     exerciseSelect.disabled=saving;
+    poseModelSelect.disabled=running||preparing||coachRunning||saving;
     find('.motion-input').setAttribute('aria-busy',String(running||preparing||coachRunning));
     find('[data-motion-playback]').hidden=!pipeline;
     find('[data-motion-target-controls]').hidden=!metadata;
@@ -310,7 +315,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
         await framePlayer.setSource({poster:preparedPoster,metadata});
         if(destroyed||signal.aborted||revision!==analysisRevision)return;
       }
-      const output=await analyzeVideo(activeFile,{signal,sampleFps:7.5,targetPoint:targetPoint?{...targetPoint}:null,onProgress:value=>{if(!destroyed&&revision===analysisRevision)updateProgress(value);}});
+      const output=await analyzeVideo(activeFile,{signal,sampleFps:7.5,model:selectedPoseModel,targetPoint:targetPoint?{...targetPoint}:null,onProgress:value=>{if(!destroyed&&revision===analysisRevision)updateProgress(value);}});
       if(destroyed||signal.aborted||revision!==analysisRevision)return;
       const assessment=analyzeMotion(output.frames,{width:output.width,height:output.height,duration:output.duration,sourceFps:output.sourceFps});
       if(mediaMode==='software'){
@@ -388,7 +393,7 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
     } else if(!pipeline&&targetPoint&&!selectingTarget) {
       context.strokeStyle='#c4ceff';context.lineWidth=3;context.beginPath();context.arc(targetPoint.x*canvas.width,targetPoint.y*canvas.height,12,0,Math.PI*2);context.stroke();
     }
-    drawMotionOverlay(context,frame?.wholebodyLandmarks,canvas.width,canvas.height);
+    drawMotionOverlay(context,frame?.wholebodyLandmarks??frame?.landmarks,canvas.width,canvas.height);
   }
   function playbackLoop() { if(destroyed||suspended)return;drawOverlay();if(!video.paused&&!video.ended)animationId=requestAnimationFrame(playbackLoop); }
   function timestampButton(time,label,canSeek) {return canSeek&&finite(time)?`<button type="button" class="motion-time" data-motion-action="seek" data-time="${time}" aria-label="跳转到 ${escapeHtml(preciseClock(time))} 查看${escapeHtml(label)}">${preciseClock(time)} <span aria-hidden="true">↗</span></button>`:`<span class="motion-time">${preciseClock(time)}</span>`;}
@@ -499,6 +504,12 @@ export function mountMotionView(container,{saveAssessment,listAssessments,delete
   });
   listen(fileInput,'change',()=>{selectFile(fileInput.files?.[0]);fileInput.value='';});
   listen(exerciseSelect,'change',()=>chooseExercise(exerciseSelect.value));
+  listen(poseModelSelect,'change',()=>{
+    if(running||preparing||coachRunning||saving){poseModelSelect.value=selectedPoseModel;return;}
+    const next=getMotionPoseModel(poseModelSelect.value).id;
+    if(next===selectedPoseModel)return;
+    reportOpenRevision++;selectedPoseModel=next;clearAnalysis();controls();
+  });
   listen(find('.motion-input'),'dragover',event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy';find('.motion-input').classList.add('is-dragover');}});
   listen(find('.motion-input'),'dragleave',event=>{if(!find('.motion-input').contains(event.relatedTarget))find('.motion-input').classList.remove('is-dragover');});
   listen(find('.motion-input'),'drop',event=>{event.preventDefault();find('.motion-input').classList.remove('is-dragover');const files=event.dataTransfer?.files;if(files?.length>1)announce('一次评估一段视频，已选择第一个文件。');selectFile(files?.[0]);});

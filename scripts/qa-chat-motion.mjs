@@ -1,4 +1,4 @@
-// Isolated chat-to-motion integration. Real local RTMW and decoder; both chat
+// Isolated chat-to-motion integration. Real selected pose model and decoder; both chat
 // tool selection and motion coaching use an in-process fixture, never paid AI.
 import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
@@ -10,6 +10,10 @@ import {createHash} from 'node:crypto';
 import {startServer} from '../server.mjs';
 import {validateMotionCoachRequest} from '../server/motion-coach.mjs';
 import {getMotionExercise} from '../public/motion-catalog.js';
+import {getMotionPoseModel} from '../public/motion-models.js';
+const poseModel=getMotionPoseModel(process.env.QA_POSE_MODEL);
+const exercise=getMotionExercise(process.env.QA_MOTION_EXERCISE||'squat');
+assert(exercise);
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 await mkdir(join(root,'.qa'),{recursive:true});
@@ -42,11 +46,11 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
   let motionContext;try{motionContext=JSON.parse(typeof parts==='string'?parts:parts?.[0]?.text);}catch{}
   if(motionContext?.stage==='guided-evidence'){
     const images=parts.filter(part=>part.type==='image_url');
-    assert.equal(motionContext.selectedExercise.id,'squat');assert(images.length>0&&images.length<=6);
+    assert.equal(motionContext.selectedExercise.id,exercise.id);assert(images.length>0&&images.length<=6);
     assert(motionContext.evidence.frames.length>0);assert.equal(motionContext.evidence.poseSchema.landmarkIndices.length,17);
     coachCalls.push({model:request.model,sourceFrames:motionContext.evidence.sourceFrameCount,sentFrames:motionContext.evidence.frames.length,
       images:images.map(image=>({sha256:sha(Buffer.from(image.image_url.url.split(',')[1],'base64')),bytes:Buffer.from(image.image_url.url.split(',')[1],'base64').length})),stage:motionContext.stage});
-    const result={selectionCheck:{status:'consistent',imageIndices:[0],evidence:'QA 模拟：图片与所选徒手深蹲相符。'},
+    const result={selectionCheck:{status:'consistent',imageIndices:[0],evidence:`QA 模拟：图片与所选${exercise.name}相符。`},
       verdict:{status:'needs-improvement',summary:'QA 模拟：建议调整，动作报告已保存。'},
       feedback:[{title:'躯干控制（QA模拟）',status:'improve',source:'visual',imageIndices:[0],
         evidence:'这是本地集成测试的固定响应，不代表动作正确性判断。',correction:'下一组降低负重，保持肩髋同步。',priority:1}],
@@ -70,7 +74,8 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
   const latestUser=request.messages.findLast(message=>message.role==='user'),text=typeof latestUser.content==='string'?latestUser.content:JSON.stringify(latestUser.content);
   if(text.includes('QA视频追问'))return answer('这段视频练什么动作？请补充动作名称。');
   assert(request.tools?.some(item=>item.function.name==='assess_motion_video'),'The native motion tool must be declared');
-  const args={videoId:firstVideoId,exerciseId:'squat'};assert(getMotionExercise(args.exerciseId));toolCalls.push(args);
+  const schema=request.tools.find(item=>item.function.name==='assess_motion_video').function.parameters;assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full']);assert(schema.required.includes('poseModel'));
+  const args={videoId:firstVideoId,exerciseId:exercise.id,poseModel:poseModel.id};assert(getMotionExercise(args.exerciseId));toolCalls.push(args);
   return tool('assess_motion_video',args);
 }});
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -95,7 +100,7 @@ await context.route(/\/motion-video\.js(?:\?.*)?$/,async route=>{const response=
   body:videoSource.replace('export async function analyzeVideo(','async function qaActualAnalyzeVideo(')+'\nexport async function analyzeVideo(...args){const result=await qaActualAnalyzeVideo(...args);window.__qaChatMotionPipeline=result;return result;}'});});
 await context.route(/\/chat-stream\.js(?:\?.*)?$/,async route=>{const response=await route.fetch();await route.fulfill({response,
   body:chatStreamSource.replace('export async function consumeChatEvents(','async function qaActualConsumeChatEvents(')+
-    '\nexport async function consumeChatEvents(body,onEvent,signal){return qaActualConsumeChatEvents(body,(type,data)=>{(window.__qaChatEvents??=[]).push({type,jobId:data.jobId,videoId:data.videoId,exerciseId:data.exerciseId});return onEvent?.(type,data);},signal);}'});});
+    '\nexport async function consumeChatEvents(body,onEvent,signal){return qaActualConsumeChatEvents(body,(type,data)=>{(window.__qaChatEvents??=[]).push({type,jobId:data.jobId,videoId:data.videoId,exerciseId:data.exerciseId,poseModel:data.poseModel});return onEvent?.(type,data);},signal);}'});});
 const state=async()=>{const response=await context.request.get(origin+'/api/state');assert.equal(response.status(),200);return response.json();};
 const records=async kind=>(await state()).records.filter(record=>record.kind===kind&&!record.deleted);
 const idle=()=>page.waitForFunction(()=>!document.querySelector('[data-action="stop-chat"]')&&!document.querySelector('#chat-input')?.disabled,undefined,{timeout:300000});
@@ -124,7 +129,7 @@ try{
   assert.equal(chatBodies[0].messages.at(-1).motionVideos.length,1);
 
   step='reuse the prior video, real pose extraction, native tool and saved report';console.log(step);
-  await send('QA开始评估：这个动作是徒手深蹲。');
+  await send(`QA开始评估：这个动作是${exercise.name}，使用${poseModel.tier}骨架模型。`);
   await page.locator('.chat-motion-result [data-action="chat-motion-detail"]').waitFor({timeout:300000});await idle();
   assert.equal(toolCalls.length,1);assert.equal(coachCalls.length,1);assert.equal(attachmentUploads.length,0);
   const originalRequestId=chatBodies.at(-1).requestId;
@@ -135,17 +140,17 @@ try{
   assert.equal(motionInputs.filter(body=>body.input).length,1,'Retry must reuse the saved tool result without extracting again');
   assert.equal(await page.locator('.chat-motion-result [data-action="chat-motion-detail"]').count(),1,'A replayed receipt must not duplicate the report card');
   const submission=motionInputs.find(body=>body.input);assert(submission,'Client must submit the real extracted motion input');
-  const input=validateMotionCoachRequest(submission.input);assert.equal(input.reviewMode,'guided');assert.equal(input.selectedExerciseId,'squat');
-  assert.equal(input.poseData.schemaVersion,3);assert.equal(input.poseData.retainedLandmarkIndices.length,17);assert(input.poseData.frameCount>=7);
+  const input=validateMotionCoachRequest(submission.input);assert.equal(input.reviewMode,'guided');assert.equal(input.selectedExerciseId,exercise.id);
+  assert.equal(input.poseData.schemaVersion,poseModel.id==='rtmw'?3:4);assert.equal(input.poseData.retainedLandmarkIndices.length,17);assert(input.poseData.frameCount>=7);
   assert.equal(input.fullAnalysis.measurements.length,input.poseData.frameCount);
   const pipeline=await page.evaluate(()=>({frames:window.__qaChatMotionPipeline.frames.length,sampleFps:window.__qaChatMotionPipeline.sampleFps,delegate:window.__qaChatMotionPipeline.delegate,
     decoder:window.__qaChatMotionPipeline.decoder,modelVersion:window.__qaChatMotionPipeline.modelVersion,timing:window.__qaChatMotionPipeline.timing}));
-  assert.match(pipeline.modelVersion,/RTMW/);assert.equal(pipeline.frames,input.poseData.frameCount);assert.equal(pipeline.sampleFps,7.5);
+  assert.equal(pipeline.modelVersion,poseModel.version);assert.equal(pipeline.frames,input.poseData.frameCount);assert.equal(pipeline.sampleFps,7.5);
   const assessments=await records('motion-assessment');assert.equal(assessments.length,1);const assessment=assessments[0];
   const button=page.locator('.chat-motion-result [data-action="chat-motion-detail"]').first();assert.equal(await button.getAttribute('data-report-id'),assessment.id);
-  const savedCoach=assessment.data.coach||assessment.data.report?.coach;assert.equal(savedCoach.mode,'guided');assert.equal(savedCoach.action.exerciseId,'squat');
+  const savedCoach=assessment.data.coach||assessment.data.report?.coach;assert.equal(savedCoach.mode,'guided');assert.equal(savedCoach.action.exerciseId,exercise.id);
   const conversations=await records('conversation'),conversation=conversations.find(record=>record.data.messages.some(message=>message.motionVideos?.length));assert(conversation);
-  const receipt=conversation.data.messages.flatMap(message=>message.toolResults||[]).find(result=>result.name==='assess_motion_video');assert.equal(receipt.reportId,assessment.id);assert.equal(receipt.record,undefined);
+  const receipt=conversation.data.messages.flatMap(message=>message.toolResults||[]).find(result=>result.name==='assess_motion_video');assert.equal(receipt.reportId,assessment.id);assert.equal(receipt.poseModel,poseModel.id);assert.equal(assessment.data.analysis.modelVersion,poseModel.version);assert.match(await page.locator('.chat-motion-model').textContent(),new RegExp(poseModel.label));assert.equal(receipt.record,undefined);
   assert.equal(conversation.data.messages.flatMap(message=>message.motionVideos||[])[0].id,firstVideoId);
   sseEvents.push(...await page.evaluate(()=>window.__qaChatEvents||[]));
   await screenshot('desktop-chat-result');await button.click();await page.locator('.motion-coach-evaluation').waitFor();
@@ -166,15 +171,15 @@ try{
   assert.equal(toolReceipts.at(-1).ok,false);assert.equal(attachmentUploads.length,0);
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await screenshot('mobile-chat-result');
   sseEvents.push(...await page.evaluate(()=>window.__qaChatEvents||[]));
-  await Promise.all(responseReads);assert(sseEvents.some(event=>event.type==='motion_request'));assert(sseEvents.some(event=>event.type==='motion_progress'));
+  await Promise.all(responseReads);assert(sseEvents.some(event=>event.type==='motion_request'&&event.poseModel===poseModel.id&&event.exerciseId===exercise.id));assert(sseEvents.some(event=>event.type==='motion_progress'));
   assert.deepEqual(externalRequests,[]);assert.deepEqual(errors,[]);
   for(const [file,hash]of Object.entries(servedCodeHashes))assert.equal(hash,codeHashes[file],`Production ${file} changed during the frozen QA run`);
-  const result={passed:true,scope:'Real RTMW and UI integration with local mock chat/tool/coach AI; no form-accuracy or paid-model claim.',dataDir,codeHashes,servedCodeHashes,
+  const result={passed:true,scope:'Real selected pose model and UI integration with local mock chat/tool/coach AI; no form-accuracy or paid-model claim.',poseModel:poseModel.id,exerciseId:exercise.id,dataDir,codeHashes,servedCodeHashes,
     sourceVideoSha256:sha(await readFile(clip)),pipeline,videoId:firstVideoId,reportId:assessment.id,chatRequests:chatBodies.length,nativeToolCalls:toolCalls.length,
     mockCoachCalls:coachCalls.length,simulatedFinalSummaryFailures:1,retryKeptRequestId:true,originalVideoUploads:attachmentUploads.length,sseEvents,
     instrumentation:'Read-only wrappers capture the real analyzeVideo return and real consumeChatEvents callback; original algorithms and callbacks are invoked unchanged.',motionInput:{frames:input.poseData.frameCount,sampleFps:input.poseData.sampleFps,images:input.keyframes.length,
       schemaVersion:input.poseData.schemaVersion,measurements:input.fullAnalysis.measurements.length},checks:['Video upload retained as local metadata; no image preview or attachment POST',
-      'Missing action asked once, follow-up reused identical video reference','Native tool emitted SSE motion_request and motion_progress','Real 17-body-point RTMW pipeline sent to existing guided coach',
+      'Missing action asked once, follow-up reused identical video reference','Native tool emitted SSE motion_request and motion_progress','Real selected pose model and exercise sent to existing guided coach',
       'Report stored once; compact chat receipt opens matching motion detail','Final-summary 500 then retry reuses the saved result without extra extraction/coaching',
       'Reload retains report while local video is absent','Missing local video gives actionable failure without extra model coaching','390px layout and no external browser requests'],errors};
   await writeFile(join(dataDir,'results.json'),JSON.stringify(result,null,2));await writeFile(join(dataDir,'mock-provider-trace.json'),JSON.stringify({chat:upstream,coaching:coachCalls,toolCalls,toolReceipts},null,2));

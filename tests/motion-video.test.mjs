@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateVideoFile, validateVideoMetadata, sampleVideoTimes, browserSeekTime, scaledVideoSize, analyzeVideo, MOTION_MODEL_VERSION } from '../public/motion-video.js';
 import { mapWholebodyLandmarks } from '../public/motion-rtmw.js';
+import { getMotionPoseModel } from '../public/motion-models.js';
 
 test('video intake rejects empty, oversize, unsupported and excessive-duration files', () => {
   assert.throws(() => validateVideoFile({ name: 'clip.mp4', size: 0 }));
@@ -114,7 +115,7 @@ for (const options of [
   { decoder: 'webcodecs', failDecode: true },
 ]) test(`RTMW preserves all 133 points and releases resources: ${JSON.stringify(options)}`, async t => {
   const state = browserHarness(t, options);
-  const result = await analyzeVideo({ name: 'clip.mp4', size: 20 });
+  const result = await analyzeVideo({ name: 'clip.mp4', size: 20 }, {model:'rtmw'});
   assert.equal(result.decoder, options.failParser || options.failDecode ? 'html-video' : options.decoder);
   assert.equal(result.modelVersion, 'RTMW-L 384x288 20231122 / COCO WholeBody 133 / flip-test');
   assert.equal(result.delegate, options.failGpu ? 'CPU' : 'GPU');
@@ -124,7 +125,7 @@ for (const options of [
     assert.deepEqual(frame.landmarks, state.landmarks);
     assert.equal('worldLandmarks' in frame, false);
   }
-  assert(state.requests.filter(request => request.type === 'init').every(request => !('model' in request)));
+  assert(state.requests.filter(request => request.type === 'init').every(request => request.model === 'rtmw'));
   assert.equal('actionRecognition' in result, false);
   assert(state.workers.every(worker => worker.stopped));
   assert(state.bitmaps.every(bitmap => bitmap.closed));
@@ -132,6 +133,14 @@ for (const options of [
 });
 
 for (const decoder of ['webcodecs', 'html-video', 'ffmpeg-direct']) {
+  test(`standard default survives CPU and decoder fallback: ${decoder}`, async t => {
+    const state=browserHarness(t,{decoder,failGpu:true});
+    const output=await analyzeVideo({name:'clip.mp4',size:20});
+    assert.equal(output.modelVersion,getMotionPoseModel('mediapipe-full').version);
+    assert.equal(output.decoder,decoder);
+    assert.equal(output.delegate,'CPU');
+    assert(state.requests.filter(item=>item.type==='init').every(item=>item.model==='mediapipe-full'));
+  });
   test(`7.5 Hz reaches the ${decoder} decoder and preserves the full timeline`, async t => {
     const state = browserHarness(t, { decoder });
     const result = await analyzeVideo({ name: 'clip.mp4', size: 20 }, { sampleFps: 7.5 });

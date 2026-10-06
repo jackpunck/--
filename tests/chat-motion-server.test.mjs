@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {startServer} from '../server.mjs';
 import {readSse,streamChat} from '../server/chat-stream.mjs';
 import {chatMotionTools} from '../server/chat-motion.mjs';
+import {MOTION_POSE_MODEL} from '../public/motion-models.js';
 import {toRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import {analyzeMotion} from '../public/motion-analysis.js';
 import {buildMotionPoseData,buildFullMotionAnalysis} from '../public/motion-pose-data.js';
@@ -15,6 +16,7 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const localVideo=()=>({id:'local-video:'+randomUUID(),name:'训练.mp4',type:'video/mp4',size:1024});
 function input() {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
+  pipeline.modelVersion=MOTION_POSE_MODEL.version;
   return {reviewMode:'guided',selectedExerciseId:'squat',duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png}],poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
 const guidedReply=()=>({selectionCheck:{status:'consistent',imageIndices:[0],evidence:'目标训练者徒手屈髋屈膝。'},verdict:{status:'standard'},feedback:[{title:'足部支撑',status:'good',source:'visual',imageIndices:[0],evidence:'可见双脚接地支撑。',correction:'继续保持全脚掌支撑。'}]});
@@ -60,7 +62,7 @@ async function fixture(t,{summaryFailure=false,...options}={}) {
 test('HTTP chat motion uses metadata-only tools, isolated ACK, one AI call and a synced persisted report',async t=>{
   const f=await fixture(t);let jobId;
   const events=await f.run(async event=>{
-    if(event.name!=='motion_request')return;jobId=event.data.jobId;
+    if(event.name!=='motion_request')return;jobId=event.data.jobId;assert.equal(event.data.poseModel,'mediapipe-full');
     assert.equal(f.motionCalls,0);
     assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.bob.cookie,body:{input:input()}})).status,404);
     assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.alice.cookie,headers:{'X-Fitness-User':f.bob.body.user.id},body:{input:input()}})).status,409);

@@ -16,3 +16,11 @@ test('model text and report IDs cannot inject active markup into motion result c
  assert.doesNotMatch(html,/<script|<img|<iframe| onclick="/);
  assert.match(html,/&lt;script&gt;/);assert.match(html,/is-uncertain/);
 });
+
+test('chat cards show the actual selected skeleton model while old receipts stay readable',()=>{
+ for(const [poseModel,label] of [['rtmw','高精度 · RTMW-L'],['mediapipe-full','标准 · MediaPipe Full']]){
+  const receipt=compactChatMotionResult({name:'assess_motion_video',ok:true,poseModel,reportId:'motion:123',record:{}});
+  assert.equal(receipt.poseModel,poseModel);assert(renderChatMotionResult(receipt).includes(label));
+ }
+ assert(!renderChatMotionResult({ok:true,reportId:'motion:old'}).includes('chat-motion-model'));
+});
