@@ -2,8 +2,58 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import {getMotionPoseModel, MOTION_POSE_MODEL} from '../public/motion-models.js';
 
 const workerSource = await readFile(new URL('../public/motion-worker.js', import.meta.url), 'utf8');
+function initializingWorker({failYolo = false} = {}) {
+  const messages = [], starts = [], imports = [];
+  const start = model => async options => {
+    starts.push({model, delegate: options.delegate});
+    if (model === 'yolo26' && failYolo) throw new Error('YOLO fixture initialization failed');
+    return {delegate: 'CPU'};
+  };
+  const modules = {
+    './motion-models.js': {getMotionPoseModel},
+    './motion-tracking.js': {validateTargetPoint: point => point, createSubjectTracker: () => ({})},
+    './motion-mediapipe.js': {createMediaPipe: start('mediapipe-full')},
+    './motion-rtmw.js': {createRtmw: start('rtmw')},
+    './motion-yolo26.js': {createYolo26: start('yolo26')},
+  };
+  const context = vm.createContext({self: {postMessage: value => messages.push(value)}, performance,
+    OffscreenCanvas: class {}, runtime: {async importModule(specifier) {
+      imports.push(specifier);
+      assert(modules[specifier], `Unexpected worker import: ${specifier}`);
+      return modules[specifier];
+    }},
+  });
+  // Keep the actual worker routing and error handling; substitute only module
+  // loading so Node does not start browser GPU/MediaPipe sessions in this test.
+  vm.runInContext(workerSource.replaceAll('import(', 'runtime.importModule('), context);
+  return {messages, starts, imports, init: model => context.self.onmessage({data: {id: 1, type: 'init', model, delegate: 'CPU'}})};
+}
+
+test('worker starts only the selected pose model and preserves the standard default', async () => {
+  assert.equal(MOTION_POSE_MODEL.id, 'mediapipe-full');
+  for (const selected of [undefined, 'rtmw', 'mediapipe-full', 'yolo26']) {
+    const h = initializingWorker(), expected = selected ?? 'mediapipe-full';
+    await h.init(selected);
+    assert.deepEqual(h.starts, [{model: expected, delegate: 'CPU'}]);
+    assert.equal(h.messages.at(-1).modelVersion, getMotionPoseModel(expected).version);
+    if (expected === 'yolo26') {
+      assert(!h.imports.includes('./motion-rtmw.js'));
+      assert(!h.imports.includes('./motion-mediapipe.js'));
+    }
+  }
+});
+
+test('YOLO initialization failure is reported without loading a different skeleton model', async () => {
+  const h = initializingWorker({failYolo: true});
+  await h.init('yolo26');
+  assert.deepEqual(h.starts, [{model: 'yolo26', delegate: 'CPU'}]);
+  assert.match(h.messages.at(-1).error, /YOLO fixture initialization failed/);
+  assert(!h.imports.includes('./motion-rtmw.js'));
+  assert(!h.imports.includes('./motion-mediapipe.js'));
+});
 function worker() {
   const inferences = [], trackingTimes = [];
   const context = vm.createContext({self: {}, performance, runtime: {

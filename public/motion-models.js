@@ -19,6 +19,15 @@ export const MOTION_POSE_MODELS = Object.freeze([
     initTimeoutMs: 180000,
     analysisTimeoutMs: 3600000,
   }),
+  Object.freeze({
+    id: 'yolo26',
+    tier: 'YOLO26',
+    label: 'YOLO26s-Pose',
+    version: 'YOLO26s-Pose 640 / COCO17 / end-to-end',
+    loadingMessage: '正在加载 YOLO26s-Pose 骨架模型…',
+    initTimeoutMs: 300000,
+    analysisTimeoutMs: 3600000,
+  }),
 ]);
 
 // UI, chat tools and every decoder share the same standard default.

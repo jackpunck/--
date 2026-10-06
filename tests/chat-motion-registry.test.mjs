@@ -15,6 +15,10 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{p
 function motionInput(poseModel='mediapipe-full',exerciseId='squat') {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
   pipeline.modelVersion=getMotionPoseModel(poseModel).version;
+  if(poseModel==='yolo26')for(const frame of pipeline.frames){
+    frame.landmarks=frame.landmarks.map((point,index)=>[0,11,12,13,14,15,16,23,24,25,26,27,28].includes(index)?point:null);
+    delete frame.wholebodyLandmarks;
+  }
   return {reviewMode:'guided',selectedExerciseId:exerciseId,duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png},{time:.4,mimeType:'image/png',data:png}],
     poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
@@ -112,9 +116,10 @@ test('registry concurrency limits and server instances cannot consume each other
 test('tool exposes action and pose model choices and rejects unsupported models before dispatch',async t=>{
   const f=fixture(t),schema=chatMotionTools(f.base.videos)[0].function.parameters;
   assert(schema.required.includes('poseModel'));assert(schema.required.includes('exerciseId'));
-  assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full']);
+  assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full','yolo26']);
   for(const id of ['squat','pushup','curl'])assert(schema.properties.exerciseId.enum.includes(id));
   assert.match(chatMotionNotice(f.base.videos),/标准\/MediaPipe Full=mediapipe-full/);
+  assert.match(chatMotionNotice(f.base.videos),/YOLO26\/YOLO26-Pose\/YOLO26s-Pose=yolo26/);
   for(const poseModel of ['full',null,42]){
     const result=await f.registry.execute({...f.base,args:{...f.base.args,poseModel},onEvent:()=>assert.fail('invalid selection must not start a job')});
     assert.equal(result.code,'INVALID_ARGUMENTS');
@@ -123,13 +128,14 @@ test('tool exposes action and pose model choices and rejects unsupported models 
 
 test('model and exercise selections reach the client, reject mismatched evidence, and own distinct retry receipts',async t=>{
   const f=fixture(t),reports=[];let calls=0;
-  for(const [poseModel,exerciseId] of [['rtmw','squat'],['mediapipe-full','squat'],['mediapipe-full','pushup']]){
+  for(const [poseModel,exerciseId] of [['rtmw','squat'],['mediapipe-full','squat'],['mediapipe-full','pushup'],['yolo26','squat']]){
     const args={...f.base.args,poseModel,exerciseId};
     const result=await f.registry.execute({...f.base,args,assess:async input=>{calls++;assert.equal(input.selectedExerciseId,exerciseId);assert.equal(input.poseData.modelVersion,getMotionPoseModel(poseModel).version);return coach(input);},onEvent:(name,data)=>{
       if(name!=='motion_request')return;
       assert.equal(data.poseModel,poseModel);assert.equal(data.exerciseId,exerciseId);
       const submit=input=>f.registry.submit({userId:'alice',jobId:data.jobId,body:{input}});
-      assert.throws(()=>submit(motionInput(poseModel==='rtmw'?'mediapipe-full':'rtmw',exerciseId)),/骨架模型不一致/);
+      for(const otherModel of ['rtmw','mediapipe-full','yolo26'].filter(id=>id!==poseModel))
+        assert.throws(()=>submit(motionInput(otherModel,exerciseId)),/骨架模型不一致/);
       assert.throws(()=>submit(motionInput(poseModel,exerciseId==='squat'?'pushup':'squat')),/动作类型不一致/);
       submit(motionInput(poseModel,exerciseId));
     }});
@@ -139,8 +145,8 @@ test('model and exercise selections reach the client, reject mismatched evidence
     const replay=await f.registry.execute({...f.base,args,onEvent:()=>assert.fail('replay must not re-analyze')});
     assert.equal(replay.reportId,result.reportId);assert.equal(replay.poseModel,poseModel);
   }
-  assert.equal(calls,3);assert.equal(new Set(reports).size,3);
-  assert.equal(f.registry.receipts({userId:'alice',requestId:f.base.requestId,videos:f.base.videos}).length,3);
+  assert.equal(calls,4);assert.equal(new Set(reports).size,4);
+  assert.equal(f.registry.receipts({userId:'alice',requestId:f.base.requestId,videos:f.base.videos}).length,4);
 });
 
 test('legacy ledger migration preserves old attempts as high precision and does not replay AI',async()=>{

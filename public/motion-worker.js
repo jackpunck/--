@@ -43,6 +43,9 @@ self.onmessage = async ({ data }) => {
       if (model.id === 'mediapipe-full') {
         const { createMediaPipe } = await import('./motion-mediapipe.js');
         pose = await createMediaPipe({ delegate: data.delegate });
+      } else if (model.id === 'yolo26') {
+        const { createYolo26 } = await import('./motion-yolo26.js');
+        pose = await createYolo26({ delegate: data.delegate });
       } else {
         const { createRtmw } = await import('./motion-rtmw.js');
         pose = await createRtmw({ delegate: data.delegate });

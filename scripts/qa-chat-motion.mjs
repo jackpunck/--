@@ -24,7 +24,7 @@ await promisify(execFile)(ffmpeg,['-hide_banner','-loglevel','error','-nostdin',
   '-t','1','-an','-vf','scale=480:-2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',clip],{windowsHide:true});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const codeFiles=['public/app.js','public/chat-attachments.js','public/chat-motion.js','public/chat-motion-result.js','public/chat-stream.js','public/motion-view.js',
-  'public/motion-video.js','public/motion-worker.js','public/motion-rtmw.js','server.mjs'];
+  'public/motion-video.js','public/motion-worker.js','public/motion-rtmw.js','public/motion-yolo26.js','public/motion-models.js','public/motion-pose-data.js','server.mjs'];
 const codeHashes=Object.fromEntries(await Promise.all(codeFiles.map(async file=>[file,sha(await readFile(join(root,file)))])));
 const {chromium}=await import(pathToFileURL(resolve(process.env.QA_PLAYWRIGHT||join(root,'.qa/browser-tools/node_modules/playwright/index.mjs'))).href);
 const videoSource=await readFile(join(root,'public/motion-video.js'),'utf8');
@@ -74,7 +74,7 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
   const latestUser=request.messages.findLast(message=>message.role==='user'),text=typeof latestUser.content==='string'?latestUser.content:JSON.stringify(latestUser.content);
   if(text.includes('QA视频追问'))return answer('这段视频练什么动作？请补充动作名称。');
   assert(request.tools?.some(item=>item.function.name==='assess_motion_video'),'The native motion tool must be declared');
-  const schema=request.tools.find(item=>item.function.name==='assess_motion_video').function.parameters;assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full']);assert(schema.required.includes('poseModel'));
+  const schema=request.tools.find(item=>item.function.name==='assess_motion_video').function.parameters;assert.deepEqual(schema.properties.poseModel.enum,['rtmw','mediapipe-full','yolo26']);assert(schema.required.includes('poseModel'));
   const args={videoId:firstVideoId,exerciseId:exercise.id,poseModel:poseModel.id};assert(getMotionExercise(args.exerciseId));toolCalls.push(args);
   return tool('assess_motion_video',args);
 }});
@@ -141,7 +141,7 @@ try{
   assert.equal(await page.locator('.chat-motion-result [data-action="chat-motion-detail"]').count(),1,'A replayed receipt must not duplicate the report card');
   const submission=motionInputs.find(body=>body.input);assert(submission,'Client must submit the real extracted motion input');
   const input=validateMotionCoachRequest(submission.input);assert.equal(input.reviewMode,'guided');assert.equal(input.selectedExerciseId,exercise.id);
-  assert.equal(input.poseData.schemaVersion,poseModel.id==='rtmw'?3:4);assert.equal(input.poseData.retainedLandmarkIndices.length,17);assert(input.poseData.frameCount>=7);
+  assert.equal(input.poseData.schemaVersion,{rtmw:3,'mediapipe-full':4,yolo26:5}[poseModel.id]);assert.equal(input.poseData.retainedLandmarkIndices.length,poseModel.id==='yolo26'?13:17);assert(input.poseData.frameCount>=7);
   assert.equal(input.fullAnalysis.measurements.length,input.poseData.frameCount);
   const pipeline=await page.evaluate(()=>({frames:window.__qaChatMotionPipeline.frames.length,sampleFps:window.__qaChatMotionPipeline.sampleFps,delegate:window.__qaChatMotionPipeline.delegate,
     decoder:window.__qaChatMotionPipeline.decoder,modelVersion:window.__qaChatMotionPipeline.modelVersion,timing:window.__qaChatMotionPipeline.timing}));

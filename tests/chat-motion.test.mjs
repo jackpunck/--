@@ -31,7 +31,9 @@ function pipeline(){
 const evidence = () => ({summary:{version:'motion-observations-v1',duration:4/7.5},images:[{time:.001,imageTime:.001,mimeType:'image/jpeg',dataUrl:'data:image/jpeg;base64,AAAA'}]});
 function setup(t){
   const h={poseCalls:[],imageCalls:[],poseQueue:[],imageQueue:[],released:[]};
-  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});const value=pipeline();value.modelVersion=getMotionPoseModel(options.model).version;return h.poseQueue.shift()?.promise??value;};
+  h.analyze=async(file,options)=>{h.poseCalls.push({file,options});options.onProgress({stage:'analyzing',progress:.2,message:'提取测试骨架'});const value=pipeline();value.modelVersion=getMotionPoseModel(options.model).version;
+    if(options.model==='yolo26')for(const frame of value.frames){frame.landmarks=frame.landmarks.map((point,index)=>[0,11,12,13,14,15,16,23,24,25,26,27,28].includes(index)?point:null);delete frame.wholebodyLandmarks;}
+    return h.poseQueue.shift()?.promise??value;};
   h.evidence=async(file,pipeline,observations,options)=>{h.imageCalls.push({file,pipeline,observations,options});return h.imageQueue.shift()?.promise??evidence();};
   globalThis.__chatMotion=h;h.videos=new ChatMotionVideos();
   h.file=(name='clip.mp4')=>new File(['synthetic fixture'],name,{type:'video/mp4'});
@@ -73,13 +75,16 @@ test('each pose model owns its cache while different exercise choices reuse that
   const h=setup(t),descriptor=h.videos.add(h.file());
   const standard=await h.videos.prepare(descriptor.id,'squat',{poseModel:'mediapipe-full'});
   const accurate=await h.videos.prepare(descriptor.id,'pushup',{poseModel:'rtmw'});
+  const yolo=await h.videos.prepare(descriptor.id,'squat',{poseModel:'yolo26'});
   const standardAgain=await h.videos.prepare(descriptor.id,'curl',{poseModel:'mediapipe-full'});
   assert.equal(standard.poseData.format,'mediapipe-body17-full');
   assert.equal(accurate.poseData.format,'rtmw-body17-full');
+  assert.equal(yolo.poseData.format,'yolo26-body13-full');
+  assert.equal(yolo.poseData.retainedLandmarkIndices.length,13);
   assert.equal(accurate.selectedExerciseId,'pushup');assert.equal(standardAgain.selectedExerciseId,'curl');
   assert.deepEqual(standardAgain.poseData,standard.poseData);
-  assert.deepEqual(h.poseCalls.map(call=>call.options.model),['mediapipe-full','rtmw']);
-  assert.equal(h.imageCalls.length,2);
+  assert.deepEqual(h.poseCalls.map(call=>call.options.model),['mediapipe-full','rtmw','yolo26']);
+  assert.equal(h.imageCalls.length,3);
   await assert.rejects(h.videos.prepare(descriptor.id,'squat',{poseModel:'unknown'}),/骨架分析模型/);
 });
 
