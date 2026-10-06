@@ -93,7 +93,7 @@ const foodRows = [
 ];
 export const foods = Object.freeze(foodRows.map(([id, name, state, protein, carbs, fat, category, allergens, source]) => Object.freeze({ id, name, state, kcal: round(protein * 4 + carbs * 4 + fat * 9), protein, carbs, fat, category, allergens: Object.freeze(allergens), source: `${source}。每100g可食部分估值，热量按4/4/9计算，包装食品优先使用实际标签。` })));
 
-export function calculateNutrition(input, dayType = 'training') {
+export function calculateNutrition(input, dayType = 'training', adjustmentKcal = 0) {
   const profile = validateProfile(input);
   oneOf(dayType, ['training', 'rest'], '日类型');
   const { age, sex, height, weight, goal } = profile;
@@ -107,12 +107,14 @@ export function calculateNutrition(input, dayType = 'training') {
   const tdee = bmr * activity + trainingEnergy;
   const factor = { lose: 0.85, gain: 1.05, maintain: 1 }[goal];
   const unclamped = tdee * factor;
-  const kcal = Math.round(Math.max(1200, unclamped));
+  adjustmentKcal = number(adjustmentKcal, '热量校准值', -300, 300);
+  const baseKcal = Math.round(Math.max(1200, unclamped));
+  const kcal = Math.round(Math.max(1200, baseKcal + adjustmentKcal));
   const protein = round(Math.min(weight * (goal === 'lose' ? 1.8 : 1.6), kcal * 0.3 / 4));
   const fat = round(kcal * 0.28 / 9);
   const carbs = round((kcal - protein * 4 - fat * 9) / 4);
   const explanation = `Mifflin–St Jeor 公式估算静息代谢（界面简称基础代谢）；日常消耗=静息代谢×${round(activity, 3)}，${dayType === 'training' ? `另计训练估值${trainingEnergy}kcal` : '休息日不加训练消耗'}。${goal === 'lose' ? '减脂采用15%能量缺口' : goal === 'gain' ? '增肌采用5%能量盈余' : '维持按估计消耗'}；蛋白质初值${goal === 'lose' ? '1.8' : '1.6'}g/kg，上限为能量的30%，脂肪占28%，其余为碳水。${unclamped < 1200 ? '结果已提高至应用的1200kcal保守下限，此下限不代表适合个人。' : ''}活动系数不应重复包含已单列的训练。此为健康成年人起始估算，可结合数周记录和专业意见调整。`;
-  return { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, protein, carbs, fat, bmi: round(bmi), dayType, explanation, source: `${sources.metabolism}；${sources.nutrition}；活动消耗结构参考 Excel，15%缺口和28%脂肪为应用默认值，未经临床验证。` };
+  return { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, baseKcal, adjustmentKcal:kcal-baseKcal, protein, carbs, fat, bmi: round(bmi), dayType, explanation:explanation+(kcal!==baseKcal?`热量校准在起始目标 ${baseKcal} kcal 上修正 ${kcal-baseKcal>0?'+':''}${kcal-baseKcal} kcal；三大营养素已随目标重新分配。`:''), source: `${sources.metabolism}；${sources.nutrition}；活动消耗结构参考 Excel，15%缺口和28%脂肪为应用默认值，未经临床验证。` };
 }
 
 export const planVariants = Object.freeze({ 2: ['standard'], 3: ['standard', 'home'], 4: ['standard', 'shoulders', 'arms'], 5: ['standard'] });
@@ -256,10 +258,10 @@ export function convertFoodWeight(grams, rawBatchGrams, cookedBatchGrams, direct
 }
 
 const asText = value => Array.isArray(value) ? value.join('、') : String(value ?? '');
-export function suggestRecipe({ profile, days = 1, meal = 'day', preferences = '', restrictions = '', trainingTime = '' } = {}) {
+export function suggestRecipe({ profile, days = 1, meal = 'day', preferences = '', restrictions = '', trainingTime = '', adjustmentKcal = 0 } = {}) {
   days = number(days, '食谱天数', 1, 7, true);
   oneOf(meal, ['day', 'breakfast', 'lunch', 'dinner', 'snack'], '餐次');
-  const target = calculateNutrition(profile);
+  const target = calculateNutrition(profile, 'training', adjustmentKcal);
   const preferenceText = asText(preferences);
   const restrictionText = asText(restrictions);
   if (/肾病|肾功能|糖尿病|进食障碍|厌食|孕|哺乳/.test(restrictionText)) throw new Error('这些饮食限制需要个体营养方案，请先由专业人员确定适用的食物与摄入目标');

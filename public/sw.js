@@ -1,6 +1,6 @@
-const CACHE = 'fitness-shell-v85';
+const CACHE = 'fitness-shell-v86';
 const SHELL = ['/', '/index.html', '/app.css', '/providers.css', '/app.js', '/store.js', '/domain.js', '/model-capabilities.js', '/schedule.js', '/busy-rules.js', '/holidays.js', '/achievements.js', '/plan-library.js', '/assets/weekly-achievement.svg', '/meal-advice-prompt.js', '/meal-contract.js', '/knowledge.js', '/knowledge-tools.js', '/visuals.js', '/model-viewer.js', '/provider-presets.js', '/provider-ui.js', '/exercise-covers.js', '/chat-stream.js', '/chat-markdown.js', '/chat-attachments.js', '/chat-view.js', '/vendor/marked.esm.js', '/vendor/purify.es.js', '/icon.svg', '/manifest.webmanifest'];
-SHELL.push('/meal-display.js','/compute.js','/compute-catalog.js');
+SHELL.push('/nutrition-feedback-view.js','/nutrition-feedback.js','/meal-display.js','/compute.js','/compute-catalog.js');
 SHELL.push('/chat-motion.js','/chat-motion-result.js','/chat-motion.css','/motion-report.js');
 SHELL.push('/community.css', '/community.js', '/community-api.js', '/community-drafts.js', '/community-report-reasons.js', '/community-groups.js', '/community-groups.css', '/community-images.js');
 SHELL.push('/motion-models.js', '/motion-rtmw.js', '/motion-mediapipe.js', '/motion-overlay.js', '/motion-smoothing.js');

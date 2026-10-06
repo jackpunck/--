@@ -12,6 +12,19 @@ import { calculateNutrition } from '../public/domain.js';
 
 const today = '2026-10-01';
 const profile = { age: 30, sex: 'male', height: 175, weight: 70, goal: 'maintain' };
+test('chat nutrition includes automatic and dated user calorie corrections',t=>{
+ const {put,read}=fixture(t);
+ put('profile','profile',{...profile,weight:71});
+ put('phase:start','phase',{...profile,date:'2026-09-17'});
+ put('phase:end','phase',{...profile,weight:71,date:today});
+ put('feedback','nutrition-feedback-settings',{date:today,enabled:true,manualAdjustmentKcal:25});
+ const current=read({sections:['nutrition']}).data.nutrition;
+ assert.equal(current.feedback.adjustmentKcal,-75);
+ assert.equal(current.target.kcal,calculateNutrition({...profile,weight:71},'rest',-75).kcal);
+ const previous=read({sections:['nutrition'],date:'2026-09-17'}).data.nutrition;
+ assert.equal(previous.feedback.adjustmentKcal,0);
+ assert.equal(previous.target.kcal,calculateNutrition(profile,'rest').kcal);
+});
 function fixture(t) {
   const path = mkdtempSync(join(tmpdir(), 'fitness-chat-context-')), { db } = openStore(path);
   for (const id of ['alice', 'bob']) db.prepare('INSERT INTO users(id,email,name,password,created_at) VALUES(?,?,?,?,?)').run(id, `${id}@context.test`, id, 'fixture', new Date().toISOString());
