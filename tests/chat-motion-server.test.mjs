@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {startServer} from '../server.mjs';
 import {readSse,streamChat} from '../server/chat-stream.mjs';
 import {chatMotionTools} from '../server/chat-motion.mjs';
+import {MOTION_POSE_MODEL} from '../public/motion-models.js';
 import {toRtmwPipeline} from './helpers/motion-rtmw-pipeline.mjs';
 import {analyzeMotion} from '../public/motion-analysis.js';
 import {buildMotionPoseData,buildFullMotionAnalysis} from '../public/motion-pose-data.js';
@@ -15,7 +16,12 @@ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCA
 const localVideo=()=>({id:'local-video:'+randomUUID(),name:'训练.mp4',type:'video/mp4',size:1024});
 function input() {
   const pipeline=toRtmwPipeline({duration:1,width:640,height:480,sampleFps:15,sourceFps:30,frames:Array.from({length:8},(_,i)=>({time:i/15,personCount:1,landmarks:Array.from({length:33},(_,j)=>({x:.2+j/100,y:.2+j/90,visibility:.98}))}))});
-  return {reviewMode:'guided',selectedExerciseId:'squat',duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png}],poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
+  pipeline.modelVersion=MOTION_POSE_MODEL.version;
+  for(const frame of pipeline.frames){
+    frame.worldLandmarks=frame.landmarks.map((point,index)=>point?{x:point.x-.5,y:point.y-.5,z:Math.sin(index)*.12,visibility:point.visibility}:null);
+    delete frame.wholebodyLandmarks;
+  }
+  return {reviewMode:'guided',actionConfirmed:true,selectedExerciseId:'squat',duration:1,keyframes:[{time:.2,mimeType:'image/png',data:png}],poseData:buildMotionPoseData(pipeline,{bodyOnly:true}),fullAnalysis:buildFullMotionAnalysis(analyzeMotion(pipeline.frames,pipeline),pipeline)};
 }
 const guidedReply=()=>({selectionCheck:{status:'consistent',imageIndices:[0],evidence:'目标训练者徒手屈髋屈膝。'},verdict:{status:'standard'},feedback:[{title:'足部支撑',status:'good',source:'visual',imageIndices:[0],evidence:'可见双脚接地支撑。',correction:'继续保持全脚掌支撑。'}]});
 const toolCall=(videoId,exerciseId='squat')=>Response.json({choices:[{message:{content:'',tool_calls:[{id:'motion-call',type:'function',function:{name:'assess_motion_video',arguments:JSON.stringify({videoId,exerciseId})}}]},finish_reason:'tool_calls'}]});
@@ -60,18 +66,24 @@ async function fixture(t,{summaryFailure=false,...options}={}) {
 test('HTTP chat motion uses metadata-only tools, isolated ACK, one AI call and a synced persisted report',async t=>{
   const f=await fixture(t);let jobId;
   const events=await f.run(async event=>{
-    if(event.name!=='motion_request')return;jobId=event.data.jobId;
+    if(event.name!=='motion_request')return;jobId=event.data.jobId;assert.equal(event.data.poseModel,'mediapipe-full');
     assert.equal(f.motionCalls,0);
     assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.bob.cookie,body:{input:input()}})).status,404);
     assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.alice.cookie,headers:{'X-Fitness-User':f.bob.body.user.id},body:{input:input()}})).status,409);
-    assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.alice.cookie,body:{input:{...input(),selectedExerciseId:'curl'}}})).status,400);
+    assert.equal((await f.api('/api/chat/motion/'+jobId,{cookie:f.alice.cookie,body:{input:{...input(),actionConfirmed:false}}})).status,400);
     const ack=await f.api('/api/chat/motion/'+jobId,{cookie:f.alice.cookie,body:{input:input()}});
     assert.equal(ack.status,202);assert.deepEqual(Object.keys(ack.body).sort(),['accepted','jobId','ok']);
   });
   assert.equal(f.motionCalls,1);assert(events.some(e=>e.name==='motion_progress'));
   const tool=events.find(e=>e.name==='tool_result'&&e.data.name==='assess_motion_video').data;
   assert.equal(tool.ok,true);assert.match(tool.reportId,/^motion:/);assert.equal(tool.record.id,tool.reportId);assert.equal(tool.record.kind,'motion-assessment');
-  assert.equal(tool.verdict.status,'standard');assert(tool.feedback.length);assert.equal(events.at(-1).name,'done');
+  assert.equal(tool.verdict.status,'standard');assert.equal(tool.verdict.summary,'暂时找不出问题。');assert.deepEqual(tool.feedback,[]);assert.equal(events.at(-1).name,'done');
+  assert.equal(tool.record.data.analysis.coordinateSpace,'mediapipe-world-3d');
+  const motionRequest=f.requests.find(request=>request.model==='motion-model');
+  const motionContext=JSON.parse(motionRequest.messages.find(message=>message.role==='user').content[0].text);
+  assert.equal(motionContext.evidence.poseSchema.measurementCoordinateSpace,'mediapipe-world-3d');
+  assert.deepEqual(motionContext.evidence.poseSchema.worldPointFields,['x','y','z','visibility']);
+  assert(motionContext.evidence.frames.some(frame=>frame.worldLandmarks.some(point=>point&&Math.abs(point[2])>.001)));
   const exported=(await f.api('/api/export',{cookie:f.alice.cookie})).body;
   assert.equal(exported.records.filter(r=>r.kind==='motion-assessment').length,1);assert.deepEqual(exported.attachments,[]);
   assert(!JSON.stringify(exported.records).includes(png));assert(!JSON.stringify(exported.records).includes('landmarks'));
@@ -109,11 +121,11 @@ test('chat tool timeout cancels local waiting instead of leaving an orphan job',
 });
 
 test('native motion tool continuation supports all chat protocols and passes the bounded abort signal',async()=>{
-  const video=localVideo(),record={id:'motion:fixture',kind:'motion-assessment',data:{coach:{verdict:{status:'uncertain'}}},version:1};
+  const video=localVideo(),record={id:'motion:fixture',kind:'motion-assessment',data:{coach:{verdict:{status:'uncertain'},limitations:['internal-motion-report-only']}},version:1};
   for(const protocol of ['openai','anthropic','gemini']) {
     let calls=0,executions=0;const events=[];
     const result=await streamChat({provider:{protocol,baseUrl:'http://127.0.0.1:9/v1',model:'fixture'},messages:[{role:'system',content:'fixture'},{role:'user',content:'评估徒手深蹲'}],tools:chatMotionTools([video]),onEvent:(name,data)=>events.push({name,data}),
-      executeTool:async(name,args,{signal})=>{assert.equal(name,'assess_motion_video');assert(signal instanceof AbortSignal);assert.equal(args.exerciseId,'squat');executions++;return {ok:true,readOnly:true,reportId:record.id,record,message:'报告已保存'};},
+      executeTool:async(name,args,{signal})=>{assert.equal(name,'assess_motion_video');assert(signal instanceof AbortSignal);assert.equal(args.exerciseId,'squat');executions++;return {ok:true,readOnly:true,reportId:record.id,record,records:[record],verdict:{status:'uncertain',summary:'暂时找不出问题。'},feedback:[],message:'报告已保存'};},
       fetchImpl:async(_url,options)=>{
         const body=JSON.parse(options.body);
         if(++calls===1){
@@ -122,11 +134,15 @@ test('native motion tool continuation supports all chat protocols and passes the
           return toolCall(video.id);
         }
         assert.match(JSON.stringify(body),/motion:fixture/);
+        assert.match(JSON.stringify(body),/暂时找不出问题/);assert.doesNotMatch(JSON.stringify(body),/internal-motion-report-only/);
+        const receipt=protocol==='anthropic'?JSON.parse(body.messages.at(-1).content[0].content):protocol==='gemini'?body.contents.at(-1).parts[0].functionResponse.response:JSON.parse(body.messages.at(-1).content);
+        assert.equal('record' in receipt,false);assert.equal('records' in receipt,false);
         if(protocol==='anthropic')return Response.json({content:[{type:'text',text:'已完成'}],stop_reason:'end_turn'});
         if(protocol==='gemini')return Response.json({candidates:[{content:{parts:[{text:'已完成'}]},finishReason:'STOP'}]});
         return textReply();
       }});
-    assert.equal(executions,1);assert.equal(result.toolResults[0].record.id,record.id);assert(events.some(e=>e.name==='tool_start'));
+    assert.equal(executions,1);assert.deepEqual(result.toolResults[0].record,record);assert.deepEqual(result.toolResults[0].records,[record]);assert(events.some(e=>e.name==='tool_start'));
+    const emitted=events.find(e=>e.name==='tool_result').data;assert.deepEqual(emitted.record,record);assert.deepEqual(emitted.records,[record]);
   }
 });
 
@@ -137,4 +153,24 @@ test('unsupported tools explicitly report that the video was not assessed and re
     assert.match(JSON.parse(options.body).messages[0].content,/本轮未完成视频动作评估/);return textReply();
   }});
   assert.match(events.find(e=>e.name==='tool_result').data.message,/视频动作评估也未完成/);
+});
+
+
+test('replayed motion receipts omit stored reports only from model context across all protocols',async()=>{
+  const record={id:'motion:replay',kind:'motion-assessment',data:{coach:{limitations:['internal-motion-report-only']}}};
+  const motion={name:'assess_motion_video',ok:true,readOnly:true,reportId:record.id,record,records:[record],verdict:{status:'uncertain',summary:'暂时找不出问题。'},feedback:[]};
+  const other={name:'get_training_plan',ok:true,record:{id:'other-record-kept',data:{note:'other-receipt-details'}}};
+  for(const protocol of ['openai','anthropic','gemini'])for(const receipt of [motion,[motion,other]]){
+    const events=[];let requests=0;
+    const result=await streamChat({provider:{protocol,baseUrl:'http://127.0.0.1:9/v1',model:'fixture'},messages:[{role:'system',content:'fixture'},{role:'user',content:'继续上次评价'}],tools:chatMotionTools([localVideo()]),receipt,onEvent:(name,data)=>events.push({name,data}),executeTool:async()=>assert.fail('A replay must not repeat the assessment'),fetchImpl:async(_url,options)=>{
+      requests++;const body=JSON.parse(options.body),context=JSON.stringify(body);
+      assert.match(context,/motion:replay/);assert.match(context,/暂时找不出问题/);assert.doesNotMatch(context,/internal-motion-report-only/);
+      if(Array.isArray(receipt))assert.match(context,/other-receipt-details/);
+      if(protocol==='anthropic')return Response.json({content:[{type:'text',text:'暂时找不出问题。'}],stop_reason:'end_turn'});
+      if(protocol==='gemini')return Response.json({candidates:[{content:{parts:[{text:'暂时找不出问题。'}]},finishReason:'STOP'}]});
+      return textReply();
+    }});
+    assert.equal(requests,1);assert.deepEqual(result.toolResults[0].record,record);assert.deepEqual(result.toolResults[0].records,[record]);
+    const visible=events.find(event=>event.name==='tool_result').data;assert.deepEqual(visible.record,record);assert.deepEqual(visible.records,[record]);
+  }
 });

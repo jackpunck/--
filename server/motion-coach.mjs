@@ -5,6 +5,7 @@ import {completeFullMotionCoach} from './motion-coach-full.mjs';
 import {completeTemporalMotionCoach} from './motion-coach-temporal.mjs';
 import {completeVisualMotionCoach} from './motion-coach-visual.mjs';
 import {completeGuidedMotionCoach} from './motion-coach-guided.mjs';
+import {completeMotionRecognition} from './motion-recognize.mjs';
 import {getMotionExercise} from '../public/motion-catalog.js';
 
 export const MOTION_COACH_REQUEST_BYTES = 40 * 1024 * 1024;
@@ -36,7 +37,7 @@ function imageDimensions(bytes, type) {
 
 /** Frames are transient request data: this endpoint never creates attachments. */
 export function validateMotionCoachRequest(body) {
-  if(body?.reviewMode!==undefined&&!['full','efficient','temporal','guided'].includes(body.reviewMode))throw new HttpError(400,'动作评估模式无效。');
+  if(body?.reviewMode!==undefined&&!['full','efficient','temporal','guided','recognize'].includes(body.reviewMode))throw new HttpError(400,'动作评估模式无效。');
   if(body?.reviewMode==='guided'&&(typeof body.selectedExerciseId!=='string'||!getMotionExercise(body.selectedExerciseId)))throw new HttpError(400,'请先选择有效的动作类型。');
   if(body?.selectedExerciseId!==undefined&&body.reviewMode!=='guided')throw new HttpError(400,'所选动作只能用于按动作类型评价。');
   if(body?.stream!==undefined&&typeof body.stream!=='boolean')throw new HttpError(400,'动作评价进度设置无效。');
@@ -66,6 +67,7 @@ export function validateMotionCoachRequest(body) {
     poseData=validateMotionPoseData(body.poseData,{duration:body.duration});
     fullAnalysis=validateFullMotionAnalysis(body.fullAnalysis,{duration:body.duration});
   } catch(error){throw new HttpError(/超过.*MiB/.test(error.message)?413:400,error.message);}
+  if ((poseData.format==='mediapipe-world17-full') !== (fullAnalysis.coordinateSpace==='mediapipe-world-3d')) throw new HttpError(400,'客观测量与骨架坐标维度不一致，请重新分析当前视频。');
   if(fullAnalysis.quality.totalFrames!==poseData.frameCount||fullAnalysis.measurements.length!==poseData.frames.length)throw new HttpError(400,'客观测量与骨架帧数不一致，请重新分析当前视频。');
   if(fullAnalysis.measurements.some((row,index)=>row.frameIndex!==index||Math.abs(row.time-poseData.frames[index].time)>0.000001))throw new HttpError(400,'客观测量与骨架时间不一致，请重新分析当前视频。');
   const analysis=compactMotionAnalysis({...body.analysis,quality:fullAnalysis.quality});
@@ -74,6 +76,7 @@ export function validateMotionCoachRequest(body) {
 
 /** Guided reviews use the user's selection; existing automatic routes remain compatible. */
 export async function completeMotionCoach(options){
+  if(options.input?.reviewMode==='recognize')return completeMotionRecognition(options);
   if(options.input?.reviewMode==='guided')return completeGuidedMotionCoach(options);
   if(options.input?.reviewMode==='efficient')return completeVisualMotionCoach(options);
   if(options.input?.reviewMode==='temporal')return completeTemporalMotionCoach(options);

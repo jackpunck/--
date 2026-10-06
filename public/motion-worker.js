@@ -1,4 +1,4 @@
-// RTMW inference and video decoding run in this background worker.
+// Pose inference and video decoding run in this background worker.
 let pose, tracker;
 let busy = false;
 let sequential;
@@ -20,7 +20,8 @@ async function analyzeFrame(image, timestampMs, sourceTime) {
   return {
     personCount: result.landmarks.length, multiPersonCheck: true, subjectTracking: selected.subjectTracking,
     landmarks: index === null ? [] : result.landmarks[index],
-    wholebodyLandmarks: index === null ? [] : result.wholebodyLandmarks[index],
+    ...(result.worldLandmarks ? { worldLandmarks: index === null ? [] : result.worldLandmarks[index] ?? [] } : {}),
+    ...(result.wholebodyLandmarks ? { wholebodyLandmarks: index === null ? [] : result.wholebodyLandmarks[index] } : {}),
     inferenceMs: performance.now() - started,
   };
 }
@@ -36,13 +37,22 @@ self.onmessage = async ({ data }) => {
   try {
     if (type === 'init') {
       if (typeof OffscreenCanvas === 'undefined') throw new Error('浏览器不支持后台画布，请使用新版 Chrome 或 Edge。');
-      const { MOTION_POSE_MODEL } = await import('./motion-models.js');
+      const { getMotionPoseModel } = await import('./motion-models.js');
+      const model = getMotionPoseModel(data.model);
       const { validateTargetPoint, createSubjectTracker } = await import('./motion-tracking.js');
-      const { createRtmw } = await import('./motion-rtmw.js');
       tracker = createSubjectTracker({ targetPoint: validateTargetPoint(data.targetPoint) });
-      pose = await createRtmw({ delegate: data.delegate });
+      if (model.id === 'mediapipe-full') {
+        const { createMediaPipe } = await import('./motion-mediapipe.js');
+        pose = await createMediaPipe({ delegate: data.delegate });
+      } else if (model.id === 'yolo26') {
+        const { createYolo26 } = await import('./motion-yolo26.js');
+        pose = await createYolo26({ delegate: data.delegate });
+      } else {
+        const { createRtmw } = await import('./motion-rtmw.js');
+        pose = await createRtmw({ delegate: data.delegate });
+      }
       previousDecodedInference = undefined;
-      self.postMessage({ id, delegate: pose.delegate, modelVersion: MOTION_POSE_MODEL.version });
+      self.postMessage({ id, delegate: pose.delegate, modelVersion: model.version });
     } else if (type === 'prepare-source') {
       source?.close(); source = undefined;
       sourceDecoder = await import('./motion-software-decode.js');

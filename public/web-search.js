@@ -1,0 +1,17 @@
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null;}catch{return null;}};
+export function webSearchSettingsView(settings) {
+  return `<div class="card-head"><h2>联网搜索</h2><span class="badge ${settings.enabled?'':'neutral'}">${settings.enabled?'已开启':'未开启'}</span></div><p class="description">为你配置的对话、规划和餐食模型提供按需搜索与网页读取。模型需支持工具调用；默认使用 Exa 免费搜索，无需额外配置搜索密钥。</p>
+  <form id="web-search-form" data-version="${settings.version}"><div class="form-grid"><div><label for="web-search-provider">搜索服务</label><select id="web-search-provider" name="provider"><option value="exa-mcp" ${settings.provider==='exa-mcp'?'selected':''}>默认免费搜索 · Exa（免密钥）</option><option value="tavily" ${settings.provider==='tavily'?'selected':''}>Tavily</option><option value="brave" ${settings.provider==='brave'?'selected':''}>Brave Search</option></select></div><div data-web-key ${settings.provider==='exa-mcp'?'hidden':''}><label for="web-search-key">搜索 API 密钥</label><input id="web-search-key" name="apiKey" ${settings.provider==='exa-mcp'?'disabled':''} type="password" autocomplete="new-password" placeholder="${settings.hasKey?'已保存；留空保留同服务密钥':'填写搜索服务密钥'}"></div></div><div class="web-search-options"><label><input type="checkbox" name="enabled" ${settings.enabled?'checked':''}> 开启联网能力</label><label data-web-clear ${settings.provider==='exa-mcp'?'hidden':''}><input type="checkbox" name="clearKey" ${settings.provider==='exa-mcp'?'disabled':''}> 清除已保存密钥</label></div><p class="provider-footnote">只发送必要的搜索词。密钥在服务端加密保存，不进入聊天上下文和个人导出。默认免费服务有频率限制；需要自有额度时可选 Tavily 或 Brave 并填写密钥。</p><div class="form-footer"><button class="button small subtle" type="button" data-action="test-web-search" ${settings.enabled?'':'disabled'}>测试已保存配置</button><button class="button primary" type="submit">保存联网设置</button></div><div id="web-search-status" role="status"></div></form><small>可选服务密钥：<a href="https://app.tavily.com/" target="_blank" rel="noopener noreferrer">Tavily</a> · <a href="https://api-dashboard.search.brave.com/" target="_blank" rel="noopener noreferrer">Brave Search</a></small>`;
+}
+export function renderWebResult(result) {
+  const sources=Array.isArray(result.sources)?result.sources:result.url?[{url:result.url,title:result.title}]:[];
+  return `<div class="tool-result web-search-result ${result.ok?'success':'failed'}" role="status"><strong>${result.ok?'✓ 联网资料':'联网未完成'}</strong><span>${esc(result.message)}</span>${sources.length?`<ul>${sources.slice(0,5).map(source=>{const url=safeUrl(source.url);return url?`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${esc(source.title||new URL(url).hostname)}</a>${source.publishedAt?` <small>${esc(source.publishedAt)}</small>`:''}</li>`:'';}).join('')}</ul>`:''}${result.retrievedAt?`<small>查询时间：${esc(new Date(result.retrievedAt).toLocaleString('zh-CN'))}</small>`:''}</div>`;
+}
+
+export function updateWebSearchProviderFields(form){
+ const free=form.elements.provider.value==='exa-mcp';
+ form.querySelector('[data-web-key]').hidden=free;form.querySelector('[data-web-clear]').hidden=free;
+ form.elements.apiKey.disabled=free;form.elements.clearKey.disabled=free;
+ if(free){form.elements.apiKey.value='';form.elements.clearKey.checked=false;}
+}

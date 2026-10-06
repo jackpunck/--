@@ -7,6 +7,7 @@ const statuses = new Set(['standard', 'needs-improvement', 'uncertain']);
 const sources = new Set(['pose', 'visual', 'combined', 'analysis']);
 const unusableDataReasons = new Set(['INVALID_DIMENSIONS', 'NO_POSE', 'NO_FRAMES']);
 const timeIsValid = value => finite(value) && value >= 0 && value <= 120;
+export const MOTION_NO_ISSUES_SUMMARY = '暂时找不出问题。';
 // Whole-name placeholders are shared by incoming identity validation and old
 // saved-report display; this does not reject legitimate uncatalogued variants.
 const unknownActionNames = new Set(['未知动作', '未知', '无法识别', '无法识别动作', '未识别', '动作未识别', 'unknown', 'unknown action', 'unidentified']);
@@ -58,9 +59,7 @@ export function sanitizeMotionVerdict(value, {feedback = [], coverage, quality, 
     && cleanText(selectionCheck.evidence).replace(/\s/g, '').length >= 4
     && Array.isArray(selectionCheck.evidenceTimes) && selectionCheck.evidenceTimes.some(timeIsValid);
   if (selected && (!selectionSupported || selectionCheck.status !== 'consistent')) {
-    return {status: 'uncertain', summary: selectionSupported && selectionCheck.status === 'mismatch'
-      ? '视频与所选动作类型不一致，请核对动作选择后重新评价。'
-      : '目前还不能确认视频与所选动作一致，请核对动作类型或补充清晰视频。'};
+    return {status: 'uncertain', summary: MOTION_NO_ISSUES_SUMMARY};
   }
   const identified = (selected || action?.status === 'identified') && !isUnknownMotionActionName(action.name) && (cleanText(action.name) || cleanText(action.exerciseId));
   const identityChanged = quality?.reasons?.includes('TARGET_ID_CHANGED');
@@ -71,14 +70,14 @@ export function sanitizeMotionVerdict(value, {feedback = [], coverage, quality, 
   if (improvements.length) status = 'needs-improvement';
   else if (requested === 'standard' && identified && positives.length && !incomplete && (visualEvidence || !noObservations(quality)) && !identityChanged) status = 'standard';
   const defaults = {
-    standard: coverage?.strategy === 'visual-keyframes' ? '动作相对标准，当前可见画面中未发现明确需要纠正的问题。' : '动作相对标准，当前可见画面和骨架数据中未发现明确需要纠正的问题。',
+    standard: MOTION_NO_ISSUES_SUMMARY,
     'needs-improvement': '发现了具体的动作问题，请按下面的建议调整。',
-    uncertain: '目前还不能确认动作是否标准，请补充清晰、完整的动作视频后再评估。',
+    uncertain: MOTION_NO_ISSUES_SUMMARY,
   };
-  // Use the requested relative wording consistently, including old AI responses
-  // that overstate certainty or only repeat general limitations of 2D poses.
-  let summary = status!=='standard' && requested === status ? cleanText(value.summary) : '';
-  if (status !== 'standard' && /(?:完全|全部|非常|十分)(?:标准|规范)|没有(?:任何)?问题|无需(?:纠正|调整)|no (?:issues|correction needed)/i.test(summary)) summary = '';
+  // A shared no-finding message describes the output, not proof of correct form.
+  // Keep the evidence-based status intact for storage and future interpretation.
+  let summary = status === 'needs-improvement' && requested === status ? cleanText(value.summary) : '';
+  if (/(?:完全|全部|非常|十分)(?:标准|规范)|没有(?:任何)?问题|无需(?:纠正|调整)|no (?:issues|correction needed)/i.test(summary)) summary = '';
   return {status, summary: summary || defaults[status]};
 }
 
@@ -97,7 +96,7 @@ function legacyVisualFeedback(coach) {
  * array, including an empty one, takes precedence over old rule-based checks.
  */
 export function readMotionVerdict(report = {}) {
-  if (report?.recognitionConflict === true) return {status: 'uncertain', summary: '动作类型还未确认，请补充能看清身体和器械的完整动作视频。'};
+  if (report?.recognitionConflict === true) return {status: 'uncertain', summary: MOTION_NO_ISSUES_SUMMARY};
   const coach = report?.coach || (report?.mode && typeof report.mode === 'string' ? report : null);
   const feedback = Array.isArray(coach?.feedback) ? coach.feedback : legacyVisualFeedback(coach);
   return sanitizeMotionVerdict(coach?.verdict, {feedback, coverage: coach?.coverage, quality: report?.quality, action: coach?.action, selectionCheck: coach?.selectionCheck});

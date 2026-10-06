@@ -9,4 +9,4 @@ export function expandChatTools(all,enabled,name){
   const names=new Set([...enabled.map(t=>t.function.name),...(groups[name]||[])]);
   return all.filter(tool=>names.has(tool.function.name));
 }
-export const toolStatus=name=>({assess_motion_video:'正在准备本机视频动作分析…',set_chat_visuals:'正在准备模型展示…',get_training_plan:'正在读取训练计划…',read_calendar:'正在读取训练日程…',get_today_meals:'正在读取今日饮食…',read_chat_context:'正在读取相关资料…',read_conversation_history:'正在查阅之前的对话…',read_chat_attachment:'正在查看之前的附件…'}[name]||(/^delete_/.test(name)?'正在删除记录…':/^create_|^update_/.test(name)?'正在保存记录…':'正在处理…'));
+export const toolStatus=name=>({web_search:'正在联网搜索…',read_web_page:'正在读取公开网页…',assess_motion_video:'正在准备本机视频动作分析…',set_chat_visuals:'正在准备模型展示…',get_training_plan:'正在读取训练计划…',read_calendar:'正在读取训练日程…',get_today_meals:'正在读取今日饮食…',read_chat_context:'正在读取相关资料…',read_conversation_history:'正在查阅之前的对话…',read_chat_attachment:'正在查看之前的附件…'}[name]||(/^delete_/.test(name)?'正在删除记录…':/^create_|^update_/.test(name)?'正在保存记录…':'正在处理…'));

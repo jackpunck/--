@@ -15,7 +15,7 @@ function savedAction(value){const action=pickFields(value,actionFields);if(value
 export function buildMotionAssessmentReport(result,{file,pipeline,createdAt=new Date().toISOString()}) {
   const report={version:'motion-report-v1',...pickFields(result,['exerciseId','exerciseName','exerciseFamily','recognitionSource']),quality:pickFields(result.quality,qualityFields),createdAt,
     video:{name:file.name,size:file.size,width:pipeline.width,height:pipeline.height,duration:pipeline.duration},
-    analysis:pickFields(pipeline,['modelVersion','sampleFps','sourceFps','decoder','elapsedMs'])};
+    analysis:{...pickFields(pipeline,['modelVersion','sampleFps','sourceFps','decoder','elapsedMs']),...(result.coordinateSpace==='mediapipe-world-3d'?{coordinateSpace:result.coordinateSpace}:{})}};
   if(result.coach){
     const source=result.coach,coach=pickFields(source,['version','mode','model','provider','limitations']);
     coach.action=savedAction(source.action);

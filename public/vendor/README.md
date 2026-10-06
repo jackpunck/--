@@ -2,6 +2,10 @@
 
 Vendored ESM builds, served locally and available offline. No runtime CDN requests.
 
+## Standard pose analysis
+
+- `mediapipe/`: `@mediapipe/tasks-vision` 0.10.32 and Pose Landmarker **Full** float16 v1. Apache-2.0; see `mediapipe/LICENSE.txt` and `NOTICE.txt`. Runtime, SIMD/non-SIMD WASM and model are loaded on demand from this server. `manifest.json` pins npm integrity, source URLs and SHA-256 hashes. Restore with `node scripts/setup-motion-assets.mjs`; verify with `--verify`. The high-precision option continues to use RTMW-L.
+
 ## Local video decoding
 
 - `ffmpeg/`: official `@ffmpeg/core` 0.12.10 single-thread UMD and WebAssembly, loaded only when the browser cannot read a video picture. See `ffmpeg/NOTICE.txt` and its bundled license files. The original video is mounted read-only in a disposable local worker and decoded into frames for synchronous pose inference, sampled JPEG replay and AI evidence. No intermediate MP4, video upload or runtime CDN is used. Asset restoration and integrity verification: `node scripts/setup-motion-codec.mjs` / `node scripts/setup-motion-codec.mjs --verify`.

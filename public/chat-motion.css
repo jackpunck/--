@@ -11,3 +11,10 @@
 .chat-motion-result .chat-motion-correction{color:var(--muted,#53634c)}
 .chat-motion-result>.button{margin-top:4px;min-height:36px}
 .chat-motion-result.failed{background:#fff5ea;border-color:#eadbc8}
+.chat-motion-confirm{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--line,#d6e3ca);border-radius:18px;padding:24px;background:var(--surface,#fff);color:var(--text,#243d33)}
+.chat-motion-confirm::backdrop{background:rgba(20,35,30,.38)}
+.chat-motion-confirm h2{margin:0 0 16px;font-size:22px}
+.chat-motion-confirm p{font-size:14px;line-height:1.7;color:var(--muted,#53634c)}
+.chat-motion-confirm label{display:block;margin:18px 0 8px}
+.chat-motion-confirm select{width:100%;min-height:44px}
+.chat-motion-confirm .form-footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:22px}

@@ -5,7 +5,7 @@ import {sanitizeMotionVerdict, readMotionVerdict} from '../public/motion-verdict
 const finding = extra => ({status: 'good', source: 'pose', evidence: '肩部和髋部在起身过程中保持同步。', evidenceTimes: [0.2, 0.8], frameIndices: [3, 12], ...extra});
 const complete = extra => ({feedback: [finding()], coverage: {complete: true, frameCount: 30, reviewedFrameCount: 30}, quality: {targetCoverage: 1, usableRatio: 1, validFrames: 30}, action: {status: 'identified', name: '弹力带俯卧撑', exerciseId: null}, ...extra});
 const standard = {status: 'standard', summary: '动作基本标准，保持肩髋同步起身。'};
-const relativeStandard = {status: 'standard', summary: '动作相对标准，当前可见画面和骨架数据中未发现明确需要纠正的问题。'};
+const relativeStandard = {status: 'standard', summary: '暂时找不出问题。'};
 const improvement = extra => finding({status: 'improve', evidence: '起身时髋部先于肩部明显抬起。', correction: '减轻负荷，让肩髋同时起身。', ...extra});
 
 test('standard requires explicit positive evidence; uncertainty is never promoted to standard', () => {
@@ -86,7 +86,7 @@ test('unsupported evidence or absent corrections cannot create a concrete proble
   }
 });
 
-test('standard summaries always use relative wording instead of contradictory or overconfident AI prose', () => {
+test('standard summaries describe no finding instead of declaring correctness', () => {
   for (const summary of ['全部标准，没有任何问题。', '动作不标准，需要纠正。', '仅有二维骨架，不能判断肌肉发力。', '动作标准。'.repeat(1000)]) {
     assert.deepEqual(sanitizeMotionVerdict({...standard, summary}, complete()), relativeStandard);
   }
@@ -103,7 +103,7 @@ test('problem summaries retain measurements but exclude invented ratings, markup
 test('legacy report reads never infer standard from scores, passes or qualified repetitions', () => {
   assert.equal(readMotionVerdict({score: 100, qualified: true, checks: [{status: 'pass'}]}).status, 'uncertain');
   assert.equal(readMotionVerdict({coach: {mode: 'visual', checks: [{status: 'pass', source: 'visual', evidence: '身体保持稳定。', evidenceTimes: [1]}]}}).status, 'uncertain');
-  assert.deepEqual(readMotionVerdict(null), {status: 'uncertain', summary: '目前还不能确认动作是否标准，请补充清晰、完整的动作视频后再评估。'});
+  assert.deepEqual(readMotionVerdict(null), {status: 'uncertain', summary: '暂时找不出问题。'});
 });
 
 test('legacy saved visual problems survive only with concrete timed evidence and correction', () => {
@@ -124,4 +124,19 @@ test('new saved reports and standalone coach objects share the same conclusion',
   const before = structuredClone(coach);
   readMotionVerdict({coach});
   assert.deepEqual(coach, before);
+});
+
+test('all no-finding outcomes share the same summary while uncertainty remains recorded', () => {
+  for (const extra of [
+    {feedback: []}, {quality: {validFrames: 0, reasons: ['NO_POSE']}}, {coverage: {complete: false}},
+    {action: {status: 'unknown'}},
+    ...['uncertain','mismatch'].map(status => ({action: {status: 'selected', source: 'user', name: '深蹲'},
+      selectionCheck: {status, evidence: '画面中的支撑位置不能确认。', evidenceTimes: [1]}})),
+  ]) {
+    for (const summary of ['无法评估动作。', '拍摄角度不足，无法识别。', '动作标准，没有问题。']) {
+      assert.deepEqual(sanitizeMotionVerdict({status: 'uncertain', summary}, complete(extra)),
+        {status: 'uncertain', summary: '暂时找不出问题。'});
+    }
+  }
+  assert.deepEqual(readMotionVerdict({recognitionConflict: true}), {status: 'uncertain', summary: '暂时找不出问题。'});
 });

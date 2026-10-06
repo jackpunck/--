@@ -4,6 +4,7 @@ const BODY_LINKS = [[0,1],[0,2],[1,3],[2,4],[5,6],[5,7],[7,9],[6,8],[8,10],[5,11
 // elbows, wrists, hips, knees, ankles, heels and front-foot support points.
 // Indices refer to the raw COCO WholeBody output, never the mapped 33 slots.
 export const MOTION_FITNESS_BODY_INDICES = Object.freeze([0,5,6,7,8,9,10,11,12,13,14,15,16,19,22,17,20]);
+const MEDIAPIPE_BODY_INDICES = [0,11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
 const FITNESS_BODY_LINKS = [...BODY_LINKS.filter(([a,b])=>MOTION_FITNESS_BODY_INDICES.includes(a)&&MOTION_FITNESS_BODY_INDICES.includes(b)),[17,19],[20,22]];
 const HAND_LINKS = [91,112].flatMap(root=>Array.from({length:5},(_,finger)=>{
   const start=root+finger*4+1;
@@ -18,6 +19,13 @@ const styles = {
 };
 
 export function buildMotionOverlay(points,width,height,{detail='body'}={}) {
+  // Convert only real anatomical matches for drawing; this display-only table
+  // never enters the inference output or the AI evidence.
+  if(Array.isArray(points)&&points.length===33){
+    const mapped=Array(133).fill(null);
+    MEDIAPIPE_BODY_INDICES.forEach((source,index)=>{const point=points[source];if(point)mapped[MOTION_FITNESS_BODY_INDICES[index]]={x:point.x,y:point.y,score:point.visibility};});
+    points=mapped;detail='body';
+  }
   if(!Array.isArray(points)||points.length!==133||!finite(width)||!finite(height)||width<=0||height<=0)return {points:[],lines:[]};
   const scale=Math.max(1,Math.min(width,height)/450);
   const visible=new Map();

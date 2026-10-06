@@ -29,7 +29,7 @@ const server=await startServer({host:'127.0.0.1',port:0,dataDir,fetchImpl:async(
  const images=Array.isArray(content)?content.filter(part=>part.type==='image_url'):[];
  aiCalls.push({input,imageCount:images.length,imageBytes:images.reduce((sum,item)=>sum+Buffer.from(item.image_url.url.split(',')[1],'base64').length,0)});
  const times=input.frames.map(frame=>frame.time);
- const output={action:{exerciseId:'squat',name:'徒手深蹲',family:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2),evidence:'两帧可见同一训练者屈膝下蹲并起身。'},verdict:{status:'needs-improvement',summary:'这组动作需要调整，请先改善躯干控制。'},feedback:[],limitations:['这是本地 QA 模拟视觉响应，不是对真实动作的评价。']};
+ const output={action:{exerciseId:'squat',name:'徒手深蹲',family:'squat',status:'identified',confidence:'high',evidenceTimes:times.slice(0,2),evidence:'两帧可见同一训练者屈膝下蹲并起身。'},...(input.stage==='recognize-action'?{}:{verdict:{status:'needs-improvement',summary:'这组动作需要调整，请先改善躯干控制。'},feedback:[],limitations:['这是本地 QA 模拟视觉响应，不是对真实动作的评价。']})};
  if(input.stage==='guided-evidence')output.selectionCheck={status:'consistent',imageIndices:[0],evidence:'当前截图与用户所选深蹲动作一致。'};
  if(input.stage==='full-data'||input.stage==='temporal-evidence'||input.stage==='visual-keyframes'||input.stage==='guided-evidence'){
   if(times.length)output.feedback.push({title:'下一组保持躯干控制',status:'improve',source:'visual',evidenceTimes:[times[0]],evidence:'测试画面中可见躯干位置变化。',correction:'下一组降低负重，收紧腹部并缓慢完成动作。',priority:1});
@@ -87,7 +87,7 @@ try{
    };
    const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
    const motionNavigation=page.locator('.nav [data-page="motion"]');
-   const openMotion=async()=>{await motionNavigation.waitFor();await motionNavigation.click();await page.locator('[data-motion-exercise]').waitFor();};
+   const openMotion=async()=>{await motionNavigation.waitFor();await motionNavigation.click();await page.locator('[data-motion-file]').waitFor({state:'attached'});};
    const selectReadyClip=async()=>{
     await page.locator('[data-motion-file]').setInputFiles(clip);
     await page.waitForFunction(()=>{
@@ -97,10 +97,10 @@ try{
    };
    const response=await page.goto(origin),csp=response.headers()['content-security-policy'];assert(csp?.includes("default-src 'self'"));assert(csp.includes("worker-src 'self'"));
    if(config.ui){
-    await openMotion();await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
+    await openMotion();await page.locator('[data-motion-pose-model]').selectOption('rtmw');await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'Unconfigured visual AI blocks analysis');
     await configure('qa-text');await page.reload();await openMotion();
-    await page.locator('[data-motion-exercise]').selectOption('squat');await selectReadyClip();
+    await selectReadyClip();
     assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'Text-only AI blocks analysis');
    }
    await configure('qa-vision');await page.reload();await motionNavigation.waitFor();
@@ -109,13 +109,18 @@ try{
    console.log(`Analyze ${config.name}: real RTMW-L and local mock visual AI`);const started=Date.now();
    if(config.ui){
     await openMotion();
-    assert.equal(await page.locator('[data-motion-quality],[data-motion-ai-mode],[data-motion-recognition]').count(),0);
+    assert.equal(await page.locator('[data-motion-quality],[data-motion-ai-mode]').count(),0);
+    assert(await page.locator('[data-motion-confirmation]').isHidden());
+    await page.locator('[data-motion-pose-model]').selectOption('rtmw');
     await selectReadyClip();
-    assert.equal(await page.locator('[data-motion-action="analyze"]').isDisabled(),true,'An exercise must be selected before review');
-    await page.locator('[data-motion-exercise]').selectOption('squat');
     await page.waitForFunction(()=>!document.querySelector('[data-motion-action="analyze"]')?.disabled);
     await page.screenshot({path:join(dataDir,'ui-desktop-before.png'),fullPage:true});
     await page.locator('[data-motion-action="analyze"]').click();
+    await page.locator('[data-motion-confirmation]').waitFor({timeout:300000});
+    assert.equal(await page.locator('[data-motion-exercise]').inputValue(),'squat');
+    assert.equal(aiCalls.length-callStart,1);assert.equal(aiCalls.at(-1).input.stage,'recognize-action');
+    assert.equal(await page.locator('[data-motion-action="save"]').count(),0);
+    await page.locator('[data-motion-action="confirm-exercise"]').click();
     await page.locator('.motion-coach-evaluation').waitFor({timeout:300000});
     assert.equal(await page.locator('[data-motion-verdict]').getAttribute('data-motion-verdict'),'needs-improvement');
     assert.match(await page.locator('.motion-ai-feedback').textContent(),/降低负重|肩髋/);
@@ -145,7 +150,7 @@ try{
     const {analyzeVideo}=await import('/motion-video.js');const {analyzeMotion}=await import('/motion-analysis.js');
     const {buildMotionPoseData,buildFullMotionAnalysis}=await import('/motion-pose-data.js');const {buildMotionEvidence}=await import('/motion-evidence.js');
     const {buildMotionAssessmentReport,validateMotionAssessmentSize}=await import('/motion-view.js');const {mergeCoachAssessment}=await import('/motion-contract.js');
-    const file=document.querySelector('#qa-rtmw-file').files[0],pipeline=reuseUI?window.__qaMotionOutput:await analyzeVideo(file);
+    const file=document.querySelector('#qa-rtmw-file').files[0],pipeline=reuseUI?window.__qaMotionOutput:await analyzeVideo(file,{model:'rtmw'});
     const observations=analyzeMotion(pipeline.frames,pipeline);
     let body,report;
     if(!reuseUI){
@@ -170,15 +175,15 @@ try{
    if(config.ui){
     assert.equal(output.stats.sampleFps,7.5);
     assert.equal(output.body.reviewMode,'guided');assert.equal(output.body.selectedExerciseId,'squat');assert.equal(output.body.poseData.format,'rtmw-body17-full');
-    assert.equal(calls.length,1);assert.equal(calls[0].input.stage,'guided-evidence');
-    assert.equal(calls[0].imageCount,output.body.keyframes.length);
+    assert.equal(calls.length,2);assert.equal(calls[0].input.stage,'recognize-action');assert.equal(calls[1].input.stage,'guided-evidence');
+    assert.equal(calls[1].imageCount,output.body.keyframes.length);
     assert.equal(output.report.coach.coverage.sourceFrameCount,output.stats.frames);
     assert.equal(output.report.coach.coverage.strategy,'guided-evidence');
     assert.equal(output.report.recognitionSource,'user');assert.equal(output.report.coach.action.status,'selected');
     assert.equal(output.report.coach.action.source,'user');assert.equal(output.report.coach.action.confidence,null);
     assert.equal(output.report.coach.selectionCheck.status,'consistent');
-    assert.equal(calls[0].input.evidence.frames.length,output.stats.frames,'This short clip supplies all body17 samples');
-    assert.equal(calls[0].input.evidence.measurements.length,output.stats.frames,'Measured angles reach the model');
+    assert.equal(calls[1].input.evidence.frames.length,output.stats.frames,'This short clip supplies all body17 samples');
+    assert.equal(calls[1].input.evidence.measurements.length,output.stats.frames,'Measured angles reach the model');
     assert.equal(output.report.coach.coverage.summarizedMeasurementCount,output.stats.frames);
    }else{
    assert.equal(new Set(full.flatMap(call=>call.input.data.frameIndices)).size,output.stats.frames,'Every sampled pose frame reaches AI');
@@ -194,7 +199,7 @@ try{
    assert(!requests.some(request=>/mediapipe|stgcn|\.task(?:\?|$)/i.test(request.url)),'Only required RTMW assets are requested');
    assert(!workers.some(worker=>worker.messages.some(message=>message.type==='classify')));
    if(config.name==='webcodecs-cpu-fallback'){
-    const cancelled=await page.evaluate(async()=>{const {analyzeVideo}=await import('/motion-video.js');const controller=new AbortController(),before=window.__qaWorkers.length;let status='resolved',frames=0;try{await analyzeVideo(document.querySelector('#qa-rtmw-file').files[0],{signal:controller.signal,onProgress(event){if(event.stage==='analyzing'){frames++;controller.abort();}}});}catch(error){status=error.name;}return{status,frames,workers:window.__qaWorkers.slice(before)};});
+    const cancelled=await page.evaluate(async()=>{const {analyzeVideo}=await import('/motion-video.js');const controller=new AbortController(),before=window.__qaWorkers.length;let status='resolved',frames=0;try{await analyzeVideo(document.querySelector('#qa-rtmw-file').files[0],{model:'rtmw',signal:controller.signal,onProgress(event){if(event.stage==='analyzing'){frames++;controller.abort();}}});}catch(error){status=error.name;}return{status,frames,workers:window.__qaWorkers.slice(before)};});
     assert.equal(cancelled.status,'AbortError');assert.equal(cancelled.frames,1);assert(cancelled.workers.every(worker=>worker.terminated>=1));output.stats.cancelled=cancelled;
    }
    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert(!requests.some(request=>request.method==='POST'&&/\/api\/attachments/.test(request.url)));

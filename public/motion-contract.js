@@ -181,7 +181,7 @@ export function mergeCoachAssessment(analysis, coach) {
   const cleanedCoach = compactCoach(coach, quality);
   const selected = selectedMotionAction(cleanedCoach);
   const action = selected || confirmedMotionAction(cleanedCoach);
-  return {version: MOTION_REPORT_VERSION, quality, exerciseId: action?.exerciseId || null, exerciseName: action?.name || '', exerciseFamily: action?.family || null,
+  return {version: MOTION_REPORT_VERSION, quality, ...(analysis?.coordinateSpace==='mediapipe-world-3d'?{coordinateSpace:analysis.coordinateSpace}:{}), exerciseId: action?.exerciseId || null, exerciseName: action?.name || '', exerciseFamily: action?.family || null,
     recognitionSource: selected ? 'user' : action ? 'visual' : 'unknown', coach: cleanedCoach};
 }
 

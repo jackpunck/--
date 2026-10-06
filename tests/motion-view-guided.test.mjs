@@ -38,6 +38,7 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 async function until(predicate){for(let i=0;i<30;i++){if(predicate())return;await flush();}assert.fail('UI operation did not settle');}
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
 function pipeline(){return {width:640,height:480,duration:2,sampleFps:7.5,sourceFps:30,frames:[0,1].map(time=>({time,personCount:1,landmarks:Array.from({length:33},(_,i)=>({x:.2+(i%5)*.1,y:.2+Math.floor(i/5)*.06,visibility:1})),subjectTracking:{status:'locked',trackId:'target',confidence:.9,bbox:{xMin:.2,yMin:.2,xMax:.7,yMax:.8}}})),targetTracking:{coverage:1}};}
+function recognition(id='squat'){return {mode:'recognize',action:{status:id?'identified':'unknown',exerciseId:id,name:getMotionExercise(id)?.name||'',confidence:id?.9:null,evidenceTimes:[0]}};}
 function coach(id){const exercise=getMotionExercise(id);return {mode:'guided',action:{exerciseId:id,name:exercise.name,family:exercise.family,status:'selected',confidence:null,source:'user'},selectionCheck:{status:'consistent',evidenceTimes:[0],evidence:'画面中的动作与用户所选动作一致。'},coverage:{complete:true,strategy:'guided-evidence'},verdict:{status:'needs-improvement',summary:'请控制动作。'},feedback:[{status:'improve',source:'combined',title:'动作节奏',evidence:'画面及骨架中可见动作节奏不稳定。',correction:'减慢动作并保持可控。',evidenceTimes:[0]}]};}
 function setup(t,{realPlayer=false,config={configured:true,vision:true,provider:'mock',model:'mock'}}={}){
   const previous={window:globalThis.window,cancelAnimationFrame:globalThis.cancelAnimationFrame,requestAnimationFrame:globalThis.requestAnimationFrame,createImageBitmap:globalThis.createImageBitmap};
@@ -52,74 +53,94 @@ function setup(t,{realPlayer=false,config={configured:true,vision:true,provider:
   };
   globalThis.__guidedView=h;
   const container=new Element(),root=container.querySelector('.motion-page');
-  const view=mountMotionView(container,{getCoachConfiguration:()=>h.config,reviewAssessment:async(body,options)=>{h.reviewCalls.push({body,options});return h.reviewQueue.shift()?.promise??coach(body.selectedExerciseId);},saveAssessment:async report=>{h.saved.push(report);},listAssessments:async()=>{h.historyCalls++;return h.historyQueue.shift()?.promise??h.historyValues;},notify:message=>h.messages.push(message)});
+  const view=mountMotionView(container,{getCoachConfiguration:()=>h.config,reviewAssessment:async(body,options)=>{h.reviewCalls.push({body,options});return h.reviewQueue.shift()?.promise??(body.reviewMode==='recognize'?recognition():coach(body.selectedExerciseId));},saveAssessment:async report=>{h.saved.push(report);},listAssessments:async()=>{h.historyCalls++;return h.historyQueue.shift()?.promise??h.historyValues;},notify:message=>h.messages.push(message)});
   h.root=root;h.container=container;h.view=view;h.find=selector=>root.querySelector(selector);
   h.select=id=>{const input=h.find('[data-motion-exercise]');input.value=id;input.fire('change');};
   h.click=action=>{const button=h.find(`[data-motion-action="${action}"]`);button.dataset.motionAction=action;button.closest=()=>button;root.fire('click',{target:button});};
   h.file=async(name='clip.mp4')=>{const input=h.find('[data-motion-file]');input.files=[new File(['fixture'],name,{type:'video/mp4'})];input.fire('change');await flush();};
+  h.confirming=()=>!h.find('[data-motion-confirmation]').hidden&&!h.find('[data-motion-action="confirm-exercise"]').disabled;
+  h.assess=async()=>{h.click('analyze');await until(h.confirming);h.click('confirm-exercise');await until(h.finished);};
   h.finished=()=>!h.find('[data-motion-results]').hidden && h.find('[data-motion-results]').innerHTML.includes('motion-coach-evaluation');
   t.after(()=>{view.destroy();delete globalThis.__guidedView;Object.assign(globalThis,previous);});
   return h;
 }
 
-test('a catalog exercise is mandatory; selection changes reuse pose and extracted pictures',async t=>{
+test('video recognition preselects a catalog exercise but never evaluates or saves until confirmation',async t=>{
   const h=setup(t);
-  assert.match(h.container.innerHTML,/<select[^>]*data-motion-exercise[^>]*required/);
   for(const exercise of motionExercises)assert(h.container.innerHTML.includes(`<option value="${exercise.id}">${exercise.name}</option>`),exercise.id);
-  await h.file();assert.equal(h.find('[data-motion-action="analyze"]').disabled,true);
-  h.click('analyze');await flush();assert.equal(h.analysisCalls.length,0);
-  h.select('squat');assert.equal(h.find('[data-motion-action="analyze"]').disabled,false);
-  h.click('analyze');await until(h.finished);
-  assert.equal(h.reviewCalls[0].body.reviewMode,'guided');assert.equal(h.reviewCalls[0].body.selectedExerciseId,'squat');
+  await h.file();assert.equal(h.find('[data-motion-action="analyze"]').disabled,false);
+  h.click('analyze');await until(h.confirming);
+  assert.equal(h.reviewCalls.length,1);assert.equal(h.reviewCalls[0].body.reviewMode,'recognize');assert.equal('selectedExerciseId' in h.reviewCalls[0].body,false);
+  assert.equal(h.find('[data-motion-exercise]').value,'squat');assert.match(h.find('[data-motion-recognition]').textContent,/AI 识别为：徒手深蹲/);
+  assert.equal(h.finished(),false);h.click('save');await flush();assert.equal(h.saved.length,0);
+  h.select('pushup');h.click('confirm-exercise');await until(h.finished);
+  assert.equal(h.reviewCalls[1].body.reviewMode,'guided');assert.equal(h.reviewCalls[1].body.selectedExerciseId,'pushup');
   assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);
-  h.select('pushup');assert.equal(h.find('[data-motion-results]').hidden,true);
-  h.click('analyze');await until(()=>h.reviewCalls.length===2&&h.finished());
-  assert.equal(h.reviewCalls[1].body.selectedExerciseId,'pushup');assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);
-  assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);
-  h.click('save');await until(()=>h.saved.length===1);
-  assert.equal(h.saved[0].recognitionSource,'user');assert.equal(h.saved[0].coach.action.exerciseId,'pushup');assert.equal(h.saved[0].coach.selectionCheck.status,'consistent');
+  h.click('save');await until(()=>h.saved.length===1);assert.equal(h.saved[0].coach.action.exerciseId,'pushup');
 });
 
-test('changing the selected action aborts review and ignores a late response that disregards abort',async t=>{
-  const h=setup(t),old=deferred();h.reviewQueue.push(old);
-  h.select('squat');await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
-  h.select('pushup');assert.equal(h.reviewCalls[0].options.signal.aborted,true);assert.equal(h.find('[data-motion-results]').hidden,true);
-  h.click('analyze');await until(()=>h.reviewCalls.length===2&&h.finished());
-  old.resolve(coach('squat'));await flush();
-  assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);
+test('changing an evaluated exercise requires confirmation and reuses local pose and pictures',async t=>{
+  const h=setup(t);await h.file();await h.assess();
+  h.click('coach');await until(h.confirming);h.select('pushup');
+  assert.equal(h.finished(),false);assert.equal(h.reviewCalls.length,2);h.click('save');await flush();assert.equal(h.saved.length,0);
+  h.click('confirm-exercise');await until(h.finished);
+  assert.equal(h.reviewCalls.length,3);assert.equal(h.reviewCalls[2].body.selectedExerciseId,'pushup');
   assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);
 });
 
-test('changing the video invalidates the old review and the evidence cache',async t=>{
-  const h=setup(t),old=deferred();h.reviewQueue.push(old);
-  h.select('squat');await h.file('first.mp4');h.click('analyze');await until(()=>h.reviewCalls.length===1);
+test('unknown recognition enables manual selection and requires a valid choice',async t=>{
+  const h=setup(t),unknown=deferred();h.reviewQueue.push(unknown);await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
+  unknown.resolve(recognition(null));await until(()=>!h.find('[data-motion-confirmation]').hidden);
+  assert.equal(h.find('[data-motion-action="confirm-exercise"]').disabled,true);assert.equal(h.find('[data-motion-exercise]').value,'');
+  h.select('not-a-catalog-id');h.click('confirm-exercise');await flush();assert.equal(h.reviewCalls.length,1);
+  h.select('pushup');h.click('confirm-exercise');await until(h.finished);assert.equal(h.reviewCalls[1].body.selectedExerciseId,'pushup');
+});
+
+test('recognition failure allows retry or manual confirmation with the prepared data',async t=>{
+  const h=setup(t),failure=deferred();h.reviewQueue.push(failure);await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
+  failure.reject(new Error('offline'));await until(()=>!h.find('[data-motion-confirmation]').hidden);
+  assert.equal(h.find('[data-motion-coach-retry]').hidden,false);assert.equal(h.finished(),false);
+  h.select('squat');h.click('confirm-exercise');await until(h.finished);
+  assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);
+});
+
+test('changing the selected action aborts an evaluation and ignores a late response',async t=>{
+  const h=setup(t);await h.file();h.click('analyze');await until(h.confirming);
+  const old=deferred();h.reviewQueue.push(old);h.click('confirm-exercise');await until(()=>h.reviewCalls.length===2);
+  h.select('pushup');assert.equal(h.reviewCalls[1].options.signal.aborted,true);assert.equal(h.finished(),false);
+  h.click('confirm-exercise');await until(h.finished);old.resolve(coach('squat'));await flush();
+  assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：俯卧撑/);assert.equal(h.analysisCalls.length,1);
+});
+
+test('changing a video discards stale recognition and cached evidence',async t=>{
+  const h=setup(t),old=deferred();h.reviewQueue.push(old);await h.file('first.mp4');h.click('analyze');await until(()=>h.reviewCalls.length===1);
   await h.file('second.mp4');assert.equal(h.reviewCalls[0].options.signal.aborted,true);
-  old.resolve(coach('squat'));await flush();assert.equal(h.find('[data-motion-results]').hidden,true);
-  h.click('analyze');await until(()=>h.reviewCalls.length===2&&h.finished());
+  old.resolve(recognition('pushup'));await flush();assert.equal(h.find('[data-motion-confirmation]').hidden,true);
+  h.click('analyze');await until(h.confirming);assert.equal(h.find('[data-motion-exercise]').value,'squat');
   assert.equal(h.analysisCalls.length,2);assert.equal(h.evidenceCalls.length,2);assert.equal(h.evidenceCalls[1].file.name,'second.mp4');
 });
 
-test('an exercise changed during pose extraction applies to that video without restarting pose',async t=>{
-  const h=setup(t),pose=deferred();h.analysisQueue.push(pose);
-  h.select('squat');await h.file();h.click('analyze');await until(()=>h.analysisCalls.length===1);
-  h.select('pushup');assert.equal(h.analysisCalls[0].options.signal.aborted,false);
-  pose.resolve(pipeline());await until(h.finished);
-  assert.equal(h.reviewCalls[0].body.selectedExerciseId,'pushup');assert.equal(h.analysisCalls.length,1);
+test('recognition cancellation remains retryable without repeating pose or images',async t=>{
+  const h=setup(t),old=deferred();h.reviewQueue.push(old);await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
+  h.click('cancel-coach');assert.equal(h.reviewCalls[0].options.signal.aborted,true);h.click('retry-coach');await until(h.confirming);
+  old.resolve(recognition('pushup'));await flush();assert.equal(h.find('[data-motion-exercise]').value,'squat');
+  assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);assert.equal(h.finished(),false);
 });
 
-test('clearing an exercise cancels review and prevents publishing or saving stale advice',async t=>{
-  const h=setup(t),old=deferred();h.reviewQueue.push(old);
-  h.select('squat');await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
-  h.select('');old.resolve(coach('squat'));await flush();
-  assert.equal(h.find('[data-motion-results]').hidden,true);assert.equal(h.find('[data-motion-action="analyze"]').disabled,true);assert.equal(h.find('[data-motion-coach-retry]').disabled,true);
-  h.click('save');await flush();assert.equal(h.saved.length,0);
-});
-
-test('a response for a different exercise is rejected even if the request remains current',async t=>{
-  const h=setup(t),wrong=deferred();h.reviewQueue.push(wrong);
-  h.select('squat');await h.file();h.click('analyze');await until(()=>h.reviewCalls.length===1);
+test('a response for a different confirmed exercise is rejected and stays unsaved',async t=>{
+  const h=setup(t);await h.file();h.click('analyze');await until(h.confirming);
+  const wrong=deferred();h.reviewQueue.push(wrong);h.click('confirm-exercise');await until(()=>h.reviewCalls.length===2);
   wrong.resolve(coach('pushup'));await until(()=>h.find('[data-motion-coach-error]').textContent.includes('与所选动作不一致'));
-  assert.equal(h.find('[data-motion-results]').hidden,true);h.click('save');await flush();assert.equal(h.saved.length,0);
+  assert.equal(h.finished(),false);h.click('save');await flush();assert.equal(h.saved.length,0);assert.equal(h.confirming(),true);
+});
+
+test('pose-model and target changes discard recognition and require new extraction',async t=>{
+  const h=setup(t);await h.file();h.click('analyze');await until(h.confirming);
+  const input=h.find('[data-motion-pose-model]');input.value='yolo26';input.fire('change');
+  assert.equal(h.find('[data-motion-confirmation]').hidden,true);assert.equal(h.find('[data-motion-exercise]').value,'');
+  h.click('analyze');await until(h.confirming);assert.equal(h.analysisCalls.length,2);assert.equal(h.analysisCalls[1].options.model,'yolo26');
+  h.click('reset-target');assert.equal(h.find('[data-motion-confirmation]').hidden,true);
+  h.click('analyze');await until(h.confirming);assert.equal(h.analysisCalls.length,3);
 });
 
 function savedReport(id,exerciseId='squat'){
@@ -187,7 +208,7 @@ test('suspend keeps pending video preparation and resume preserves the selected 
   prepared.resolve({mode:'native',file});await until(()=>h.find('[data-motion-progress]').hidden);
   h.view.resume();
   assert.match(h.find('[data-motion-metadata]').innerHTML,/kept.mp4/);
-  assert.equal(h.find('[data-motion-exercise]').value,'squat');assert.equal(h.find('[data-motion-action="analyze"]').disabled,false);
+  assert.equal(h.find('[data-motion-exercise]').value,'');assert.equal(h.find('[data-motion-action="analyze"]').disabled,false);
   assert.equal(h.prepareCalls.length,1);assert.equal(h.analysisCalls.length,0);assert.equal(h.reviewCalls.length,0);
 });
 
@@ -216,11 +237,11 @@ test('native and software playback pause without resetting position or restartin
 test('analysis completes while suspended without clearing data or notifying another page',async t=>{
   const h=setup(t),pose=deferred();h.analysisQueue.push(pose);h.select('squat');await h.file();h.click('analyze');
   await until(()=>h.analysisCalls.length===1);h.view.suspend();assert.equal(h.analysisCalls[0].options.signal.aborted,false);
-  pose.resolve(pipeline());await until(h.finished);
+  pose.resolve(pipeline());await until(h.confirming);assert.equal(h.finished(),false);h.click('confirm-exercise');await until(h.finished);
   assert.equal(h.messages.length,0);assert.equal(h.view.hasUnsavedWork(),true);h.view.resume();
   assert.match(h.find('[data-motion-results]').innerHTML,/你选择的动作：徒手深蹲/);
-  assert.equal(h.analysisCalls.length,1);assert.equal(h.reviewCalls.length,1);
-  h.select('pushup');h.click('analyze');await until(()=>h.reviewCalls.length===2&&h.finished());
+  assert.equal(h.analysisCalls.length,1);assert.equal(h.reviewCalls.length,2);
+  h.click('coach');h.select('pushup');h.click('confirm-exercise');await until(()=>h.reviewCalls.length===3&&h.finished());
   assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1,'Screenshots also survive detachment');
   h.click('save');await until(()=>h.saved.length===1);assert.equal(h.view.hasUnsavedWork(),false);
 });
@@ -231,7 +252,7 @@ test('AI and evidence requests continue through suspend; resume never repeats th
   h.view.suspend();assert.equal(h.evidenceCalls[0].options.signal.aborted,false);
   images.resolve({summary:{},images:[{time:0,mimeType:'image/jpeg',dataUrl:'data:image/jpeg;base64,AAAA'}]});
   await until(()=>h.reviewCalls.length===1);h.view.resume();h.view.suspend();
-  assert.equal(h.reviewCalls[0].options.signal.aborted,false);review.resolve(coach('squat'));await until(h.finished);
+  assert.equal(h.reviewCalls[0].options.signal.aborted,false);review.resolve(recognition());await until(h.confirming);assert.equal(h.finished(),false);
   assert.equal(h.messages.length,0);h.view.resume();
   assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);assert.equal(h.reviewCalls.length,1);
 });
@@ -242,16 +263,16 @@ test('returning from settings reads current model configuration without automati
   h.config={configured:true,vision:true,provider:'Updated provider',model:'new model'};h.view.resume();
   assert.match(h.find('[data-motion-coach-description]').textContent,/Updated provider · new model/);
   assert.equal(h.find('[data-motion-action="analyze"]').disabled,false);assert.equal(h.analysisCalls.length,0);assert.equal(h.reviewCalls.length,0);
-  h.click('analyze');await until(h.finished);h.view.suspend();h.config={configured:true,vision:false};h.view.resume();
+  await h.assess();h.view.suspend();h.config={configured:true,vision:false};h.view.resume();
   assert.equal(h.find('[data-motion-action="analyze"]').disabled,true);assert.match(h.find('[data-motion-coach-description]').textContent,/不支持图片/);
-  assert.equal(h.finished(),true);assert.equal(h.reviewCalls.length,1);
+  assert.equal(h.finished(),true);assert.equal(h.reviewCalls.length,2);
   h.config={configured:true,vision:true,provider:'Another',model:'model'};h.view.refreshConfiguration();
-  h.click('analyze');await until(()=>h.reviewCalls.length===2&&h.finished());
+  await h.assess();assert.equal(h.reviewCalls.length,3);
   assert.equal(h.analysisCalls.length,1);assert.equal(h.evidenceCalls.length,1);
 });
 
 test('hidden report reads never scroll or notify, and deleted reports preserve the unsaved live result',async t=>{
-  const h=setup(t);h.select('squat');await h.file();h.click('analyze');await until(h.finished);
+  const h=setup(t);h.select('squat');await h.file();await h.assess();
   const notices=h.messages.length;h.view.suspend();h.historyValues=[savedReport('saved','pushup')];
   assert.equal(await h.view.openReport('saved'),true);assert.equal(h.find('[data-motion-results]').scrollCount,undefined);
   h.historyValues=[];assert.equal(await h.view.openReport('deleted'),false);
@@ -269,4 +290,19 @@ for(const stage of ['prepare','analysis','review'])test(`destroy still aborts ${
   h.view.destroy();assert.equal(calls[0].options.signal.aborted,true);assert.equal(h.view.hasUnsavedWork(),false);
   pending.resolve(stage==='prepare'?{mode:'native',file:calls[0].file}:stage==='analysis'?pipeline():coach('squat'));await flush();
   h.view.resume();assert.equal(h.messages.length,0);assert.equal(h.player.destroyed,true);assert.equal(h.finished(),false);
+});
+
+test('awaiting confirmation survives navigation without another recognition or premature evaluation',async t=>{
+  const h=setup(t);await h.file();h.click('analyze');await until(h.confirming);h.select('pushup');
+  h.view.suspend();h.view.resume();assert.equal(h.confirming(),true);assert.equal(h.find('[data-motion-exercise]').value,'pushup');
+  assert.equal(h.reviewCalls.length,1);assert.equal(h.finished(),false);h.click('confirm-exercise');await until(h.finished);
+  assert.equal(h.reviewCalls[1].body.selectedExerciseId,'pushup');assert.equal(h.analysisCalls.length,1);
+});
+
+test('no-finding reports hide uncertain copy, limitations and praise',async t=>{
+  const h=setup(t);await h.file();h.click('analyze');await until(h.confirming);
+  const reviewed=deferred();h.reviewQueue.push(reviewed);h.click('confirm-exercise');await until(()=>h.reviewCalls.length===2);
+  reviewed.resolve({...coach('squat'),selectionCheck:{status:'uncertain',evidence:'无法确认所选动作',evidenceTimes:[0]},verdict:{status:'uncertain',summary:'无法评估动作'},feedback:[{status:'uncertain',title:'脚部遮挡',evidence:'无法判断',correction:'补拍',evidenceTimes:[0]}],limitations:['无法评估动作，请补拍']});
+  await until(h.finished);const html=h.find('[data-motion-results]').innerHTML;
+  assert.match(html,/暂时找不出问题/);assert.doesNotMatch(html,/无法评估|无法判断|补拍|脚部遮挡|无法确认/);
 });

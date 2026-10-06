@@ -638,3 +638,25 @@
 .weight-method .formula-expression{padding:12px;border-radius:8px;background:var(--soft);color:var(--ink)}
 @media(max-width:1000px){.knowledge-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.weight-layout{grid-template-columns:1fr}.rm-target-result .tool-total>strong{font-size:30px}}
 @media(max-width:700px){.knowledge-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.weight-layout{gap:14px}.weight-empty{padding:32px 14px}.weight-presets{gap:6px}.weight-presets button{padding:8px 10px}.weight-conversion-table th,.weight-conversion-table td{padding:10px 6px}}
+.nutrition-feedback{margin:0 0 20px}
+.nutrition-feedback .card-head{margin-bottom:12px;gap:12px;flex-wrap:wrap}
+.nutrition-feedback-summary{display:flex;gap:12px 24px;align-items:center;flex-wrap:wrap;font-size:13px}
+.nutrition-feedback-summary strong{font-size:16px}
+.nutrition-feedback p{font-size:12px;line-height:1.7;margin:10px 0}
+.nutrition-feedback summary{font-size:12px;cursor:pointer}
+.nutrition-feedback-form{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-top:14px}
+.nutrition-feedback-form label{margin:0;font-size:12px}
+.nutrition-feedback-form label:first-child{display:flex;align-items:center;gap:7px;align-self:center}
+.nutrition-feedback-form input[type=checkbox]{width:16px;height:16px;margin:0}
+.nutrition-feedback-form input[type=number]{display:block;max-width:200px;margin-top:6px}
+.nutrition-feedback-form small{flex-basis:100%;font-size:11px}
+.nutrition-feedback-history{max-height:150px;overflow:auto;padding-left:20px;font-size:11px;line-height:1.9}
+.web-search-settings{margin-top:22px}
+.web-search-options{display:flex;flex-wrap:wrap;gap:12px 24px;margin:18px 0}
+.web-search-options label{display:flex;align-items:center;gap:8px;margin:0;font-size:12px}
+.web-search-options [hidden]{display:none}
+.web-search-options input{width:16px;height:16px;margin:0}
+.web-search-result{display:block!important;overflow-wrap:anywhere}
+.web-search-result>strong,.web-search-result>span,.web-search-result>small{display:block;margin:4px 0}
+.web-search-result ul{padding-left:20px;margin:8px 0;line-height:1.8}
+.web-search-result a{color:#274c77;text-decoration:underline}

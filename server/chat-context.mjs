@@ -1,10 +1,11 @@
-import { exercises, foods, calculateNutrition, sumFoods } from '../public/domain.js';
+import { exercises, foods, sumFoods } from '../public/domain.js';
 import { muscleCatalog } from '../public/visuals.js';
 import { formulaCards, foodPortions } from '../public/knowledge-tools.js';
 import { knowledgeCards } from '../public/knowledge.js';
 import { calendarState, recordById, validDate } from './calendar-data.mjs';
 import { recordFromRow } from './storage.mjs';
 import { trainingDayType } from '../public/schedule.js';
+import {nutritionForDate} from '../public/nutrition-feedback.js';
 
 export const visualGuide = `由你结合对话上下文决定是否调用 set_chat_visuals 展示本地3D肌肉或动作卡片，前端不会根据关键词自动展示，也可在“知识大全”打开。支持的动作：${exercises.map(e=>e.name).join('、')}。目录内动作均有教学演示：除平板支撑为持续等长支撑外，其余${exercises.filter(e=>e.demo&&!e.isometric).length}个动作可连续播放、暂停和拖动观察。模型采用人工姿态与近似蒙皮，高亮说明解剖位置，不代表实际发力强度或医学诊断，未经过专业动作审核。肌肉目录：${muscleCatalog.map(m=>m.name).join('、')}。不要声称所有动作或所有肌肉都有独立模型；未收录的应说明。不要编造3D图片网址或插入外部示意图替代本地模型。`;
 export const portionGuide = '这些食物为应用内近似数据，一盒米饭只是白米饭示例，配菜、用油另计；克数可调，以实称或包装为准。';
@@ -58,12 +59,11 @@ export function readChatContext({ db, userId, args = {}, localToday }) {
   for (const section of sections) {
     if (section === 'profile') data.profile = { profile: stored('profile'), preferences: stored('preferences') };
     if (section === 'nutrition') {
-      const date = args.date ?? localToday, dayType = trainingDayType(date, calendarState(db, userId).records);
+      const date = args.date ?? localToday, tasks=calendarState(db, userId).records, dayType = trainingDayType(date, tasks);
       const totals = rows('meal').filter(r => r.data?.date === date && r.data.confirmed).reduce((sum, r) => { const values = sumFoods(r.data.items || []); for (const key of Object.keys(sum)) sum[key] += values[key]; return sum; }, { kcal: 0, protein: 0, carbs: 0, fat: 0 });
-      let target;
-      try { target = calculateNutrition(stored('profile'), dayType); }
-      catch (error) { target = { error: error.message }; }
-      data.nutrition = { date, dayType, target, totals, remaining: target.error ? null : Object.fromEntries(Object.keys(totals).map(key => [key, target[key] - totals[key]])) };
+      const calibrated=nutritionForDate({profile:stored('profile'),phases:rows('phase'),settings:rows('nutrition-feedback-settings'),tasks,date,today:localToday});
+      const target=calibrated.nutrition[dayType];
+      data.nutrition = { date, dayType, target, feedback:calibrated.feedback, totals, remaining: target.error ? null : Object.fromEntries(Object.keys(totals).map(key => [key, target[key] - totals[key]])) };
     }
     if (section === 'meals') data.meals = history(rows('meal'), 35);
     if (section === 'training') data.training = history(calendarState(db, userId).records, 20, true);

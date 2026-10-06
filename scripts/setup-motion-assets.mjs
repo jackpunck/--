@@ -23,7 +23,7 @@ function packageFiles(tgz) {
   }
   return files;
 }
-for (const directory of ['mp4box']) {
+for (const directory of ['mp4box', 'mediapipe']) {
  const root = new URL(`../public/vendor/${directory}/`, import.meta.url);
  const manifest = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
  let packageContent;

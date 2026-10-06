@@ -1,4 +1,5 @@
 import { analyzeVideo } from './motion-video.js';
+import { getMotionPoseModel } from './motion-models.js';
 import { analyzeMotion } from './motion-analysis.js';
 import { buildMotionEvidence } from './motion-evidence.js';
 import { buildMotionPoseData, buildFullMotionAnalysis } from './motion-pose-data.js';
@@ -42,7 +43,7 @@ export class ChatMotionVideos {
     validateVideoFile(descriptor);
     // AttachmentManager owns per-draft deduplication. Two drafts can hold the
     // very same File object and must still be removable independently.
-    this.#entries.set(descriptor.id, {descriptor, file, local:null, payload:null, job:null});
+    this.#entries.set(descriptor.id, {descriptor, file, models:new Map()});
     return {...descriptor};
   }
 
@@ -52,30 +53,37 @@ export class ChatMotionVideos {
     const entry = this.#entries.get(id);
     if (!entry) return false;
     this.#entries.delete(id);
-    entry.job?.controller.abort();
-    for (const waiter of [...(entry.job?.waiters || [])]) waiter.cancel();
-    entry.local = entry.payload = null;
+    for (const cache of entry.models.values()) {
+      cache.job?.controller.abort();
+      for (const waiter of [...(cache.job?.waiters || [])]) waiter.cancel();
+      cache.local = cache.payload = null;
+    }
+    entry.models.clear();
     releasePreparedMotionVideo(entry.file);
     return true;
   }
 
   clear() { for (const id of this.#entries.keys()) this.remove(id); }
 
-  async prepare(id, exerciseId, {signal, onProgress} = {}) {
+  async prepare(id, exerciseId, {signal, onProgress, poseModel} = {}) {
     checkAbort(signal);
     const entry = this.#entries.get(id);
     if (!entry) throw missingVideo();
-    if (!getMotionExercise(exerciseId)) throw new Error('请选择有效的动作类型后再评价。');
-    if (entry.payload) {
+    if (exerciseId != null && !getMotionExercise(exerciseId)) throw new Error('请选择有效的动作类型后再评价。');
+    const phase = exerciseId == null ? {reviewMode:'recognize'} : {reviewMode:'guided',selectedExerciseId:exerciseId};
+    const model = getMotionPoseModel(poseModel);
+    let cache = entry.models.get(model.id);
+    if (!cache) { cache={local:null,payload:null,job:null}; entry.models.set(model.id,cache); }
+    if (cache.payload) {
       progress(onProgress, {stage:'ready', progress:1, cached:true, message:'已复用这段视频的骨架与关键画面。'});
       checkAbort(signal);
       if (this.#entries.get(id) !== entry) throw missingVideo();
-      return {...structuredClone(entry.payload), selectedExerciseId:exerciseId};
+      return {...structuredClone(cache.payload), ...phase};
     }
-    let job = entry.job;
+    let job = cache.job;
     if (!job || job.controller.signal.aborted) {
       job = {controller:new AbortController(), waiters:new Set(), settled:false, lastProgress:null};
-      entry.job = job;
+      cache.job = job;
       const publish = value => {
         job.lastProgress = {...value, message:value?.message || '正在准备本地动作数据…'};
         for (const waiter of job.waiters) progress(waiter.onProgress, {...job.lastProgress});
@@ -86,11 +94,11 @@ export class ChatMotionVideos {
         const current = () => { checkAbort(job.controller.signal); if (this.#entries.get(id) !== entry) throw missingVideo(); };
         try {
           current();
-          return await this.#build(entry, job.controller.signal, publish, current);
+          return await this.#build(entry, cache, model, job.controller.signal, publish, current);
         } finally {
           releasePreparedMotionVideo(entry.file);
           job.settled = true;
-          if (entry.job === job) entry.job = null;
+          if (cache.job === job) cache.job = null;
         }
       });
       // The queue must not retain the last payload after remove()/clear().
@@ -115,17 +123,17 @@ export class ChatMotionVideos {
         try {
           checkAbort(signal); checkAbort(job.controller.signal);
           if (this.#entries.get(id) !== entry) throw missingVideo();
-          resolve({...structuredClone(value), selectedExerciseId:exerciseId});
+          resolve({...structuredClone(value), ...phase});
         }
         catch (error) { reject(error); }
       }, error => { if (active) { cleanup(); reject(error); } });
     });
   }
 
-  async #build(entry, signal, publish, current) {
-    if (!entry.local) {
-      publish({stage:'loading', progress:0, message:'正在本机提取骨架，首次使用需要下载姿态模型…'});
-      const output = await analyzeVideo(entry.file, {signal, sampleFps:7.5, onProgress:publish});
+  async #build(entry, cache, model, signal, publish, current) {
+    if (!cache.local) {
+      publish({stage:'loading', progress:0, message:`正在使用${model.tier}（${model.label}）提取骨架…`});
+      const output = await analyzeVideo(entry.file, {signal, sampleFps:7.5, model:model.id, onProgress:publish});
       current();
       // Chat needs no playback buffers or raw face/finger points. All original
       // body coordinates, target tracking and source timestamps stay intact.
@@ -135,17 +143,17 @@ export class ChatMotionVideos {
       const poseData = buildMotionPoseData(pipeline, {bodyOnly:true});
       const fullAnalysis = buildFullMotionAnalysis(observations, pipeline);
       current();
-      entry.local = {pipeline, observations, poseData, fullAnalysis};
+      cache.local = {pipeline, observations, poseData, fullAnalysis};
     } else publish({stage:'evidence', cached:true, message:'已复用骨架，正在准备关键画面…'});
-    const {pipeline, observations, poseData, fullAnalysis} = entry.local;
+    const {pipeline, observations, poseData, fullAnalysis} = cache.local;
     const evidence = await buildMotionEvidence(entry.file, pipeline, observations, {signal, onProgress:publish});
     current();
     if (!evidence.images.length) throw new Error('未能提取训练者的关键画面，请在动作评估页点选训练者后重新评估，或重新添加清晰视频。');
     const keyframes = evidence.images.map(({time, mimeType, dataUrl, imageTime}) => ({time, mimeType, data:dataUrl.slice(dataUrl.indexOf(',')+1), imageTime}));
-    entry.payload = {duration:pipeline.duration, analysis:evidence.summary, keyframes, poseData, fullAnalysis, reviewMode:'guided'};
-    entry.local = null;
+    cache.payload = {duration:pipeline.duration, analysis:evidence.summary, keyframes, poseData, fullAnalysis, reviewMode:'guided'};
+    cache.local = null;
     publish({stage:'ready', progress:1, message:'骨架与关键画面已准备好，原视频保留在本机。'});
     current();
-    return entry.payload;
+    return cache.payload;
   }
 }
